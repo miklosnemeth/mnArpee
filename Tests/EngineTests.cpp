@@ -4,7 +4,9 @@
 
 #include "ArpEngine.h"
 
+#include <algorithm>
 #include <cstdio>
+#include <cstdlib>
 #include <string>
 #include <vector>
 
@@ -68,6 +70,46 @@ int firstNoteOn(const std::vector<mnArpee::EngineEvent>& evs)
         if (e.isNoteOn)
             return e.note;
     return -1;
+}
+
+struct AbsEvent
+{
+    long long sample;
+    mnArpee::EngineEvent ev;
+};
+
+// Like runFor, but with absolute sample positions across blocks.
+std::vector<AbsEvent> runAbs(mnArpee::ArpEngine& e, double seconds, mnArpee::HostPosition host,
+                             int block = 512)
+{
+    std::vector<AbsEvent> all;
+    long long done = 0;
+    const long long total = (long long) (seconds * host.sampleRate);
+    while (done < total)
+    {
+        const int n = (int) std::min<long long>(block, total - done);
+        for (const auto& ev : e.render(n, host, {}))
+            all.push_back({ done + ev.sampleOffset, ev });
+        done += n;
+    }
+    return all;
+}
+
+long long findAbs(const std::vector<AbsEvent>& evs, bool noteOn, int note, int nth = 0)
+{
+    for (const auto& a : evs)
+        if (a.ev.isNoteOn == noteOn && a.ev.note == note && nth-- == 0)
+            return a.sample;
+    return -1;
+}
+
+mnArpee::Bank singleProgramBank(int numSteps, mnArpee::SyncRate rate, int gate)
+{
+    auto b = mnArpee::makeFactoryBank();
+    b.programs[0].numSteps = numSteps;
+    b.programs[0].sync = rate;
+    b.programs[0].gatePercent = gate;
+    return b;
 }
 } // namespace
 
@@ -154,6 +196,87 @@ int main()
         auto ev8 = runFor(e8, 2.0, freeHost());
         auto ev16 = runFor(e16, 2.0, freeHost());
         check(countOn(ev16) >= countOn(ev8) * 1.5, "rate-16th-denser-than-8th");
+    }
+
+    // 7. Gate 50% at 1/8 (0.25s = 11025 samples): note-off after half a step.
+    {
+        ArpEngine e;
+        e.setBank(singleProgramBank(2, SyncRate::R1_8, 50));
+        e.noteOn(60, 100);
+        auto evs = runAbs(e, 1.0, freeHost());
+        check(findAbs(evs, true, 60) == 0, "gate-first-on-at-zero");
+        check(std::abs(findAbs(evs, false, 60) - 5512) <= 1, "gate-50-percent-off-time");
+    }
+
+    // 8. Gate 125%: the first note is still sounding when the second starts.
+    {
+        ArpEngine e;
+        auto b = singleProgramBank(2, SyncRate::R1_8, 125);
+        b.programs[0].steps[1].keyIndex = 1;
+        e.setBank(b);
+        e.noteOn(60, 100);
+        e.noteOn(64, 100);
+        auto evs = runAbs(e, 1.0, freeHost());
+        const auto on2 = findAbs(evs, true, 64);
+        const auto off1 = findAbs(evs, false, 60);
+        check(on2 == 11025 && std::abs(off1 - 13781) <= 1, "gate-125-overlaps-next-step");
+    }
+
+    // 9. Rest extends the previous note by one step (gate 50%: off at 1.5 steps).
+    {
+        ArpEngine e;
+        auto b = singleProgramBank(4, SyncRate::R1_8, 50);
+        b.programs[0].steps[1].type = StepType::Rest;
+        b.programs[0].steps[2].type = StepType::Off;
+        b.programs[0].steps[3].type = StepType::Off;
+        e.setBank(b);
+        e.noteOn(60, 100);
+        auto evs = runAbs(e, 0.9, freeHost());
+        check(std::abs(findAbs(evs, false, 60) - 16537) <= 1, "rest-extends-note");
+    }
+
+    // 10. Panic releases sounding notes.
+    {
+        ArpEngine e;
+        e.setBank(singleProgramBank(2, SyncRate::R1_4, 100));
+        e.noteOn(60, 100);
+        runAbs(e, 0.1, freeHost());
+        e.panic();
+        auto evs = runAbs(e, 0.02, freeHost());
+        check(findAbs(evs, false, 60) >= 0, "panic-sends-note-off");
+    }
+
+    // 11. Program switch works for a 1-step (pass-through) program.
+    {
+        ArpEngine e;
+        e.setBank(singleProgramBank(1, SyncRate::R1_16, 80));
+        e.setCurrentProgram(1);
+        runAbs(e, 0.1, freeHost());
+        check(e.getCurrentProgram() == 1, "program-switch-from-passthrough");
+    }
+
+    // 12. Latch: a new chord replaces the latched one.
+    {
+        ArpEngine e;
+        e.setLatch(true);
+        e.noteOn(60, 100);
+        e.noteOff(60);
+        e.noteOn(64, 100);
+        e.noteOff(64);
+        auto evs = runAbs(e, 0.5, freeHost());
+        check(findAbs(evs, true, 64) >= 0 && findAbs(evs, true, 60) < 0, "latch-new-chord-replaces");
+    }
+
+    // 13. Live program params (no bank copy, no restart).
+    {
+        ArpEngine e;
+        e.noteOn(60, 100);
+        runAbs(e, 0.3, freeHost());
+        const int stepBefore = e.getCurrentStep();
+        e.setProgramParams(0, SyncRate::R1_8, 80, 0, 0, 16);
+        check(e.getCurrentStep() == stepBefore, "params-do-not-reset-playback");
+        const int n = countOn(runFor(e, 1.0, freeHost()));
+        check(n >= 3 && n <= 5, "params-apply-live"); // 1/8 = 4 notes/s at 120 bpm
     }
 
     std::printf("%d checks, %d failures\n", checks, failures);

@@ -90,6 +90,8 @@ void MnArpeeAudioProcessor::applyApvtsToEngine()
     prog.gatePercent = juce::jlimit(1, 125, (int) gateP->load());
     prog.swingPercent = juce::jlimit(-50, 50, (int) swingP->load());
     prog.numSteps = juce::jlimit(0, 64, (int) stepsP->load());
+    engine.setProgramParams(progIdx, prog.sync, prog.gatePercent, prog.swingPercent,
+                            prog.octaveShift, prog.numSteps);
 
     if (progIdx != lastProgramParam)
     {
@@ -126,11 +128,7 @@ void MnArpeeAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer,
     buffer.clear();
 
     if (consumeBankRefresh())
-    {
-        engine.setBank(bank);
-        lastProgramParam = -1;
-        lastChainParam = -1;
-    }
+        engine.updateBank(bank); // step edits must not restart the pattern
     applyApvtsToEngine();
 
     mnArpee::HostPosition host;
@@ -221,80 +219,103 @@ void MnArpeeAudioProcessor::setLatchDirect(bool on)
 
 void MnArpeeAudioProcessor::getStateInformation(juce::MemoryBlock& destData)
 {
-    juce::MemoryOutputStream out(destData, false);
-    out.writeInt((int) bank.programs.size());
-    for (const auto& prog : bank.programs)
+    // The bank is stored as a base64 attribute inside the APVTS XML, so there is
+    // a single, self-describing state blob (copyXmlToBinary overwrites destData).
+    juce::MemoryBlock bankBlock;
     {
-        out.writeString(juce::String(prog.name));
-        out.writeInt(prog.numSteps);
-        out.writeInt((int) prog.sync);
-        out.writeInt(prog.gatePercent);
-        out.writeInt(prog.swingPercent);
-        out.writeInt(prog.octaveShift);
-        out.writeInt(prog.transposeOct);
-        for (int i = 0; i < mnArpee::maxSteps; ++i)
+        const juce::ScopedLock lock(engineLock);
+        juce::MemoryOutputStream out(bankBlock, false);
+        out.writeInt((int) bank.programs.size());
+        for (const auto& prog : bank.programs)
         {
-            const auto& s = prog.steps[(size_t) i];
-            out.writeByte((char) s.type);
-            out.writeByte(s.keyIndex);
-            out.writeByte(s.scaleStep);
-            out.writeByte(s.octave);
-            out.writeByte((char) s.velocity);
-            out.writeShort((short) s.gateScalePercent);
-            out.writeByte((char) s.chance);
+            out.writeString(juce::String(prog.name));
+            out.writeInt(prog.numSteps);
+            out.writeInt((int) prog.sync);
+            out.writeInt(prog.gatePercent);
+            out.writeInt(prog.swingPercent);
+            out.writeInt(prog.octaveShift);
+            out.writeInt(prog.transposeOct);
+            for (int i = 0; i < mnArpee::maxSteps; ++i)
+            {
+                const auto& s = prog.steps[(size_t) i];
+                out.writeByte((char) s.type);
+                out.writeByte(s.keyIndex);
+                out.writeByte(s.scaleStep);
+                out.writeByte(s.octave);
+                out.writeByte((char) s.velocity);
+                out.writeShort((short) s.gateScalePercent);
+                out.writeByte((char) s.chance);
+            }
         }
+        out.writeInt(bank.currentChain);
     }
-    out.writeInt(bank.currentChain);
     auto state = apvts.copyState();
     if (auto xml = state.createXml())
+    {
+        xml->setAttribute("bankData", bankBlock.toBase64Encoding());
         copyXmlToBinary(*xml, destData);
+    }
 }
 
 void MnArpeeAudioProcessor::setStateInformation(const void* data, int sizeInBytes)
 {
-    if (data == nullptr || sizeInBytes <= 8)
+    if (data == nullptr || sizeInBytes <= 0)
         return;
-    juce::MemoryInputStream in(data, (size_t) sizeInBytes, false);
-    const int numProgs = in.readInt();
-    if (numProgs <= 0 || numProgs > mnArpee::maxPrograms)
+    auto xml = getXmlFromBinary(data, sizeInBytes);
+    if (xml == nullptr || ! xml->hasTagName(apvts.state.getType()))
         return;
-    mnArpee::Bank loaded;
-    loaded.programs.reserve((size_t) numProgs);
-    for (int pi = 0; pi < numProgs; ++pi)
-    {
-        mnArpee::Program prog;
-        prog.name = in.readString().toStdString();
-        prog.numSteps = juce::jlimit(0, 64, in.readInt());
-        prog.sync = (mnArpee::SyncRate) juce::jlimit(0, 12, in.readInt());
-        prog.gatePercent = juce::jlimit(1, 125, in.readInt());
-        prog.swingPercent = juce::jlimit(-50, 50, in.readInt());
-        prog.octaveShift = juce::jlimit(-2, 2, in.readInt());
-        prog.transposeOct = juce::jlimit(-3, 3, in.readInt());
-        for (int i = 0; i < mnArpee::maxSteps; ++i)
-        {
-            auto& s = prog.steps[(size_t) i];
-            s.type = (mnArpee::StepType) juce::jlimit(0, 5, (int) in.readByte());
-            s.keyIndex = (std::int8_t) juce::jlimit(0, 4, (int) in.readByte());
-            s.scaleStep = (std::int8_t) juce::jlimit(-12, 12, (int) in.readByte());
-            s.octave = (std::int8_t) juce::jlimit(-3, 3, (int) in.readByte());
-            s.velocity = (std::uint8_t) juce::jlimit(0, 127, (int) (unsigned char) in.readByte());
-            s.gateScalePercent = (std::uint16_t) juce::jlimit(10, 800, (int) in.readShort());
-            s.chance = (std::uint8_t) juce::jlimit(1, 100, (int) (unsigned char) in.readByte());
-        }
-        loaded.programs.push_back(prog);
-    }
-    loaded.currentChain = in.readInt();
-    loaded.chains = bank.chains;
-    loaded.numChains = bank.numChains;
-    loaded.chainQuantizeBars = bank.chainQuantizeBars;
-    loaded.restartChainOnSwitch = bank.restartChainOnSwitch;
-    {
-        const juce::ScopedLock lock(engineLock);
-        bank = loaded;
-        engine.setBank(bank);
-    }
-    if (auto xml = getXmlFromBinary(data, sizeInBytes))
-        if (xml->hasTagName(apvts.state.getType()))
-            apvts.replaceState(juce::ValueTree::fromXml(*xml));
-}
 
+    juce::MemoryBlock bankBlock;
+    if (bankBlock.fromBase64Encoding(xml->getStringAttribute("bankData")) && bankBlock.getSize() > 4)
+    {
+        juce::MemoryInputStream in(bankBlock, false);
+        const int numProgs = in.readInt();
+        if (numProgs > 0 && numProgs <= mnArpee::maxPrograms)
+        {
+            mnArpee::Bank loaded;
+            loaded.programs.reserve((size_t) numProgs);
+            for (int pi = 0; pi < numProgs; ++pi)
+            {
+                mnArpee::Program prog;
+                prog.name = in.readString().toStdString();
+                prog.numSteps = juce::jlimit(0, 64, in.readInt());
+                prog.sync = (mnArpee::SyncRate) juce::jlimit(0, 12, in.readInt());
+                prog.gatePercent = juce::jlimit(1, 125, in.readInt());
+                prog.swingPercent = juce::jlimit(-50, 50, in.readInt());
+                prog.octaveShift = juce::jlimit(-2, 2, in.readInt());
+                prog.transposeOct = juce::jlimit(-3, 3, in.readInt());
+                for (int i = 0; i < mnArpee::maxSteps; ++i)
+                {
+                    auto& s = prog.steps[(size_t) i];
+                    s.type = (mnArpee::StepType) juce::jlimit(0, 5, (int) in.readByte());
+                    s.keyIndex = (std::int8_t) juce::jlimit(0, 4, (int) in.readByte());
+                    s.scaleStep = (std::int8_t) juce::jlimit(-12, 12, (int) in.readByte());
+                    s.octave = (std::int8_t) juce::jlimit(-3, 3, (int) in.readByte());
+                    s.velocity = (std::uint8_t) juce::jlimit(0, 127, (int) (unsigned char) in.readByte());
+                    s.gateScalePercent = (std::uint16_t) juce::jlimit(10, 800, (int) in.readShort());
+                    s.chance = (std::uint8_t) juce::jlimit(1, 100, (int) (unsigned char) in.readByte());
+                }
+                loaded.programs.push_back(prog);
+            }
+            // Reads past the end return 0, so check that the trailing int really exists.
+            const bool complete = in.getPosition() + 4 <= (juce::int64) bankBlock.getSize();
+            loaded.currentChain = in.readInt();
+            if (complete)
+            {
+                // Chains and quantize settings are not stored; keep the factory ones.
+                loaded.chains = bank.chains;
+                loaded.numChains = bank.numChains;
+                loaded.chainQuantizeBars = bank.chainQuantizeBars;
+                loaded.restartChainOnSwitch = bank.restartChainOnSwitch;
+                loaded.currentChain = juce::jlimit(-1, (int) loaded.chains.size() - 1,
+                                                   loaded.currentChain);
+                const juce::ScopedLock lock(engineLock);
+                bank = loaded;
+                engine.setBank(bank);
+                lastProgramParam = -1;
+                lastChainParam = -1;
+            }
+        }
+    }
+    apvts.replaceState(juce::ValueTree::fromXml(*xml));
+}

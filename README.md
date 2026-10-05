@@ -8,7 +8,8 @@ No input pre-filtering: held notes are sorted by pitch before they reach the eng
 - No arp modes: the step matrix draws the whole pattern (KEY SELECT k1..k5 picks from the pitch-sorted input), octave -2..+2
 - 64 steps / program, step types: Off / Normal / Rest / Tie / Chord / Random
 - KEY SELECT k1..k5, octave -3..+3, velocity, chance
-- Rate 1/64..3/8 (bar fractions, BlueArp manual), Gate %, Swing %, host sync + free-run
+- Rate 1/64..3/8 (bar fractions, BlueArp manual), Gate % (1..125, Rest steps extend the previous note), Swing %, host sync + free-run
+- Rate, gate, swing, octave and steps are global controls applied to the selected program
 - 8 programs + 2 chains (Verse/Chorus), quantized chain switching
 - Latch, sustain pedal, panic, CC/bend/aftertouch pass-through
 - Matrix UI: clicking a cell sets the step; the bottom strip edits the selected step

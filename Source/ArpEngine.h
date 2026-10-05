@@ -43,7 +43,13 @@ public:
 
     ArpEngine();
 
+    // Replaces the bank and restarts playback from step 0.
     void setBank(const Bank& bank);
+    // Replaces the bank (e.g. after a step edit) without touching the playback position.
+    void updateBank(const Bank& bank);
+    // Live program parameters, applied without copying the whole bank (audio-thread safe).
+    void setProgramParams(int programIndex, SyncRate sync, int gatePercent, int swingPercent,
+                          int octaveShift, int numSteps);
     void setCurrentProgram(int index);
     void setCurrentChain(int chainIndex);
     void setLatch(bool on) { latch = on; }
@@ -72,6 +78,8 @@ private:
 
     void playOneStep(Program& prog, const std::vector<HeldNote>& input,
                      int at, int numSamples, double samplesPerQuarter);
+    void scheduleOff(int note, double ppq);
+    void flushOffs(double uptoPpq, double blockStartPpq, double samplesPerQuarter);
     void emitOnBuf(int note, int vel, int at);
     void emitOffBuf(int note, int at);
     void killAllBuf(int at);
@@ -97,6 +105,8 @@ private:
     int chainStepPos = 0;
 
     std::map<int, int> sounding;
+    std::map<int, double> pendingOffs; // note -> ppq at which the gate closes
+    bool panicPending = false;
     std::vector<int> previousStepNotes;
 
     RandomFn randomFn;
