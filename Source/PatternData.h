@@ -42,16 +42,6 @@ enum class StepType : std::uint8_t
     Random,     // veletlen input hang
 };
 
-enum class ArpMode : std::uint8_t
-{
-    Up = 0,
-    Down,
-    UpDown,
-    DownUp,
-    Random,
-    AsPlayed,
-};
-
 enum class SyncRate : std::uint8_t
 {
     R1_64 = 0, R1_48, R1_32, R1_24, R1_16, R1_12, R1_8, R1_6, R1_4,
@@ -100,7 +90,6 @@ struct Program
     SyncRate sync = SyncRate::R1_16;
     int gatePercent = 80;            // 1..125
     int swingPercent = 0;            // -50..+50
-    ArpMode mode = ArpMode::Up;
     int octaveShift = 0;             // -2..+2 global arp oktav
     int transposeOct = 0;            // -3..+3 program-szintu
     std::array<Step, maxSteps> steps {};

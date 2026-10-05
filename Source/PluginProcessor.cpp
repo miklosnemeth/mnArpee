@@ -5,11 +5,9 @@ namespace
 {
 juce::AudioProcessorValueTreeState::ParameterLayout makeLayout()
 {
-    juce::StringArray modes { "Up", "Down", "UpDown", "DownUp", "Random", "AsPlayed" };
     juce::StringArray rates { "1/64", "1/48", "1/32", "1/24", "1/16", "1/12",
                               "1/8", "1/6", "1/4", "3/64", "3/32", "3/16", "3/8" };
     std::vector<std::unique_ptr<juce::RangedAudioParameter>> params;
-    params.push_back(std::make_unique<juce::AudioParameterChoice>("mode", "Arp Mode", modes, 0));
     params.push_back(std::make_unique<juce::AudioParameterChoice>("rate", "Rate", rates, 4));
     params.push_back(std::make_unique<juce::AudioParameterInt>("octave", "Octave", -2, 2, 0));
     params.push_back(std::make_unique<juce::AudioParameterInt>("gate", "Gate %", 1, 125, 80));
@@ -41,19 +39,6 @@ bool MnArpeeAudioProcessor::hasEditor() const { return true; }
 juce::AudioProcessorEditor* MnArpeeAudioProcessor::createEditor()
 {
     return new MnArpeeAudioEditor(*this);
-}
-
-const char* MnArpeeAudioProcessor::modeName(mnArpee::ArpMode m)
-{
-    switch (m)
-    {
-        case mnArpee::ArpMode::Up:      return "Up";
-        case mnArpee::ArpMode::Down:    return "Down";
-        case mnArpee::ArpMode::UpDown:  return "UpDown";
-        case mnArpee::ArpMode::DownUp:  return "DownUp";
-        case mnArpee::ArpMode::Random:  return "Random";
-        default:                        return "AsPlayed";
-    }
 }
 
 const char* MnArpeeAudioProcessor::syncName(mnArpee::SyncRate r)
@@ -88,7 +73,6 @@ void MnArpeeAudioProcessor::releaseResources() {}
 
 void MnArpeeAudioProcessor::applyApvtsToEngine()
 {
-    auto* modeP = apvts.getRawParameterValue("mode");
     auto* rateP = apvts.getRawParameterValue("rate");
     auto* octP = apvts.getRawParameterValue("octave");
     auto* gateP = apvts.getRawParameterValue("gate");
@@ -101,7 +85,6 @@ void MnArpeeAudioProcessor::applyApvtsToEngine()
     const int progIdx = juce::jlimit(0, (int) bank.programs.size() - 1,
                                      (int) progP->load() - 1);
     auto& prog = bank.programs[(size_t) progIdx];
-    prog.mode = (mnArpee::ArpMode) juce::jlimit(0, 5, (int) modeP->load());
     prog.sync = (mnArpee::SyncRate) juce::jlimit(0, 12, (int) rateP->load());
     prog.octaveShift = juce::jlimit(-2, 2, (int) octP->load());
     prog.gatePercent = juce::jlimit(1, 125, (int) gateP->load());
@@ -247,7 +230,6 @@ void MnArpeeAudioProcessor::getStateInformation(juce::MemoryBlock& destData)
         out.writeInt((int) prog.sync);
         out.writeInt(prog.gatePercent);
         out.writeInt(prog.swingPercent);
-        out.writeInt((int) prog.mode);
         out.writeInt(prog.octaveShift);
         out.writeInt(prog.transposeOct);
         for (int i = 0; i < mnArpee::maxSteps; ++i)
@@ -286,7 +268,6 @@ void MnArpeeAudioProcessor::setStateInformation(const void* data, int sizeInByte
         prog.sync = (mnArpee::SyncRate) juce::jlimit(0, 12, in.readInt());
         prog.gatePercent = juce::jlimit(1, 125, in.readInt());
         prog.swingPercent = juce::jlimit(-50, 50, in.readInt());
-        prog.mode = (mnArpee::ArpMode) juce::jlimit(0, 5, in.readInt());
         prog.octaveShift = juce::jlimit(-2, 2, in.readInt());
         prog.transposeOct = juce::jlimit(-3, 3, in.readInt());
         for (int i = 0; i < mnArpee::maxSteps; ++i)

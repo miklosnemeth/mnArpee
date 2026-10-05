@@ -51,7 +51,7 @@ private:
     MnArpeeLookAndFeel lnf;
 
     // Fejléc
-    juce::ComboBox programBox, chainBox, modeBox, rateBox;
+    juce::ComboBox programBox, chainBox, rateBox;
     juce::Slider octaveSlider, gateSlider, swingSlider, stepsSlider;
     juce::ToggleButton latchButton;
     juce::Label brandLabel;
@@ -64,7 +64,7 @@ private:
     juce::Slider stepOctSlider, stepVelSlider;
 
     // Címkék
-    juce::Label programLabel, chainLabel, modeLabel, rateLabel;
+    juce::Label programLabel, chainLabel, rateLabel;
     juce::Label octaveLabel, gateLabel, swingLabel, stepsLabel;
     juce::Label stepTypeLabel, stepKeyLabel, stepOctLabel, stepVelLabel;
 

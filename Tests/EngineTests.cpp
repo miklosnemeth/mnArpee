@@ -93,16 +93,26 @@ int main()
         check(countOn(evs) == 0, "silence-without-input");
     }
 
-    // 3. Down mod: elso hang a legmagasabb.
+    // 3. Egyedi pattern: k3, k1, k2 sorrend (C-E-G akkordbol G, C, E).
     {
         ArpEngine e;
         Bank b = makeFactoryBank();
-        b.programs[0].mode = ArpMode::Down;
+        b.programs[0].numSteps = 3;
+        b.programs[0].steps[0].keyIndex = 2;
+        b.programs[0].steps[1].keyIndex = 0;
+        b.programs[0].steps[2].keyIndex = 1;
         e.setBank(b);
-        e.noteOn(60, 100);
+        e.noteOn(64, 100);
         e.noteOn(67, 100);
-        auto evs = runFor(e, 0.5, freeHost());
-        check(firstNoteOn(evs) == 67, "down-first-note-is-highest");
+        e.noteOn(60, 100);
+        auto evs = runFor(e, 1.0, freeHost());
+        std::vector<int> seq;
+        for (const auto& ev : evs)
+            if (ev.isNoteOn)
+                seq.push_back(ev.note);
+        check(seq.size() >= 6 && seq[0] == 67 && seq[1] == 60 && seq[2] == 64
+                  && seq[3] == 67 && seq[4] == 60 && seq[5] == 64,
+              "custom-pattern-key-order");
     }
 
     // 4. Chord step: mindket hang egyszerre.

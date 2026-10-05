@@ -5,7 +5,7 @@ Eloszures nelkul: a lenyomott hangok pitch szerint rendezve kerulnek a motorba.
 
 ## Funkciok (MVP)
 
-- Arp modok: Up / Down / UpDown / DownUp / Random / AsPlayed + oktav -2..+2
+- Nincsenek arp modok: a mintat a step-matrix rajzolja ki (KEY SELECT k1..k5 a pitch szerint rendezett inputbol), oktav -2..+2
 - 64 step / program, step-tipusok: Off / Normal / Rest / Tie / Chord / Random
 - KEY SELECT k1..k5, oktav -3..+3, velocity, chance
 - Rate 1/64..3/8 (bar-tort, BlueArp manual), Gate %, Swing %, host-sync + free-run

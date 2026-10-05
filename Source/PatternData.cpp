@@ -13,7 +13,6 @@ Program makeInitProgram(const std::string& name)
     p.sync = SyncRate::R1_16;
     p.gatePercent = 80;
     p.swingPercent = 0;
-    p.mode = ArpMode::Up;
     p.octaveShift = 0;
     p.transposeOct = 0;
     for (int i = 0; i < maxSteps; ++i)
@@ -35,8 +34,10 @@ Program up16(const std::string& name, SyncRate sync, int gate, int swing, int oc
     p.sync = sync;
     p.gatePercent = gate;
     p.swingPercent = swing;
-    p.mode = ArpMode::Up;
     p.octaveShift = oct;
+    // Egyedi pattern: k1 k2 k3 k4 ismetlodik.
+    for (int i = 0; i < maxSteps; ++i)
+        p.steps[(size_t) i].keyIndex = static_cast<std::int8_t>(i % 4);
     return p;
 }
 } // namespace
@@ -49,14 +50,16 @@ Bank makeFactoryBank()
     bank.programs.push_back(up16("Bass 8ths", SyncRate::R1_8, 90, 0, 0));
 
     {
-        auto p = up16("UpDown Pad", SyncRate::R1_8, 100, 0, 0);
-        p.mode = ArpMode::UpDown;
+        auto p = up16("Up-Down Pad", SyncRate::R1_8, 100, 0, 0);
+        // k1 k2 k3 k4 k3 k2 (fel-le minta kezzel kirakva)
+        static constexpr int seq[] = { 0, 1, 2, 3, 2, 1 };
+        for (int i = 0; i < maxSteps; ++i)
+            p.steps[(size_t) i].keyIndex = static_cast<std::int8_t>(seq[i % 6]);
         bank.programs.push_back(p);
     }
     {
         auto p = up16("Shuffle 16", SyncRate::R1_16, 75, 20, 0);
-        p.mode = ArpMode::Up;
-        bank.programs.push_back(p);
+            bank.programs.push_back(p);
     }
     {
         auto p = makeInitProgram("Chord Stabs");
@@ -74,7 +77,6 @@ Bank makeFactoryBank()
         auto p = makeInitProgram("Random Sparkle");
         p.sync = SyncRate::R1_32;
         p.gatePercent = 60;
-        p.mode = ArpMode::Random;
         for (int i = 0; i < 16; ++i)
             p.steps[(size_t) i].type = StepType::Random;
         bank.programs.push_back(p);

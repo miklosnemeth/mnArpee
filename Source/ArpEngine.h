@@ -68,7 +68,7 @@ private:
     double stepBars() const;
     double swingOffsetBars(int stepIndex) const;
     std::vector<int> pickStepNotes(const Program& prog, const Step& step,
-                                   const std::vector<HeldNote>& input, int stepCounter);
+                                   const std::vector<HeldNote>& input);
 
     void playOneStep(Program& prog, const std::vector<HeldNote>& input,
                      int at, int numSamples, double samplesPerQuarter);
@@ -94,7 +94,6 @@ private:
     double freePpq = 0.0;
     int currentStep = 0;
     int stepsPlayedInProgram = 0;
-    int upDownDir = 1;
     int chainStepPos = 0;
 
     std::map<int, int> sounding;

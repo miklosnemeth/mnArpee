@@ -6,7 +6,7 @@
 
 //==============================================================================
 // MnArpeeAudioProcessor: VST3/Standalone MIDI-effect.
-// - APVTS: rate, mode, octave, gate, swing, program, chain, latch.
+// - APVTS: rate, octave, gate, swing, program, chain, latch.
 // - A step-matrix az aktiv programot szerkeszti (UI -> engine bank).
 // - MIDI: bemeneti hangok -> engine; CC/bend/aftertouch thru; sustain+refcount.
 //==============================================================================
@@ -49,7 +49,6 @@ public:
     void requestBankRefresh() { bankDirty.store(true); }
     bool consumeBankRefresh() { return bankDirty.exchange(false); }
 
-    static const char* modeName(mnArpee::ArpMode m);
     static const char* syncName(mnArpee::SyncRate r);
 
 private:

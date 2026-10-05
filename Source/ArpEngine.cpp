@@ -9,16 +9,6 @@ namespace
 {
 double barsToQuarters(double bars) { return bars * 4.0; }
 int clampNote(int n) { return std::clamp(n, 0, 127); }
-int triangle(int pos, int size)
-{
-    if (size <= 1)
-        return 0;
-    const int period = 2 * (size - 1);
-    int m = pos % period;
-    if (m < 0)
-        m += period;
-    return m < size ? m : period - m;
-}
 }
 
 ArpEngine::ArpEngine() { bank = makeFactoryBank(); }
@@ -32,7 +22,6 @@ void ArpEngine::setBank(const Bank& b)
     pendingChain = -2;
     currentStep = 0;
     stepsPlayedInProgram = 0;
-    upDownDir = 1;
     chainStepPos = 0;
     previousStepNotes.clear();
 }
@@ -102,7 +91,6 @@ void ArpEngine::panic()
     previousStepNotes.clear();
     stepsPlayedInProgram = 0;
     currentStep = 0;
-    upDownDir = 1;
 }
 
 std::vector<HeldNote> ArpEngine::getActiveInput() const { return orderedInput(); }
@@ -145,28 +133,9 @@ std::vector<HeldNote> ArpEngine::orderedInput() const
     if (notes.empty() && latch && ! latchedNotes.empty())
         notes = latchedNotes;
 
-    switch (activeProgram().mode)
-    {
-        case ArpMode::Up:
-        case ArpMode::Random:
-            std::sort(notes.begin(), notes.end(),
-                      [](const HeldNote& a, const HeldNote& b) { return a.note < b.note; });
-            break;
-        case ArpMode::Down:
-            std::sort(notes.begin(), notes.end(),
-                      [](const HeldNote& a, const HeldNote& b) { return a.note > b.note; });
-            break;
-        case ArpMode::AsPlayed:
-            std::sort(notes.begin(), notes.end(),
-                      [](const HeldNote& a, const HeldNote& b) { return a.order < b.order; });
-            break;
-        default:
-            std::sort(notes.begin(), notes.end(),
-                      [](const HeldNote& a, const HeldNote& b) { return a.note < b.note; });
-            if (upDownDir < 0)
-                std::reverse(notes.begin(), notes.end());
-            break;
-    }
+    // Eloszures nelkul: mindig pitch szerint novekvo; a step KEY SELECT valasztja a hangot.
+    std::sort(notes.begin(), notes.end(),
+              [](const HeldNote& a, const HeldNote& b) { return a.note < b.note; });
     return notes;
 }
 
@@ -181,7 +150,7 @@ double ArpEngine::swingOffsetBars(int stepIndex) const
 }
 
 std::vector<int> ArpEngine::pickStepNotes(const Program& prog, const Step& step,
-                                          const std::vector<HeldNote>& input, int stepCounter)
+                                          const std::vector<HeldNote>& input)
 {
     std::vector<int> picked;
     if (input.empty())
@@ -193,17 +162,12 @@ std::vector<int> ArpEngine::pickStepNotes(const Program& prog, const Step& step,
             picked.push_back(clampNote(h.note + step.scaleStep + step.octave * 12));
         return picked;
     }
+    // KEY SELECT: k1..k5 a rendezett inputbol; ha kevesebb hang van, korbeer.
     int pick = 0;
-    if (step.type == StepType::Random || prog.mode == ArpMode::Random)
+    if (step.type == StepType::Random)
         pick = randomFn ? randomFn(0, n - 1) : (int) (rng() % (unsigned) n);
-    else if (prog.mode == ArpMode::UpDown || prog.mode == ArpMode::DownUp)
-        pick = triangle(stepCounter, n);
     else
-        pick = stepCounter % n;
-    // KEY SELECT (k1..k5) felulirja a szamlalot, ha nem k1.
-    const int ki = std::clamp((int) step.keyIndex, 0, maxInputKeys - 1);
-    if (step.type != StepType::Random && prog.mode != ArpMode::Random && ki != 0)
-        pick = (step.type == StepType::Chord) ? pick : (ki % n);
+        pick = std::clamp((int) step.keyIndex, 0, maxInputKeys - 1) % n;
     const auto& h = input[(size_t) std::clamp(pick, 0, n - 1)];
     const int tr = step.scaleStep + step.octave * 12 + prog.transposeOct * 12 + prog.octaveShift * 12;
     picked.push_back(clampNote(h.note + tr));
@@ -264,7 +228,7 @@ void ArpEngine::playOneStep(Program& prog, const std::vector<HeldNote>& input,
     }
     else if (play && step.type != StepType::Off)
     {
-        auto newNotes = pickStepNotes(prog, step, input, stepsPlayedInProgram);
+        auto newNotes = pickStepNotes(prog, step, input);
         std::vector<int> olds;
         for (const auto& kv : sounding)
             if (std::find(newNotes.begin(), newNotes.end(), kv.first) == newNotes.end())
@@ -290,17 +254,6 @@ void ArpEngine::playOneStep(Program& prog, const std::vector<HeldNote>& input,
         killAllBuf(swung);
         if (step.type == StepType::Off)
             previousStepNotes.clear();
-    }
-
-    if (prog.mode == ArpMode::UpDown || prog.mode == ArpMode::DownUp)
-    {
-        const int n = (int) input.size();
-        if (n > 1)
-        {
-            const int edge = triangle(stepsPlayedInProgram, n);
-            if (edge == 0 || edge == n - 1)
-                upDownDir = -upDownDir;
-        }
     }
 
     currentStep = (currentStep + 1) % numSteps;

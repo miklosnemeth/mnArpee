@@ -137,13 +137,12 @@ MnArpeeAudioEditor::MnArpeeAudioEditor(MnArpeeAudioProcessor& p)
         progNames.add("P" + juce::String(i + 1));
     programBox.addItemList(progNames, 1);
     chainBox.addItemList({ "Off", "Chain 1", "Chain 2" }, 1);
-    modeBox.addItemList({ "Up", "Down", "UpDown", "DownUp", "Random", "As Played" }, 1);
     rateBox.addItemList({ "1/64", "1/48", "1/32", "1/24", "1/16", "1/12",
                           "1/8", "1/6", "1/4", "3/64", "3/32", "3/16", "3/8" }, 1);
     stepTypeBox.addItemList({ "Off", "Normal", "Rest", "Tie", "Chord", "Random" }, 1);
     stepKeyBox.addItemList({ "k1", "k2", "k3", "k4", "k5" }, 1);
 
-    for (auto* cb : { &programBox, &chainBox, &modeBox, &rateBox, &stepTypeBox, &stepKeyBox })
+    for (auto* cb : { &programBox, &chainBox, &rateBox, &stepTypeBox, &stepKeyBox })
     {
         addAndMakeVisible(*cb);
         cb->addListener(this);
@@ -173,7 +172,6 @@ MnArpeeAudioEditor::MnArpeeAudioEditor(MnArpeeAudioProcessor& p)
     };
     setupLabel(programLabel, "PROGRAM");
     setupLabel(chainLabel, "CHAIN");
-    setupLabel(modeLabel, "MODE");
     setupLabel(rateLabel, "RATE");
     setupLabel(octaveLabel, "OCT");
     setupLabel(gateLabel, "GATE %");
@@ -269,7 +267,6 @@ void MnArpeeAudioEditor::resized()
     };
     place(inner, programLabel, programBox, 80);
     place(inner, chainLabel, chainBox, 100);
-    place(inner, modeLabel, modeBox, 110);
     place(inner, rateLabel, rateBox, 86);
     place(inner, octaveLabel, octaveSlider, 112);
     place(inner, gateLabel, gateSlider, 112);
@@ -340,8 +337,6 @@ void MnArpeeAudioEditor::comboBoxChanged(juce::ComboBox* cb)
         setInt("program", programBox.getSelectedItemIndex() + 1);
     else if (cb == &chainBox)
         setInt("chain", chainBox.getSelectedItemIndex());
-    else if (cb == &modeBox)
-        setChoice("mode", modeBox.getSelectedItemIndex());
     else if (cb == &rateBox)
         setChoice("rate", rateBox.getSelectedItemIndex());
     else if (cb == &stepTypeBox || cb == &stepKeyBox)
@@ -381,8 +376,6 @@ void MnArpeeAudioEditor::refreshFromState()
                                     juce::dontSendNotification);
     chainBox.setSelectedItemIndex(juce::jlimit(0, 2, getInt("chain")),
                                   juce::dontSendNotification);
-    modeBox.setSelectedItemIndex(juce::jlimit(0, 5, getInt("mode")),
-                                 juce::dontSendNotification);
     rateBox.setSelectedItemIndex(juce::jlimit(0, 12, getInt("rate")),
                                  juce::dontSendNotification);
     octaveSlider.setValue(getInt("octave"), juce::dontSendNotification);
