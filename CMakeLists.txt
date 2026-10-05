@@ -1,0 +1,86 @@
+cmake_minimum_required(VERSION 3.22)
+project(mnArpee VERSION 1.0.0 LANGUAGES C CXX)
+
+set(CMAKE_CXX_STANDARD 23)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_CXX_EXTENSIONS OFF)
+
+if(NOT CMAKE_BUILD_TYPE)
+    set(CMAKE_BUILD_TYPE Release)
+endif()
+
+# JUCE: prefer local checkout at d:/dev/JUCE, fallback to FetchContent 9.0.1
+if(NOT MNARPEE_TESTS_ONLY)
+if(EXISTS "d:/dev/JUCE/CMakeLists.txt")
+    add_subdirectory("d:/dev/JUCE" JUCE)
+else()
+    include(FetchContent)
+    FetchContent_Declare(juce
+        GIT_REPOSITORY https://github.com/juce-framework/JUCE.git
+        GIT_TAG 9.0.1
+    )
+    FetchContent_MakeAvailable(juce)
+endif()
+endif()
+
+if(NOT MNARPEE_TESTS_ONLY)
+juce_add_plugin(mnArpee
+    COMPANY_NAME "MNAudio"
+    PLUGIN_MANUFACTURER_CODE MnAu
+    PLUGIN_CODE MnAp
+    FORMATS VST3 Standalone
+    IS_SYNTH FALSE
+    IS_MIDI_EFFECT TRUE
+    NEEDS_MIDI_INPUT TRUE
+    NEEDS_MIDI_OUTPUT TRUE
+    NEEDS_AUDIO_INPUT FALSE
+    NEEDS_AUDIO_OUTPUT FALSE
+    VST3_CATEGORIES Instrument
+    PRODUCT_NAME "mnArpee"
+    COPY_PLUGIN_AFTER_BUILD FALSE
+)
+
+juce_generate_juce_header(mnArpee)
+
+target_sources(mnArpee PRIVATE
+    Source/PatternData.cpp
+    Source/ArpEngine.cpp
+    Source/PluginProcessor.cpp
+    Source/PluginEditor.cpp
+    Source/StepGrid.cpp
+)
+
+target_compile_definitions(mnArpee
+    PUBLIC
+        JucePlugin_Name="mnArpee"
+        JUCE_VST3_CAN_REPLACE_VST2=0
+)
+
+if(MSVC)
+    target_compile_options(mnArpee PRIVATE /utf-8 /Zc:__cplusplus)
+endif()
+
+target_link_libraries(mnArpee
+    PRIVATE
+        juce::juce_audio_devices
+        juce::juce_audio_utils
+        juce::juce_gui_extra
+    PUBLIC
+        juce::juce_recommended_config_flags
+        juce::juce_recommended_warning_flags
+)
+endif()
+
+option(MNARPEE_BUILD_TESTS "Build the console engine tests (mnArpeeTests)" OFF)
+if(MNARPEE_BUILD_TESTS)
+    add_executable(mnArpeeTests
+        Tests/EngineTests.cpp
+        Source/PatternData.cpp
+        Source/ArpEngine.cpp
+    )
+    target_include_directories(mnArpeeTests PRIVATE Source)
+    if(MSVC)
+        target_compile_options(mnArpeeTests PRIVATE /utf-8 /Zc:__cplusplus)
+    endif()
+endif()
+
