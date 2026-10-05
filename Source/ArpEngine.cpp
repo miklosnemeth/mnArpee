@@ -63,7 +63,7 @@ void ArpEngine::noteOff(int note)
         sustainedNotes.insert(note);
     if (latch)
     {
-        // Latch bekapcsolva: az elengedett hang is a tartott akkord resze marad.
+        // Latch on: a released note stays part of the held chord.
         latchedNotes.erase(
             std::remove_if(latchedNotes.begin(), latchedNotes.end(),
                            [note](const HeldNote& x) { return x.note == note; }),
@@ -133,7 +133,7 @@ std::vector<HeldNote> ArpEngine::orderedInput() const
     if (notes.empty() && latch && ! latchedNotes.empty())
         notes = latchedNotes;
 
-    // Eloszures nelkul: mindig pitch szerint novekvo; a step KEY SELECT valasztja a hangot.
+    // No pre-filtering: input is always sorted by ascending pitch; each step's KEY SELECT picks the note.
     std::sort(notes.begin(), notes.end(),
               [](const HeldNote& a, const HeldNote& b) { return a.note < b.note; });
     return notes;
@@ -162,7 +162,7 @@ std::vector<int> ArpEngine::pickStepNotes(const Program& prog, const Step& step,
             picked.push_back(clampNote(h.note + step.scaleStep + step.octave * 12));
         return picked;
     }
-    // KEY SELECT: k1..k5 a rendezett inputbol; ha kevesebb hang van, korbeer.
+    // KEY SELECT: k1..k5 index into the sorted input; wraps around if fewer notes are held.
     int pick = 0;
     if (step.type == StepType::Random)
         pick = randomFn ? randomFn(0, n - 1) : (int) (rng() % (unsigned) n);

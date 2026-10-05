@@ -2,9 +2,9 @@
 
 namespace
 {
-constexpr int labelW = 56;   // sorszám-sáv balra
-constexpr int stepH = 24;    // lépéssor magasság
-constexpr int gutterTop = 20; // oszlop-címkek (1,5,9,…)
+constexpr int labelW = 56;   // row label strip on the left
+constexpr int stepH = 24;    // step row height
+constexpr int gutterTop = 20; // column labels (1,5,9,...)
 constexpr int cellGap = 3;
 }
 
@@ -74,7 +74,7 @@ void StepGrid::cellAt(juce::Point<int> p, int& step, int& row) const
 
 void StepGrid::paint(juce::Graphics& g)
 {
-    // Átlátszó háttér: a szerkesztő kártyája látszik alatta.
+    // Transparent background: the editor card shows through.
     g.setColour(Palette::bg().withAlpha(0.55f));
     g.fillRoundedRectangle(getLocalBounds().toFloat(), 6.0f);
 
@@ -84,7 +84,7 @@ void StepGrid::paint(juce::Graphics& g)
     const int n = std::clamp(program->numSteps, 1, mnArpee::maxSteps);
     auto board = boardArea();
 
-    // Oszlop-címkék (minden 4. step kiemelve).
+    // Column labels (every 4th step highlighted).
     g.setFont(juce::Font(juce::FontOptions(11.0f)));
     g.setColour(Palette::dimText());
     for (int s = 0; s < n; s += 4)
@@ -110,7 +110,7 @@ void StepGrid::paint(juce::Graphics& g)
             const bool isEdit = (s == editStep);
             const bool isPlay = (s == playStep);
 
-            // Lépés-oszlop kiemelés (playhead-fénycsík + szerkesztett oszlop).
+            // Step column highlight (playhead glow strip + edited column).
             if (isPlay)
             {
                 g.setColour(Palette::playHead());
@@ -122,7 +122,7 @@ void StepGrid::paint(juce::Graphics& g)
             juce::Colour col;
             if (active)
             {
-                // Velocity arányos erősség a kiemelt kékben.
+                // Intensity proportional to velocity in the highlight blue.
                 const float vel = juce::jlimit(0.0f, 1.0f, step.velocity / 127.0f);
                 col = Palette::accent().withBrightness(0.45f + 0.30f * vel);
             }
@@ -144,7 +144,7 @@ void StepGrid::paint(juce::Graphics& g)
             g.setColour(col);
             g.fillRoundedRectangle(cell.toFloat(), 3.0f);
 
-            // Off step: halvány piros × az első sorban (a lánc nem játszik).
+            // Off step: faint red x in the first row (nothing plays).
             if (step.type == mnArpee::StepType::Off && r == 0)
             {
                 g.setColour(Palette::danger().withAlpha(0.65f));
@@ -171,7 +171,7 @@ void StepGrid::paint(juce::Graphics& g)
         }
     }
 
-    // Playhead nyíl a fejlécben.
+    // Playhead arrow in the header.
     if (playStep >= 0 && playStep < n)
     {
         auto c = cellRect(playStep, 0);

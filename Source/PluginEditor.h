@@ -8,7 +8,7 @@
 class MnArpeeAudioProcessor;
 
 //==============================================================================
-// MnArpeeLookAndFeel: egységes sötét stílus a teljes UI-hoz.
+// MnArpeeLookAndFeel: unified dark style for the whole UI.
 //==============================================================================
 class MnArpeeLookAndFeel : public juce::LookAndFeel_V4
 {
@@ -25,7 +25,7 @@ public:
 };
 
 //==============================================================================
-// MnArpeeAudioEditor: kártyás sötét fejléc + StepGrid + step-szerkesztő sáv.
+// MnArpeeAudioEditor: dark card header + StepGrid + step editor strip.
 //==============================================================================
 class MnArpeeAudioEditor : public juce::AudioProcessorEditor,
                            private juce::Timer,
@@ -50,7 +50,7 @@ private:
     MnArpeeAudioProcessor& proc;
     MnArpeeLookAndFeel lnf;
 
-    // Fejléc
+    // Header
     juce::ComboBox programBox, chainBox, rateBox;
     juce::Slider octaveSlider, gateSlider, swingSlider, stepsSlider;
     juce::ToggleButton latchButton;
@@ -59,20 +59,20 @@ private:
     // Matrix
     StepGrid grid;
 
-    // Step-szerkesztő
+    // Step editor
     juce::ComboBox stepTypeBox, stepKeyBox;
     juce::Slider stepOctSlider, stepVelSlider;
 
-    // Címkék
+    // Labels
     juce::Label programLabel, chainLabel, rateLabel;
     juce::Label octaveLabel, gateLabel, swingLabel, stepsLabel;
     juce::Label stepTypeLabel, stepKeyLabel, stepOctLabel, stepVelLabel;
 
-    // Info sáv
+    // Info bar
     juce::String statusText;
     juce::String lastStatusText;
 
-    // Kártya-téglalapok (paint rajzolja, resized számolja)
+    // Card rectangles (drawn by paint, computed by resized)
     juce::Rectangle<int> paramsCard, gridCard, editCard;
 
     int editStep = 0;

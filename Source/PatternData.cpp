@@ -19,7 +19,7 @@ Program makeInitProgram(const std::string& name)
     {
         Step s;
         s.type = StepType::Normal;
-        s.keyIndex = 0; // k1; a szamlalo lepteti (Up), a pattern felulirhatja
+        s.keyIndex = 0; // k1; the pattern overrides this per step
         s.velocity = 96;
         p.steps[(size_t) i] = s;
     }
@@ -35,7 +35,7 @@ Program up16(const std::string& name, SyncRate sync, int gate, int swing, int oc
     p.gatePercent = gate;
     p.swingPercent = swing;
     p.octaveShift = oct;
-    // Egyedi pattern: k1 k2 k3 k4 ismetlodik.
+    // Custom pattern: k1 k2 k3 k4 repeating.
     for (int i = 0; i < maxSteps; ++i)
         p.steps[(size_t) i].keyIndex = static_cast<std::int8_t>(i % 4);
     return p;
@@ -51,7 +51,7 @@ Bank makeFactoryBank()
 
     {
         auto p = up16("Up-Down Pad", SyncRate::R1_8, 100, 0, 0);
-        // k1 k2 k3 k4 k3 k2 (fel-le minta kezzel kirakva)
+        // k1 k2 k3 k4 k3 k2 (up-down shape spelled out by hand)
         static constexpr int seq[] = { 0, 1, 2, 3, 2, 1 };
         for (int i = 0; i < maxSteps; ++i)
             p.steps[(size_t) i].keyIndex = static_cast<std::int8_t>(seq[i % 6]);
@@ -110,7 +110,7 @@ Bank makeFactoryBank()
     bank.chains.push_back(Chain{ "Verse", { 0, 1 }, -1 });
     bank.chains.push_back(Chain{ "Chorus", { 0, 4, 0, 5 }, -1 });
     bank.numChains = 4;
-    bank.chainQuantizeBars = 0.25; // 1 beat 4/4-ben
+    bank.chainQuantizeBars = 0.25; // one beat in 4/4
     bank.restartChainOnSwitch = true;
     bank.currentChain = -1;
     return bank;

@@ -5,15 +5,15 @@
 #include "ArpEngine.h"
 
 //==============================================================================
-// StepGrid: 64 stepes matrix. Sor = KEY SELECT (k1..k5 + Chr + Rnd),
-// oszlop = step. Cella-klikk valtja a kijelolt beallitast.
+// StepGrid: 64-step matrix. Row = KEY SELECT (k1..k5 + Chr + Rnd),
+// column = step. Clicking a cell toggles that setting.
 //==============================================================================
 class StepGrid : public juce::Component
 {
 public:
     using StepClicked = std::function<void(int stepIndex, int row)>;
 
-    // Egységes sötét paletta (a teljes UI ezt használja).
+    // Unified dark palette (used by the whole UI).
     struct Palette
     {
         static juce::Colour bg()      { return juce::Colour(0xff0e1117); }

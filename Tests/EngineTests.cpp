@@ -1,6 +1,6 @@
-// mnArpee motor tesztek (JUCE-fuggetlen, sima console app).
-// Forditas: a CMake MNARPEE_BUILD_TESTS=ON kapcsoloja.
-// Futtatas: build/Release/mnArpeeTests.exe
+// mnArpee engine tests (JUCE-independent, plain console app).
+// Build: enabled by the CMake option MNARPEE_BUILD_TESTS=ON.
+// Run: build/Release/mnArpeeTests.exe
 
 #include "ArpEngine.h"
 
@@ -61,7 +61,7 @@ int countOn(const std::vector<mnArpee::EngineEvent>& evs)
     return c;
 }
 
-// Abszolut ido szerinti elso note-on (a blokkonkenti `at` nem monoton!).
+// First note-on in absolute time (the per-block `at` is not monotonic!).
 int firstNoteOn(const std::vector<mnArpee::EngineEvent>& evs)
 {
     for (const auto& e : evs)
@@ -75,7 +75,7 @@ int main()
 {
     using namespace mnArpee;
 
-    // 1. Alap Up arp: C-E-G akkord, 16 x 1/16 ~ 4 negyed = 2s @120bpm.
+    // 1. Default pattern: C-E-G chord, 16 x 1/16 = 4 quarters = 2s @120bpm.
     {
         ArpEngine e;
         e.noteOn(60, 100);
@@ -86,14 +86,14 @@ int main()
         check(firstNoteOn(evs) == 60, "up16-first-note-is-lowest");
     }
 
-    // 2. Ures input = csend.
+    // 2. Empty input = silence.
     {
         ArpEngine e;
         auto evs = runFor(e, 1.0, freeHost());
         check(countOn(evs) == 0, "silence-without-input");
     }
 
-    // 3. Egyedi pattern: k3, k1, k2 sorrend (C-E-G akkordbol G, C, E).
+    // 3. Custom pattern: k3, k1, k2 order (G, C, E from a C-E-G chord).
     {
         ArpEngine e;
         Bank b = makeFactoryBank();
@@ -115,7 +115,7 @@ int main()
               "custom-pattern-key-order");
     }
 
-    // 4. Chord step: mindket hang egyszerre.
+    // 4. Chord step: both notes at once.
     {
         ArpEngine e;
         Bank b = makeFactoryBank();
@@ -133,7 +133,7 @@ int main()
         check(chordNotes >= 2, "chord-step-plays-all");
     }
 
-    // 5. Latch: elengedes utan is szol.
+    // 5. Latch: keeps sounding after release.
     {
         ArpEngine e;
         e.setLatch(true);
@@ -143,7 +143,7 @@ int main()
         check(countOn(evs) > 0, "latch-keeps-playing");
     }
 
-    // 6. Sync rate valtas: 1/8 feleannyi note mint 1/16.
+    // 6. Sync rate change: 1/8 yields half as many notes as 1/16.
     {
         ArpEngine e8, e16;
         Bank b = makeFactoryBank();

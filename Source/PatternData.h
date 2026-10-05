@@ -6,21 +6,22 @@
 #include <vector>
 
 //==============================================================================
-// PatternData: BlueArp-manual alapu egyszerusitett adatmodell (eloszures nelkul).
+// PatternData: simplified data model based on the BlueArp manual (no input pre-filtering).
 //
-// Manual-lefedettseg (v2.8.0):
+// Manual coverage (v2.8.0):
 //  - steps: 0..64 (0 = MIDI thru, 1 = quantized thru)
-//  - sync: 1/64..3/8 törtjei (bar törtjeként)
+//  - sync: 1/64..3/8 as fractions of a bar
 //  - gate 1..125%, swing -50..+50%
 //  - STEP TYPE: Off/Nrm/Rst/Tie/Chr/Rnd
 //  - KEY SELECT: Fixed/Root/k1..k5
 //  - SCALE STEP -12..+12, OCTAVE -3..+3
 //  - VELOCITY 0..127, GATE TIME mult, CHANCE 1..100%
 //  - chains: max 16, chain quantize, restart-on-switch
-// Egyszerusites az MVP-ben (keres szerint):
-//  - nincs input range filter / wrap, nincs missing-keys substitution,
-//    nincs akkordfelismeres / skala-derivalas, nincs input quantize,
-//    nincs fixed-key sequencer mod, nincs skala-kenyszerites.
+// MVP simplifications (by request):
+//  - no input range filter / wrap, no missing-keys substitution,
+//    no chord detection / scale derivation, no input quantize,
+//    no fixed-key sequencer mode, no scale enforcement,
+//  - no arp modes: the step matrix defines the whole pattern.
 //==============================================================================
 
 namespace mnArpee
@@ -34,12 +35,12 @@ constexpr int maxChainSteps = 64;
 
 enum class StepType : std::uint8_t
 {
-    Off = 0,    // nem general hangot
-    Normal,     // normal hang
-    Rest,       // elozo step hangjat folytatja (hosszabbitas)
-    Tie,        // atlapolas az elozovel (glide mono/legato szintin)
-    Chord,      // osszes input hang egyszerre
-    Random,     // veletlen input hang
+    Off = 0,    // produces no note
+    Normal,     // normal note
+    Rest,       // continues the previous step's note (extends it)
+    Tie,        // overlaps the previous note (glide on mono/legato synths)
+    Chord,      // all input notes at once
+    Random,     // random input note
 };
 
 enum class SyncRate : std::uint8_t
@@ -50,7 +51,7 @@ enum class SyncRate : std::uint8_t
 
 constexpr double syncRateToBars(SyncRate r) noexcept
 {
-    // bar-tört: BlueArp manual "sync" tablazat (1/64 .. 3/8 bar).
+    // Bar fractions: BlueArp manual "sync" table (1/64 .. 3/8 bar).
     switch (r)
     {
         case SyncRate::R1_64: return 1.0 / 64.0;
@@ -73,12 +74,12 @@ constexpr double syncRateToBars(SyncRate r) noexcept
 struct Step
 {
     StepType type = StepType::Normal;
-    // Melyik rendezett input hang: 0..4 (k1..k5). Chord/Random eseten figyelmen kivul.
+    // Which sorted input note: 0..4 (k1..k5). Ignored for Chord/Random.
     std::int8_t keyIndex = 0;
-    std::int8_t scaleStep = 0;   // -12..+12 felhang (MVP: kromatikus)
+    std::int8_t scaleStep = 0;   // -12..+12 semitones up (MVP: chromatic)
     std::int8_t octave = 0;      // -3..+3
     std::uint8_t velocity = 96;  // 0..127
-    // Gate-szorzo szazalekban: 100 = nincs valtozas (manual GATE TIME "2x" stb. helyett).
+    // Gate multiplier in percent: 100 = unchanged (instead of the manual's GATE TIME "2x" etc.).
     std::uint16_t gateScalePercent = 100;
     std::uint8_t chance = 100;   // 1..100%
 };
@@ -90,26 +91,26 @@ struct Program
     SyncRate sync = SyncRate::R1_16;
     int gatePercent = 80;            // 1..125
     int swingPercent = 0;            // -50..+50
-    int octaveShift = 0;             // -2..+2 global arp oktav
-    int transposeOct = 0;            // -3..+3 program-szintu
+    int octaveShift = 0;             // -2..+2 global arp octave
+    int transposeOct = 0;            // -3..+3 program-level
     std::array<Step, maxSteps> steps {};
 };
 
 struct Chain
 {
     std::string name;
-    // Lancolt program-indexek sorrendben.
+    // Chained program indices in order.
     std::vector<int> programs;
-    int nextChain = -1;              // -1 = nincs auto-ugras
+    int nextChain = -1;              // -1 = no auto-jump
 };
 
 struct Bank
 {
     std::vector<Program> programs;
     std::vector<Chain> chains;
-    int currentChain = -1;           // -1 = lanc ki
-    int numChains = 4;               // 1..16 (automatizálható "current chain" knob tartomanyahoz)
-    double chainQuantizeBars = 1.0;  // default 1/4 ~ 1 beat 4/4-ben = 1.0 bar? lasd megjegyzest
+    int currentChain = -1;           // -1 = chain off
+    int numChains = 4;               // 1..16 (range of the automatable "current chain" knob)
+    double chainQuantizeBars = 1.0;  // in bars; 0.25 = one beat in 4/4
     bool restartChainOnSwitch = true;
 };
 

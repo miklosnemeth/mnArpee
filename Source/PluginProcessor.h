@@ -7,8 +7,8 @@
 //==============================================================================
 // MnArpeeAudioProcessor: VST3/Standalone MIDI-effect.
 // - APVTS: rate, octave, gate, swing, program, chain, latch.
-// - A step-matrix az aktiv programot szerkeszti (UI -> engine bank).
-// - MIDI: bemeneti hangok -> engine; CC/bend/aftertouch thru; sustain+refcount.
+// - The step matrix edits the active program (UI -> engine bank).
+// - MIDI: input notes -> engine; CC/bend/aftertouch pass through; sustain + refcount.
 //==============================================================================
 class MnArpeeAudioProcessor : public juce::AudioProcessor
 {
@@ -16,7 +16,7 @@ public:
     MnArpeeAudioProcessor();
     ~MnArpeeAudioProcessor() override;
 
-    // ToggleButton-kezeleshez: latch kozvetlen irasa.
+    // For the ToggleButton: writes the latch parameter directly.
     void setLatchDirect(bool on);
 
     void prepareToPlay(double sampleRate, int samplesPerBlock) override;

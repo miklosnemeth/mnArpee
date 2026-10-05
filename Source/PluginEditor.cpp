@@ -37,7 +37,7 @@ void MnArpeeLookAndFeel::drawComboBox(juce::Graphics& g, int width, int height,
     g.setColour(box.findColour(juce::ComboBox::outlineColourId));
     g.drawRoundedRectangle(r, 5.0f, 1.0f);
 
-    // Le-fel nyilak (kis chevron).
+    // Up/down arrows (small chevron).
     auto ar = r.removeFromRight(18.0f).reduced(5.0f);
     g.setColour(box.findColour(juce::ComboBox::arrowColourId));
     juce::Path p;
@@ -183,7 +183,7 @@ MnArpeeAudioEditor::MnArpeeAudioEditor(MnArpeeAudioProcessor& p)
     setupLabel(stepVelLabel, "VEL");
 
     refreshFromState();
-    lastStatusText = {};      // első timer-tick mindig frissít
+    lastStatusText = {};      // the first timer tick always refreshes
     statusText = "keys  -";
     startTimerHz(15);
 }
@@ -204,7 +204,7 @@ void MnArpeeAudioEditor::paint(juce::Graphics& g)
     g.setColour(Pal::border());
     g.drawRect(getLocalBounds(), 1);
 
-    // Kártyák a vezérlők mögött.
+    // Cards behind the controls.
     g.setColour(Pal::card());
     g.fillRoundedRectangle(paramsCard.toFloat(), 8.0f);
     g.setColour(Pal::border());
@@ -220,7 +220,7 @@ void MnArpeeAudioEditor::paint(juce::Graphics& g)
     g.setColour(Pal::border());
     g.drawRoundedRectangle(editCard.toFloat(), 8.0f, 1.0f);
 
-    // Szekció-címkék.
+    // Section labels.
     g.setFont(juce::Font(juce::FontOptions(11.0f, juce::Font::bold)));
     g.setColour(Pal::dimText());
     g.drawText("PATTERN", gridCard.getX() + 14, gridCard.getY() + 7, 120, 16,
@@ -229,7 +229,7 @@ void MnArpeeAudioEditor::paint(juce::Graphics& g)
                editCard.getX() + 14, editCard.getY() + 7, 200, 16,
                juce::Justification::centredLeft);
 
-    // Info sor a fejlécen (márka és latch között): lenyomott hangok.
+    // Info line in the header (between brand and latch): held notes.
     g.setFont(juce::Font(juce::FontOptions(12.0f)));
     g.setColour(Pal::text());
     const int sx = 12 + 180;
@@ -241,17 +241,17 @@ void MnArpeeAudioEditor::resized()
 {
     auto area = getLocalBounds().reduced(12);
 
-    // Fejléc: márka balra, latch + statusz jobbra.
+    // Header: brand on the left, latch + status on the right.
     auto header = area.removeFromTop(56);
     auto latchArea = header.removeFromRight(150);
     brandLabel.setBounds(header.removeFromLeft(170));
     latchButton.setBounds(latchArea.getX(), latchArea.getCentreY() - 12, 100, 24);
 
-    // Paraméter-kártya.
+    // Parameter card.
     paramsCard = area.removeFromTop(74);
     area.removeFromTop(10);
 
-    // Alsó: step-szerkesztő kártya, fölötte a matrix.
+    // Bottom: step editor card, with the matrix above it.
     editCard = area.removeFromBottom(76);
     area.removeFromBottom(10);
     gridCard = area;
@@ -273,11 +273,11 @@ void MnArpeeAudioEditor::resized()
     place(inner, swingLabel, swingSlider, 112);
     place(inner, stepsLabel, stepsSlider, 112);
 
-    // Grid a kártya belsejében (címke-sávval a tetején).
+    // Grid inside the card (label strip on top).
     grid.setBounds(gridCard.getX() + 6, gridCard.getY() + 24,
                    gridCard.getWidth() - 12, gridCard.getHeight() - 30);
 
-    // Step-szerkesztő sáv.
+    // Step editor strip.
     auto edit = editCard.reduced(12);
     edit.removeFromTop(18);
     auto place2 = [](juce::Rectangle<int>& r, juce::Label& lab, juce::Component& comp, int w)
