@@ -1,26 +1,31 @@
 #pragma once
 
+#include <algorithm>
 #include <array>
 #include <cstdint>
-#include <string>
-#include <vector>
+#include <string_view>
+#include <type_traits>
 
 //==============================================================================
-// PatternData: BlueArp-manual alapu egyszerusitett adatmodell (eloszures nelkul).
+// PatternData: simplified data model based on the BlueArp manual (no input pre-filtering).
 //
-// Manual-lefedettseg (v2.8.0):
+// Manual coverage (v2.8.0):
 //  - steps: 0..64 (0 = MIDI thru, 1 = quantized thru)
-//  - sync: 1/64..3/8 törtjei (bar törtjeként)
+//  - sync: 1/64..3/8 as fractions of a bar
 //  - gate 1..125%, swing -50..+50%
 //  - STEP TYPE: Off/Nrm/Rst/Tie/Chr/Rnd
 //  - KEY SELECT: Fixed/Root/k1..k5
 //  - SCALE STEP -12..+12, OCTAVE -3..+3
 //  - VELOCITY 0..127, GATE TIME mult, CHANCE 1..100%
 //  - chains: max 16, chain quantize, restart-on-switch
-// Egyszerusites az MVP-ben (keres szerint):
-//  - nincs input range filter / wrap, nincs missing-keys substitution,
-//    nincs akkordfelismeres / skala-derivalas, nincs input quantize,
-//    nincs fixed-key sequencer mod, nincs skala-kenyszerites.
+// MVP simplifications (by request):
+//  - no input range filter / wrap, no missing-keys substitution,
+//    no chord detection / scale derivation, no input quantize,
+//    no fixed-key sequencer mode, no scale enforcement,
+//  - no arp modes: the step matrix defines the whole pattern.
+//
+// Every type here is trivially copyable and fixed size, so a whole Bank can be
+// handed to the audio thread with a plain copy (no heap allocation).
 //==============================================================================
 
 namespace mnArpee
@@ -28,28 +33,19 @@ namespace mnArpee
 
 constexpr int maxSteps = 64;
 constexpr int maxInputKeys = 5;
-constexpr int maxPrograms = 128;
+constexpr int maxPrograms = 16;
 constexpr int maxChains = 16;
 constexpr int maxChainSteps = 64;
+constexpr int maxNameLength = 32; // including the terminating zero
 
 enum class StepType : std::uint8_t
 {
-    Off = 0,    // nem general hangot
-    Normal,     // normal hang
-    Rest,       // elozo step hangjat folytatja (hosszabbitas)
-    Tie,        // atlapolas az elozovel (glide mono/legato szintin)
-    Chord,      // osszes input hang egyszerre
-    Random,     // veletlen input hang
-};
-
-enum class ArpMode : std::uint8_t
-{
-    Up = 0,
-    Down,
-    UpDown,
-    DownUp,
-    Random,
-    AsPlayed,
+    Off = 0,    // produces no note
+    Normal,     // normal note
+    Rest,       // continues the previous step's note (extends it)
+    Tie,        // overlaps the previous note (glide on mono/legato synths)
+    Chord,      // all input notes at once
+    Random,     // random input note
 };
 
 enum class SyncRate : std::uint8_t
@@ -57,10 +53,11 @@ enum class SyncRate : std::uint8_t
     R1_64 = 0, R1_48, R1_32, R1_24, R1_16, R1_12, R1_8, R1_6, R1_4,
     R3_64, R3_32, R3_16, R3_8,
 };
+constexpr int numSyncRates = 13;
 
 constexpr double syncRateToBars(SyncRate r) noexcept
 {
-    // bar-tört: BlueArp manual "sync" tablazat (1/64 .. 3/8 bar).
+    // Bar fractions: BlueArp manual "sync" table (1/64 .. 3/8 bar).
     switch (r)
     {
         case SyncRate::R1_64: return 1.0 / 64.0;
@@ -80,51 +77,75 @@ constexpr double syncRateToBars(SyncRate r) noexcept
     return 1.0 / 16.0;
 }
 
+constexpr const char* syncRateName(SyncRate r) noexcept
+{
+    constexpr const char* names[numSyncRates] = { "1/64", "1/48", "1/32", "1/24", "1/16",
+                                                  "1/12", "1/8",  "1/6",  "1/4",  "3/64",
+                                                  "3/32", "3/16", "3/8" };
+    const int i = (int) r;
+    return (i >= 0 && i < numSyncRates) ? names[i] : "1/16";
+}
+
+// Fixed-size, zero-terminated name.
+struct Name
+{
+    std::array<char, maxNameLength> chars {};
+
+    void set(std::string_view s) noexcept
+    {
+        chars.fill(0);
+        const auto n = std::min(s.size(), chars.size() - 1);
+        std::copy_n(s.data(), n, chars.data());
+    }
+    std::string_view view() const noexcept { return { chars.data() }; }
+};
+
 struct Step
 {
     StepType type = StepType::Normal;
-    // Melyik rendezett input hang: 0..4 (k1..k5). Chord/Random eseten figyelmen kivul.
+    // Which sorted input note: 0..4 (k1..k5). Ignored for Chord/Random.
     std::int8_t keyIndex = 0;
-    std::int8_t scaleStep = 0;   // -12..+12 felhang (MVP: kromatikus)
+    std::int8_t scaleStep = 0;   // -12..+12 semitones up (MVP: chromatic)
     std::int8_t octave = 0;      // -3..+3
     std::uint8_t velocity = 96;  // 0..127
-    // Gate-szorzo szazalekban: 100 = nincs valtozas (manual GATE TIME "2x" stb. helyett).
+    // Gate multiplier in percent: 100 = unchanged (instead of the manual's GATE TIME "2x" etc.).
     std::uint16_t gateScalePercent = 100;
     std::uint8_t chance = 100;   // 1..100%
 };
 
 struct Program
 {
-    std::string name = "Init";
+    Name name;
     int numSteps = 16;               // 0..64
     SyncRate sync = SyncRate::R1_16;
     int gatePercent = 80;            // 1..125
     int swingPercent = 0;            // -50..+50
-    ArpMode mode = ArpMode::Up;
-    int octaveShift = 0;             // -2..+2 global arp oktav
-    int transposeOct = 0;            // -3..+3 program-szintu
+    int octaveShift = 0;             // -2..+2 global arp octave
+    int transposeOct = 0;            // -3..+3 program-level
     std::array<Step, maxSteps> steps {};
 };
 
 struct Chain
 {
-    std::string name;
-    // Lancolt program-indexek sorrendben.
-    std::vector<int> programs;
-    int nextChain = -1;              // -1 = nincs auto-ugras
+    Name name;
+    // Chained program indices in order.
+    std::array<std::int8_t, maxChainSteps> programs {};
+    int length = 0;
 };
 
 struct Bank
 {
-    std::vector<Program> programs;
-    std::vector<Chain> chains;
-    int currentChain = -1;           // -1 = lanc ki
-    int numChains = 4;               // 1..16 (automatizálható "current chain" knob tartomanyahoz)
-    double chainQuantizeBars = 1.0;  // default 1/4 ~ 1 beat 4/4-ben = 1.0 bar? lasd megjegyzest
+    std::array<Program, maxPrograms> programs {};
+    int numPrograms = 0;
+    std::array<Chain, maxChains> chains {};
+    int numChains = 0;
+    double chainQuantizeBars = 0.25; // in bars; 0.25 = one beat in 4/4
     bool restartChainOnSwitch = true;
 };
 
-Program makeInitProgram(const std::string& name = "Init");
+static_assert(std::is_trivially_copyable_v<Bank>, "Bank must be copyable without allocation");
+
+Program makeInitProgram(std::string_view name = "Init");
 Bank makeFactoryBank();
 
 } // namespace mnArpee

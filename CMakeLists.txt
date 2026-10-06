@@ -9,10 +9,11 @@ if(NOT CMAKE_BUILD_TYPE)
     set(CMAKE_BUILD_TYPE Release)
 endif()
 
-# JUCE: prefer local checkout at d:/dev/JUCE, fallback to FetchContent 9.0.1
+# JUCE: prefer a local checkout (MNARPEE_JUCE_DIR), fall back to FetchContent 9.0.1
+set(MNARPEE_JUCE_DIR "d:/dev/JUCE" CACHE PATH "Local JUCE checkout")
 if(NOT MNARPEE_TESTS_ONLY)
-if(EXISTS "d:/dev/JUCE/CMakeLists.txt")
-    add_subdirectory("d:/dev/JUCE" JUCE)
+if(EXISTS "${MNARPEE_JUCE_DIR}/CMakeLists.txt")
+    add_subdirectory("${MNARPEE_JUCE_DIR}" JUCE)
 else()
     include(FetchContent)
     FetchContent_Declare(juce
@@ -54,6 +55,8 @@ target_compile_definitions(mnArpee
     PUBLIC
         JucePlugin_Name="mnArpee"
         JUCE_VST3_CAN_REPLACE_VST2=0
+        JUCE_WEB_BROWSER=0
+        JUCE_USE_CURL=0
 )
 
 if(MSVC)
@@ -71,8 +74,9 @@ target_link_libraries(mnArpee
 )
 endif()
 
-option(MNARPEE_BUILD_TESTS "Build the console engine tests (mnArpeeTests)" OFF)
+option(MNARPEE_BUILD_TESTS "Build the engine tests (mnArpeeTests) and, with JUCE, the plugin tests (mnArpeePluginTests)" OFF)
 if(MNARPEE_BUILD_TESTS)
+    enable_testing()
     add_executable(mnArpeeTests
         Tests/EngineTests.cpp
         Source/PatternData.cpp
@@ -82,5 +86,21 @@ if(MNARPEE_BUILD_TESTS)
     if(MSVC)
         target_compile_options(mnArpeeTests PRIVATE /utf-8 /Zc:__cplusplus)
     endif()
-endif()
+    add_test(NAME engine COMMAND mnArpeeTests)
 
+    if(NOT MNARPEE_TESTS_ONLY)
+        # Drives the real processor and editor without a host. It links the plugin's
+        # shared code, so it gets that target's include paths and definitions.
+        add_executable(mnArpeePluginTests Tests/PluginTests.cpp)
+        target_include_directories(mnArpeePluginTests PRIVATE
+            Source
+            $<TARGET_PROPERTY:mnArpee,INCLUDE_DIRECTORIES>)
+        target_compile_definitions(mnArpeePluginTests PRIVATE
+            $<TARGET_PROPERTY:mnArpee,COMPILE_DEFINITIONS>)
+        target_link_libraries(mnArpeePluginTests PRIVATE mnArpee)
+        if(MSVC)
+            target_compile_options(mnArpeePluginTests PRIVATE /utf-8 /Zc:__cplusplus)
+        endif()
+        add_test(NAME plugin COMMAND mnArpeePluginTests)
+    endif()
+endif()

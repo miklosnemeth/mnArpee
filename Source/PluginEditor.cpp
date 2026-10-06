@@ -37,7 +37,7 @@ void MnArpeeLookAndFeel::drawComboBox(juce::Graphics& g, int width, int height,
     g.setColour(box.findColour(juce::ComboBox::outlineColourId));
     g.drawRoundedRectangle(r, 5.0f, 1.0f);
 
-    // Le-fel nyilak (kis chevron).
+    // Up/down arrows (small chevron).
     auto ar = r.removeFromRight(18.0f).reduced(5.0f);
     g.setColour(box.findColour(juce::ComboBox::arrowColourId));
     juce::Path p;
@@ -103,65 +103,43 @@ MnArpeeAudioEditor::MnArpeeAudioEditor(MnArpeeAudioProcessor& p)
     addAndMakeVisible(brandLabel);
 
     addAndMakeVisible(grid);
-    grid.onStepClicked([this](int step, int row)
-    {
-        editStep = step;
-        auto& apvts = proc.getApvts();
-        juce::ScopedLock lock(proc.getEngineLock());
-        auto& bank = proc.getEngineBankForEdit();
-        int progIdx = 0;
-        if (auto* pp = apvts.getRawParameterValue("program"))
-            progIdx = juce::jlimit(0, 7, (int) pp->load() - 1);
-        auto& prog = bank.programs[(size_t) progIdx];
-        auto& st = prog.steps[(size_t) step];
-        if (row <= 4)
-        {
-            st.type = (st.type == mnArpee::StepType::Normal
-                       && st.keyIndex == row) ? mnArpee::StepType::Off
-                                              : mnArpee::StepType::Normal;
-            st.keyIndex = (std::int8_t) row;
-        }
-        else if (row == 5)
-            st.type = (st.type == mnArpee::StepType::Chord) ? mnArpee::StepType::Off
-                                                            : mnArpee::StepType::Chord;
-        else
-            st.type = (st.type == mnArpee::StepType::Random) ? mnArpee::StepType::Off
-                                                             : mnArpee::StepType::Random;
-        proc.requestBankRefresh();
-        grid.setEditStep(step);
-        refreshFromState();
-    });
+    grid.onStepClicked([this](int step, int row) { onGridClicked(step, row); });
 
     juce::StringArray progNames;
-    for (int i = 0; i < 8; ++i)
+    for (int i = 0; i < MnArpeeAudioProcessor::numUserPrograms; ++i)
         progNames.add("P" + juce::String(i + 1));
     programBox.addItemList(progNames, 1);
     chainBox.addItemList({ "Off", "Chain 1", "Chain 2" }, 1);
-    modeBox.addItemList({ "Up", "Down", "UpDown", "DownUp", "Random", "As Played" }, 1);
-    rateBox.addItemList({ "1/64", "1/48", "1/32", "1/24", "1/16", "1/12",
-                          "1/8", "1/6", "1/4", "3/64", "3/32", "3/16", "3/8" }, 1);
+    for (int i = 0; i < mnArpee::numSyncRates; ++i)
+        rateBox.addItem(mnArpee::syncRateName((mnArpee::SyncRate) i), i + 1);
     stepTypeBox.addItemList({ "Off", "Normal", "Rest", "Tie", "Chord", "Random" }, 1);
     stepKeyBox.addItemList({ "k1", "k2", "k3", "k4", "k5" }, 1);
-
-    for (auto* cb : { &programBox, &chainBox, &modeBox, &rateBox, &stepTypeBox, &stepKeyBox })
-    {
+    for (auto* cb : { &programBox, &chainBox, &rateBox, &stepTypeBox, &stepKeyBox })
         addAndMakeVisible(*cb);
-        cb->addListener(this);
-    }
 
-    setupKnob(octaveSlider, -2, 2, 1);
-    setupKnob(gateSlider, 1, 125, 1);
-    setupKnob(swingSlider, -50, 50, 1);
-    setupKnob(stepsSlider, 1, 64, 1);
-    setupKnob(stepOctSlider, -3, 3, 1);
-    setupKnob(stepVelSlider, 0, 127, 1);
+    for (auto* s : { &octaveSlider, &gateSlider, &swingSlider, &stepsSlider, &stepOctSlider,
+                     &stepVelSlider })
+        setupSlider(*s);
+    stepOctSlider.setRange(-3, 3, 1);
+    stepVelSlider.setRange(1, 127, 1);
 
     addAndMakeVisible(latchButton);
     latchButton.setButtonText("Latch");
-    latchButton.onClick = [this]
-    {
-        proc.setLatchDirect(latchButton.getToggleState());
-    };
+
+    auto& apvts = proc.getApvts();
+    programAtt = std::make_unique<ComboAttachment>(apvts, "program", programBox);
+    chainAtt = std::make_unique<ComboAttachment>(apvts, "chain", chainBox);
+    rateAtt = std::make_unique<ComboAttachment>(apvts, "rate", rateBox);
+    octaveAtt = std::make_unique<SliderAttachment>(apvts, "octave", octaveSlider);
+    gateAtt = std::make_unique<SliderAttachment>(apvts, "gate", gateSlider);
+    swingAtt = std::make_unique<SliderAttachment>(apvts, "swing", swingSlider);
+    stepsAtt = std::make_unique<SliderAttachment>(apvts, "steps", stepsSlider);
+    latchAtt = std::make_unique<ButtonAttachment>(apvts, "latch", latchButton);
+
+    stepTypeBox.onChange = [this] { onStepEditorChanged(); };
+    stepKeyBox.onChange = [this] { onStepEditorChanged(); };
+    stepOctSlider.onValueChange = [this] { onStepEditorChanged(); };
+    stepVelSlider.onValueChange = [this] { onStepEditorChanged(); };
 
     auto setupLabel = [this](juce::Label& l, const char* text)
     {
@@ -173,7 +151,6 @@ MnArpeeAudioEditor::MnArpeeAudioEditor(MnArpeeAudioProcessor& p)
     };
     setupLabel(programLabel, "PROGRAM");
     setupLabel(chainLabel, "CHAIN");
-    setupLabel(modeLabel, "MODE");
     setupLabel(rateLabel, "RATE");
     setupLabel(octaveLabel, "OCT");
     setupLabel(gateLabel, "GATE %");
@@ -184,20 +161,30 @@ MnArpeeAudioEditor::MnArpeeAudioEditor(MnArpeeAudioProcessor& p)
     setupLabel(stepOctLabel, "OCT");
     setupLabel(stepVelLabel, "VEL");
 
-    refreshFromState();
-    lastStatusText = {};      // első timer-tick mindig frissít
     statusText = "keys  -";
-    startTimerHz(15);
+    reloadProgram();
+    startTimerHz(30);
 }
 
-void MnArpeeAudioEditor::setupKnob(juce::Slider& s, double lo, double hi, double step)
+MnArpeeAudioEditor::~MnArpeeAudioEditor()
+{
+    stopTimer();
+    setLookAndFeel(nullptr);
+}
+
+void MnArpeeAudioEditor::setupSlider(juce::Slider& s)
 {
     s.setSliderStyle(juce::Slider::LinearHorizontal);
     s.setTextBoxStyle(juce::Slider::TextBoxRight, false, 46, 18);
-    s.setRange(lo, hi, step);
     s.setPopupDisplayEnabled(true, true, this);
     addAndMakeVisible(s);
-    s.addListener(this);
+}
+
+int MnArpeeAudioEditor::selectedProgram() const
+{
+    if (auto* p = proc.getApvts().getRawParameterValue("program"))
+        return juce::jlimit(0, MnArpeeAudioProcessor::numUserPrograms - 1, (int) std::lround(p->load()) - 1);
+    return 0;
 }
 
 void MnArpeeAudioEditor::paint(juce::Graphics& g)
@@ -206,7 +193,7 @@ void MnArpeeAudioEditor::paint(juce::Graphics& g)
     g.setColour(Pal::border());
     g.drawRect(getLocalBounds(), 1);
 
-    // Kártyák a vezérlők mögött.
+    // Cards behind the controls.
     g.setColour(Pal::card());
     g.fillRoundedRectangle(paramsCard.toFloat(), 8.0f);
     g.setColour(Pal::border());
@@ -222,7 +209,7 @@ void MnArpeeAudioEditor::paint(juce::Graphics& g)
     g.setColour(Pal::border());
     g.drawRoundedRectangle(editCard.toFloat(), 8.0f, 1.0f);
 
-    // Szekció-címkék.
+    // Section labels.
     g.setFont(juce::Font(juce::FontOptions(11.0f, juce::Font::bold)));
     g.setColour(Pal::dimText());
     g.drawText("PATTERN", gridCard.getX() + 14, gridCard.getY() + 7, 120, 16,
@@ -231,7 +218,7 @@ void MnArpeeAudioEditor::paint(juce::Graphics& g)
                editCard.getX() + 14, editCard.getY() + 7, 200, 16,
                juce::Justification::centredLeft);
 
-    // Info sor a fejlécen (márka és latch között): lenyomott hangok.
+    // Info line in the header (between brand and latch): held notes.
     g.setFont(juce::Font(juce::FontOptions(12.0f)));
     g.setColour(Pal::text());
     const int sx = 12 + 180;
@@ -243,17 +230,17 @@ void MnArpeeAudioEditor::resized()
 {
     auto area = getLocalBounds().reduced(12);
 
-    // Fejléc: márka balra, latch + statusz jobbra.
+    // Header: brand on the left, latch + status on the right.
     auto header = area.removeFromTop(56);
     auto latchArea = header.removeFromRight(150);
     brandLabel.setBounds(header.removeFromLeft(170));
     latchButton.setBounds(latchArea.getX(), latchArea.getCentreY() - 12, 100, 24);
 
-    // Paraméter-kártya.
+    // Parameter card.
     paramsCard = area.removeFromTop(74);
     area.removeFromTop(10);
 
-    // Alsó: step-szerkesztő kártya, fölötte a matrix.
+    // Bottom: step editor card, with the matrix above it.
     editCard = area.removeFromBottom(76);
     area.removeFromBottom(10);
     gridCard = area;
@@ -269,18 +256,17 @@ void MnArpeeAudioEditor::resized()
     };
     place(inner, programLabel, programBox, 80);
     place(inner, chainLabel, chainBox, 100);
-    place(inner, modeLabel, modeBox, 110);
     place(inner, rateLabel, rateBox, 86);
     place(inner, octaveLabel, octaveSlider, 112);
     place(inner, gateLabel, gateSlider, 112);
     place(inner, swingLabel, swingSlider, 112);
     place(inner, stepsLabel, stepsSlider, 112);
 
-    // Grid a kártya belsejében (címke-sávval a tetején).
+    // Grid inside the card (label strip on top).
     grid.setBounds(gridCard.getX() + 6, gridCard.getY() + 24,
                    gridCard.getWidth() - 12, gridCard.getHeight() - 30);
 
-    // Step-szerkesztő sáv.
+    // Step editor strip.
     auto edit = editCard.reduced(12);
     edit.removeFromTop(18);
     auto place2 = [](juce::Rectangle<int>& r, juce::Label& lab, juce::Component& comp, int w)
@@ -296,130 +282,96 @@ void MnArpeeAudioEditor::resized()
     place2(edit, stepVelLabel, stepVelSlider, 170);
 }
 
-MnArpeeAudioEditor::~MnArpeeAudioEditor()
-{
-    stopTimer();
-    setLookAndFeel(nullptr);
-}
 void MnArpeeAudioEditor::timerCallback()
 {
-    juce::String txt;
+    // Follow program switches, model changes (edits, state loads) and the step count.
+    const int prog = selectedProgram();
+    int steps = shownProgram.numSteps;
+    if (auto* sp = proc.getApvts().getRawParameterValue("steps"))
+        steps = (int) std::lround(sp->load());
+    if (prog != shownProgramIndex || proc.getModelVersion() != shownModelVersion)
+        reloadProgram();
+    else if (steps != shownProgram.numSteps)
     {
-        juce::ScopedLock lock(proc.getEngineLock());
-        grid.setPlayStep(proc.getEngine().getCurrentStep());
-        auto input = proc.getEngine().getActiveInput();
-        for (size_t i = 0; i < input.size() && i < 5; ++i)
-        {
-            if (i > 0)
-                txt += " ";
-            txt += juce::String(input[i].note);
-        }
+        shownProgram.numSteps = steps;
+        grid.setProgram(shownProgram);
     }
-    if (txt != lastStatusText)
+
+    const auto& ui = proc.getUiStatus();
+    grid.setPlayStep(ui.playingProgram.load(std::memory_order_relaxed) == shownProgramIndex
+                         ? ui.playStep.load(std::memory_order_relaxed)
+                         : -1);
+
+    juce::String txt;
+    const int n = ui.numInput.load(std::memory_order_acquire);
+    for (int i = 0; i < n; ++i)
+        txt << (i > 0 ? " " : "") << juce::MidiMessage::getMidiNoteName(
+                   ui.input[(size_t) i].load(std::memory_order_relaxed), true, true, 4);
+    txt = "keys  " + (txt.isNotEmpty() ? txt : juce::String("-"));
+    if (txt != statusText)
     {
-        lastStatusText = txt;
-        statusText = txt.isNotEmpty() ? "keys  " + txt : "keys  -";
+        statusText = txt;
         repaint(180, 12, getWidth() - 342, 56);
     }
 }
 
-void MnArpeeAudioEditor::comboBoxChanged(juce::ComboBox* cb)
+void MnArpeeAudioEditor::reloadProgram()
 {
-    auto& apvts = proc.getApvts();
-    auto setInt = [&](const char* id, int v)
-    {
-        if (auto* p = dynamic_cast<juce::AudioParameterInt*>(apvts.getParameter(id)))
-            p->setValueNotifyingHost(p->convertTo0to1((float) v));
-    };
-    auto setChoice = [&](const char* id, int v)
-    {
-        if (auto* p = dynamic_cast<juce::AudioParameterChoice*>(apvts.getParameter(id)))
-            p->setValueNotifyingHost(p->convertTo0to1((float) v));
-    };
-    if (cb == &programBox)
-        setInt("program", programBox.getSelectedItemIndex() + 1);
-    else if (cb == &chainBox)
-        setInt("chain", chainBox.getSelectedItemIndex());
-    else if (cb == &modeBox)
-        setChoice("mode", modeBox.getSelectedItemIndex());
-    else if (cb == &rateBox)
-        setChoice("rate", rateBox.getSelectedItemIndex());
-    else if (cb == &stepTypeBox || cb == &stepKeyBox)
-        pushStepEditToEngine();
-}
-
-void MnArpeeAudioEditor::sliderValueChanged(juce::Slider* s)
-{
-    auto& apvts = proc.getApvts();
-    auto setInt = [&](const char* id, int v)
-    {
-        if (auto* p = dynamic_cast<juce::AudioParameterInt*>(apvts.getParameter(id)))
-            p->setValueNotifyingHost(p->convertTo0to1((float) v));
-    };
-    if (s == &octaveSlider)
-        setInt("octave", (int) s->getValue());
-    else if (s == &gateSlider)
-        setInt("gate", (int) s->getValue());
-    else if (s == &swingSlider)
-        setInt("swing", (int) s->getValue());
-    else if (s == &stepsSlider)
-        setInt("steps", (int) s->getValue());
-    else
-        pushStepEditToEngine();
-}
-
-void MnArpeeAudioEditor::refreshFromState()
-{
-    auto& apvts = proc.getApvts();
-    auto getInt = [&](const char* id) -> int
-    {
-        if (auto* p = apvts.getRawParameterValue(id))
-            return (int) p->load();
-        return 0;
-    };
-    programBox.setSelectedItemIndex(juce::jlimit(0, 7, getInt("program") - 1),
-                                    juce::dontSendNotification);
-    chainBox.setSelectedItemIndex(juce::jlimit(0, 2, getInt("chain")),
-                                  juce::dontSendNotification);
-    modeBox.setSelectedItemIndex(juce::jlimit(0, 5, getInt("mode")),
-                                 juce::dontSendNotification);
-    rateBox.setSelectedItemIndex(juce::jlimit(0, 12, getInt("rate")),
-                                 juce::dontSendNotification);
-    octaveSlider.setValue(getInt("octave"), juce::dontSendNotification);
-    gateSlider.setValue(getInt("gate"), juce::dontSendNotification);
-    swingSlider.setValue(getInt("swing"), juce::dontSendNotification);
-    stepsSlider.setValue(getInt("steps"), juce::dontSendNotification);
-    latchButton.setToggleState(getInt("latch") != 0, juce::dontSendNotification);
-
-    juce::ScopedLock lock(proc.getEngineLock());
-    auto& bank = proc.getEngineBankForEdit();
-    int progIdx = juce::jlimit(0, 7, getInt("program") - 1);
-    auto& prog = bank.programs[(size_t) progIdx];
-    grid.setProgram(&prog);
+    shownModelVersion = proc.getModelVersion();
+    shownProgramIndex = selectedProgram();
+    shownProgram = proc.getProgramCopy(shownProgramIndex);
+    grid.setProgram(shownProgram);
     grid.setEditStep(editStep);
-    const auto& st = prog.steps[(size_t) std::clamp(editStep, 0, 63)];
-    stepTypeBox.setSelectedItemIndex((int) st.type, juce::dontSendNotification);
-    stepKeyBox.setSelectedItemIndex(std::clamp((int) st.keyIndex, 0, 4),
-                                    juce::dontSendNotification);
-    stepOctSlider.setValue(st.octave, juce::dontSendNotification);
-    stepVelSlider.setValue(st.velocity, juce::dontSendNotification);
-    repaint();
+    refreshStepEditor();
 }
 
-void MnArpeeAudioEditor::pushStepEditToEngine()
+void MnArpeeAudioEditor::refreshStepEditor()
 {
-    auto& apvts = proc.getApvts();
-    int progIdx = 0;
-    if (auto* pp = apvts.getRawParameterValue("program"))
-        progIdx = juce::jlimit(0, 7, (int) pp->load() - 1);
-    juce::ScopedLock lock(proc.getEngineLock());
-    auto& bank = proc.getEngineBankForEdit();
-    auto& st = bank.programs[(size_t) progIdx].steps[(size_t) std::clamp(editStep, 0, 63)];
-    st.type = (mnArpee::StepType) stepTypeBox.getSelectedItemIndex();
-    st.keyIndex = (std::int8_t) stepKeyBox.getSelectedItemIndex();
+    const auto& st = shownProgram.steps[(size_t) std::clamp(editStep, 0, mnArpee::maxSteps - 1)];
+    stepTypeBox.setSelectedItemIndex((int) st.type, juce::dontSendNotification);
+    stepKeyBox.setSelectedItemIndex(std::clamp((int) st.keyIndex, 0, 4), juce::dontSendNotification);
+    stepOctSlider.setValue(st.octave, juce::dontSendNotification);
+    stepVelSlider.setValue(std::max(1, (int) st.velocity), juce::dontSendNotification);
+    repaint(editCard);
+}
+
+void MnArpeeAudioEditor::commitStep(const mnArpee::Step& step)
+{
+    shownProgram.steps[(size_t) editStep] = step;
+    proc.setStep(shownProgramIndex, editStep, step);
+    shownModelVersion = proc.getModelVersion(); // our own edit: no reload needed
+    grid.setProgram(shownProgram);
+}
+
+void MnArpeeAudioEditor::onGridClicked(int step, int row)
+{
+    using mnArpee::StepType;
+    editStep = step;
+    auto st = shownProgram.steps[(size_t) step];
+    if (row <= 4)
+    {
+        const bool pitched = st.type == StepType::Normal || st.type == StepType::Tie;
+        if (pitched && st.keyIndex == row)
+            st.type = StepType::Off;
+        else if (st.type != StepType::Tie)
+            st.type = StepType::Normal;
+        st.keyIndex = (std::int8_t) row;
+    }
+    else if (row == 5)
+        st.type = st.type == StepType::Chord ? StepType::Off : StepType::Chord;
+    else
+        st.type = st.type == StepType::Random ? StepType::Off : StepType::Random;
+    commitStep(st);
+    grid.setEditStep(step);
+    refreshStepEditor();
+}
+
+void MnArpeeAudioEditor::onStepEditorChanged()
+{
+    auto st = shownProgram.steps[(size_t) editStep];
+    st.type = (mnArpee::StepType) juce::jlimit(0, 5, stepTypeBox.getSelectedItemIndex());
+    st.keyIndex = (std::int8_t) juce::jlimit(0, 4, stepKeyBox.getSelectedItemIndex());
     st.octave = (std::int8_t) stepOctSlider.getValue();
     st.velocity = (std::uint8_t) stepVelSlider.getValue();
-    proc.requestBankRefresh();
-    refreshFromState();
+    commitStep(st);
 }
-

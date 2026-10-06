@@ -5,15 +5,16 @@
 #include "ArpEngine.h"
 
 //==============================================================================
-// StepGrid: 64 stepes matrix. Sor = KEY SELECT (k1..k5 + Chr + Rnd),
-// oszlop = step. Cella-klikk valtja a kijelolt beallitast.
+// StepGrid: 64-step matrix. Row = KEY SELECT (k1..k5 + Chr + Rnd),
+// column = step. Clicking a cell toggles that setting. Tie steps are drawn linked
+// to the previous column, Rest and Off steps as a mark in the first row.
 //==============================================================================
 class StepGrid : public juce::Component
 {
 public:
     using StepClicked = std::function<void(int stepIndex, int row)>;
 
-    // Egységes sötét paletta (a teljes UI ezt használja).
+    // Unified dark palette (used by the whole UI).
     struct Palette
     {
         static juce::Colour bg()      { return juce::Colour(0xff0e1117); }
@@ -31,9 +32,11 @@ public:
 
     StepGrid();
 
-    void setProgram(const mnArpee::Program* prog);
-    void setPlayStep(int step) { playStep = step; repaint(); }
-    void setEditStep(int step) { editStep = step; repaint(); }
+    // The grid keeps its own copy, so it never points into data that may be replaced.
+    void setProgram(const mnArpee::Program& prog);
+    // Only the old and new playhead columns are repainted.
+    void setPlayStep(int step);
+    void setEditStep(int step);
     void onStepClicked(StepClicked fn) { clicked = std::move(fn); }
 
     void paint(juce::Graphics& g) override;
@@ -46,10 +49,13 @@ public:
 private:
     juce::Rectangle<int> boardArea() const;
     juce::Rectangle<int> cellRect(int step, int row) const;
+    juce::Rectangle<int> columnBounds(int step) const;
+    int visibleSteps() const;
     void cellAt(juce::Point<int> p, int& step, int& row) const;
     int rowForStep(const mnArpee::Step& s) const;
 
-    const mnArpee::Program* program = nullptr;
+    mnArpee::Program program;
+    bool hasProgram = false;
     int playStep = -1;
     int editStep = 0;
     int hoverStep = -1;

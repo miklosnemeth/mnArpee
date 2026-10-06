@@ -1,26 +1,26 @@
 #include "PatternData.h"
 
 #include <algorithm>
+#include <initializer_list>
 
 namespace mnArpee
 {
 
-Program makeInitProgram(const std::string& name)
+Program makeInitProgram(std::string_view name)
 {
     Program p;
-    p.name = name;
+    p.name.set(name);
     p.numSteps = 16;
     p.sync = SyncRate::R1_16;
     p.gatePercent = 80;
     p.swingPercent = 0;
-    p.mode = ArpMode::Up;
     p.octaveShift = 0;
     p.transposeOct = 0;
     for (int i = 0; i < maxSteps; ++i)
     {
         Step s;
         s.type = StepType::Normal;
-        s.keyIndex = 0; // k1; a szamlalo lepteti (Up), a pattern felulirhatja
+        s.keyIndex = 0; // k1; the pattern overrides this per step
         s.velocity = 96;
         p.steps[(size_t) i] = s;
     }
@@ -29,14 +29,16 @@ Program makeInitProgram(const std::string& name)
 
 namespace
 {
-Program up16(const std::string& name, SyncRate sync, int gate, int swing, int oct)
+Program up16(std::string_view name, SyncRate sync, int gate, int swing, int oct)
 {
     auto p = makeInitProgram(name);
     p.sync = sync;
     p.gatePercent = gate;
     p.swingPercent = swing;
-    p.mode = ArpMode::Up;
     p.octaveShift = oct;
+    // Custom pattern: k1 k2 k3 k4 repeating.
+    for (int i = 0; i < maxSteps; ++i)
+        p.steps[(size_t) i].keyIndex = static_cast<std::int8_t>(i % 4);
     return p;
 }
 } // namespace
@@ -44,19 +46,21 @@ Program up16(const std::string& name, SyncRate sync, int gate, int swing, int oc
 Bank makeFactoryBank()
 {
     Bank bank;
-    bank.programs.reserve(16);
-    bank.programs.push_back(up16("Trance Up 16", SyncRate::R1_16, 80, 0, 0));
-    bank.programs.push_back(up16("Bass 8ths", SyncRate::R1_8, 90, 0, 0));
+    auto add = [&bank](const Program& p) { bank.programs[(size_t) bank.numPrograms++] = p; };
+    add(up16("Trance Up 16", SyncRate::R1_16, 80, 0, 0));
+    add(up16("Bass 8ths", SyncRate::R1_8, 90, 0, 0));
 
     {
-        auto p = up16("UpDown Pad", SyncRate::R1_8, 100, 0, 0);
-        p.mode = ArpMode::UpDown;
-        bank.programs.push_back(p);
+        auto p = up16("Up-Down Pad", SyncRate::R1_8, 100, 0, 0);
+        // k1 k2 k3 k4 k3 k2 (up-down shape spelled out by hand)
+        static constexpr int seq[] = { 0, 1, 2, 3, 2, 1 };
+        for (int i = 0; i < maxSteps; ++i)
+            p.steps[(size_t) i].keyIndex = static_cast<std::int8_t>(seq[i % 6]);
+        add(p);
     }
     {
         auto p = up16("Shuffle 16", SyncRate::R1_16, 75, 20, 0);
-        p.mode = ArpMode::Up;
-        bank.programs.push_back(p);
+            add(p);
     }
     {
         auto p = makeInitProgram("Chord Stabs");
@@ -68,16 +72,15 @@ Bank makeFactoryBank()
             p.steps[(size_t) i].type = (i % 2 == 0) ? StepType::Chord : StepType::Off;
             p.steps[(size_t) i].velocity = (i % 2 == 0) ? 110 : 96;
         }
-        bank.programs.push_back(p);
+        add(p);
     }
     {
         auto p = makeInitProgram("Random Sparkle");
         p.sync = SyncRate::R1_32;
         p.gatePercent = 60;
-        p.mode = ArpMode::Random;
         for (int i = 0; i < 16; ++i)
             p.steps[(size_t) i].type = StepType::Random;
-        bank.programs.push_back(p);
+        add(p);
     }
     {
         auto p = makeInitProgram("Octave Bass");
@@ -90,7 +93,7 @@ Bank makeFactoryBank()
             p.steps[(size_t) i].octave = static_cast<std::int8_t>((i % 2 == 0) ? 0 : 1);
             p.steps[(size_t) i].velocity = (i % 4 == 0) ? 115 : 95;
         }
-        bank.programs.push_back(p);
+        add(p);
     }
     {
         auto p = makeInitProgram("Tie Glide");
@@ -101,16 +104,20 @@ Bank makeFactoryBank()
             p.steps[(size_t) i].type = (i % 4 == 3) ? StepType::Tie : StepType::Normal;
             p.steps[(size_t) i].keyIndex = static_cast<std::int8_t>(i % 3);
         }
-        bank.programs.push_back(p);
+        add(p);
     }
 
-    bank.chains.reserve(4);
-    bank.chains.push_back(Chain{ "Verse", { 0, 1 }, -1 });
-    bank.chains.push_back(Chain{ "Chorus", { 0, 4, 0, 5 }, -1 });
-    bank.numChains = 4;
-    bank.chainQuantizeBars = 0.25; // 1 beat 4/4-ben
+    auto addChain = [&bank](std::string_view name, std::initializer_list<int> progs)
+    {
+        auto& c = bank.chains[(size_t) bank.numChains++];
+        c.name.set(name);
+        for (int p : progs)
+            c.programs[(size_t) c.length++] = static_cast<std::int8_t>(p);
+    };
+    addChain("Verse", { 0, 1 });
+    addChain("Chorus", { 0, 4, 0, 5 });
+    bank.chainQuantizeBars = 0.25; // one beat in 4/4
     bank.restartChainOnSwitch = true;
-    bank.currentChain = -1;
     return bank;
 }
 
