@@ -71,6 +71,9 @@ public:
     // Increments whenever the model changes (edits, program switch, state load).
     int getModelVersion() const { return modelVersion.load(); }
     const UiStatus& getUiStatus() const { return ui; }
+    // Message thread: runs a pending program switch now instead of on the next message
+    // loop iteration (used by the plugin tests).
+    void handlePendingUpdates() { handleUpdateNowIfNeeded(); }
 
 private:
     struct ParamValues

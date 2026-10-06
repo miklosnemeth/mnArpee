@@ -74,8 +74,9 @@ target_link_libraries(mnArpee
 )
 endif()
 
-option(MNARPEE_BUILD_TESTS "Build the console engine tests (mnArpeeTests)" OFF)
+option(MNARPEE_BUILD_TESTS "Build the engine tests (mnArpeeTests) and, with JUCE, the plugin tests (mnArpeePluginTests)" OFF)
 if(MNARPEE_BUILD_TESTS)
+    enable_testing()
     add_executable(mnArpeeTests
         Tests/EngineTests.cpp
         Source/PatternData.cpp
@@ -85,5 +86,21 @@ if(MNARPEE_BUILD_TESTS)
     if(MSVC)
         target_compile_options(mnArpeeTests PRIVATE /utf-8 /Zc:__cplusplus)
     endif()
-endif()
+    add_test(NAME engine COMMAND mnArpeeTests)
 
+    if(NOT MNARPEE_TESTS_ONLY)
+        # Drives the real processor and editor without a host. It links the plugin's
+        # shared code, so it gets that target's include paths and definitions.
+        add_executable(mnArpeePluginTests Tests/PluginTests.cpp)
+        target_include_directories(mnArpeePluginTests PRIVATE
+            Source
+            $<TARGET_PROPERTY:mnArpee,INCLUDE_DIRECTORIES>)
+        target_compile_definitions(mnArpeePluginTests PRIVATE
+            $<TARGET_PROPERTY:mnArpee,COMPILE_DEFINITIONS>)
+        target_link_libraries(mnArpeePluginTests PRIVATE mnArpee)
+        if(MSVC)
+            target_compile_options(mnArpeePluginTests PRIVATE /utf-8 /Zc:__cplusplus)
+        endif()
+        add_test(NAME plugin COMMAND mnArpeePluginTests)
+    endif()
+endif()

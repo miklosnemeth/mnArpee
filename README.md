@@ -37,11 +37,23 @@ Artifacts:
 
 ## Tests
 
+Engine tests only (no JUCE needed):
+
 ```powershell
 cmake -S . -B build-tests -DMNARPEE_TESTS_ONLY=ON -DMNARPEE_BUILD_TESTS=ON
 cmake --build build-tests --config Release
 build-tests/Release/mnArpeeTests.exe
 ```
+
+Engine and plugin tests (the plugin tests drive the real processor and editor without a host):
+
+```powershell
+cmake -S . -B build -DMNARPEE_BUILD_TESTS=ON
+cmake --build build --config Release
+ctest --test-dir build -C Release --output-on-failure
+```
+
+On Linux the editor checks need an X display (`xvfb-run ctest ...`); without one they are skipped.
 
 ## License
 
