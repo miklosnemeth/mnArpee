@@ -26,11 +26,12 @@ public:
 
 //==============================================================================
 // MnArpeeAudioEditor: dark card header + StepGrid + step editor strip.
+// Header controls are bound to the parameters with attachments (host automation and
+// state loads show up, gestures are reported); the grid and step strip edit the
+// selected program through the processor.
 //==============================================================================
 class MnArpeeAudioEditor : public juce::AudioProcessorEditor,
-                           private juce::Timer,
-                           private juce::ComboBox::Listener,
-                           private juce::Slider::Listener
+                           private juce::Timer
 {
 public:
     explicit MnArpeeAudioEditor(MnArpeeAudioProcessor&);
@@ -40,12 +41,18 @@ public:
     void resized() override;
 
 private:
+    using ComboAttachment = juce::AudioProcessorValueTreeState::ComboBoxAttachment;
+    using SliderAttachment = juce::AudioProcessorValueTreeState::SliderAttachment;
+    using ButtonAttachment = juce::AudioProcessorValueTreeState::ButtonAttachment;
+
     void timerCallback() override;
-    void comboBoxChanged(juce::ComboBox*) override;
-    void sliderValueChanged(juce::Slider*) override;
-    void refreshFromState();
-    void pushStepEditToEngine();
-    void setupKnob(juce::Slider& s, double lo, double hi, double step);
+    void reloadProgram();
+    void refreshStepEditor();
+    void onGridClicked(int step, int row);
+    void onStepEditorChanged();
+    void commitStep(const mnArpee::Step& step);
+    void setupSlider(juce::Slider& s);
+    int selectedProgram() const;
 
     MnArpeeAudioProcessor& proc;
     MnArpeeLookAndFeel lnf;
@@ -68,13 +75,21 @@ private:
     juce::Label octaveLabel, gateLabel, swingLabel, stepsLabel;
     juce::Label stepTypeLabel, stepKeyLabel, stepOctLabel, stepVelLabel;
 
+    // Attachments (declared after the controls, so they are destroyed first)
+    std::unique_ptr<ComboAttachment> programAtt, chainAtt, rateAtt;
+    std::unique_ptr<SliderAttachment> octaveAtt, gateAtt, swingAtt, stepsAtt;
+    std::unique_ptr<ButtonAttachment> latchAtt;
+
     // Info bar
     juce::String statusText;
-    juce::String lastStatusText;
 
     // Card rectangles (drawn by paint, computed by resized)
     juce::Rectangle<int> paramsCard, gridCard, editCard;
 
+    // The program shown in the grid (a copy, so a state load can never leave it dangling).
+    mnArpee::Program shownProgram;
+    int shownProgramIndex = -1;
+    int shownModelVersion = -1;
     int editStep = 0;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(MnArpeeAudioEditor)

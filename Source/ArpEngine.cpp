@@ -7,249 +7,308 @@ namespace mnArpee
 {
 namespace
 {
-double barsToQuarters(double bars) { return bars * 4.0; }
 int clampNote(int n) { return std::clamp(n, 0, 127); }
+bool validNote(int n) { return n >= 0 && n < 128; }
+// Re-grid tolerance, in quarters, against floating point noise.
+constexpr double gridEpsilon = 1.0e-9;
+// Host positions that differ from the expected one by more than this are a jump.
+constexpr double jumpToleranceQuarters = 0.01;
 }
 
-ArpEngine::ArpEngine() { bank = makeFactoryBank(); }
+ArpEngine::ArpEngine() { setBank(makeFactoryBank()); }
 
+//==============================================================================
 void ArpEngine::setBank(const Bank& b)
 {
-    bank = b;
-    if (! bank.programs.empty())
-        currentProgram = std::clamp(currentProgram, 0, (int) bank.programs.size() - 1);
+    updateBank(b);
     pendingProgram = -1;
     pendingChain = -2;
     currentStep = 0;
     stepsPlayedInProgram = 0;
-    chainStepPos = 0;
-    previousStepNotes.clear();
+    chainPos = 0;
+    lastPlayedStep = -1;
+    positionInit = false;
 }
 
 void ArpEngine::updateBank(const Bank& b)
 {
     bank = b;
-    if (! bank.programs.empty())
-        currentProgram = std::clamp(currentProgram, 0, (int) bank.programs.size() - 1);
-    currentStep = std::min(currentStep, maxSteps - 1);
+    bank.numPrograms = std::clamp(bank.numPrograms, 0, maxPrograms);
+    bank.numChains = std::clamp(bank.numChains, 0, maxChains);
+    const int last = std::max(0, bank.numPrograms - 1);
+    currentProgram = std::clamp(currentProgram, 0, last);
+    selectedProgram = std::clamp(selectedProgram, 0, last);
+    if (pendingProgram > last)
+        pendingProgram = -1;
+    if (currentChain >= bank.numChains)
+        currentChain = -1;
 }
 
 void ArpEngine::setProgramParams(int programIndex, SyncRate sync, int gatePercent,
                                  int swingPercent, int octaveShift, int numSteps)
 {
-    if (programIndex < 0 || programIndex >= (int) bank.programs.size())
+    if (programIndex < 0 || programIndex >= bank.numPrograms)
         return;
     auto& p = bank.programs[(size_t) programIndex];
-    p.sync = sync;
-    p.gatePercent = gatePercent;
-    p.swingPercent = swingPercent;
-    p.octaveShift = octaveShift;
-    p.numSteps = numSteps;
+    p.sync = (SyncRate) std::clamp((int) sync, 0, numSyncRates - 1);
+    p.gatePercent = std::clamp(gatePercent, 1, 125);
+    p.swingPercent = std::clamp(swingPercent, -50, 50);
+    p.octaveShift = std::clamp(octaveShift, -2, 2);
+    p.numSteps = std::clamp(numSteps, 0, maxSteps);
 }
 
 void ArpEngine::setCurrentProgram(int index)
 {
-    if (bank.programs.empty())
+    if (bank.numPrograms <= 0)
         return;
-    pendingProgram = std::clamp(index, 0, (int) bank.programs.size() - 1);
+    selectedProgram = std::clamp(index, 0, bank.numPrograms - 1);
+    pendingProgram = selectedProgram != currentProgram ? selectedProgram : -1;
 }
 
 void ArpEngine::setCurrentChain(int chainIndex)
 {
-    pendingChain = chainIndex;
+    pendingChain = std::clamp(chainIndex, -1, maxChains - 1);
     pendingChainAtPpq = -1.0;
 }
 
+void ArpEngine::setLatch(bool on)
+{
+    latch = on;
+    if (! on)
+        latchedVel.fill(0);
+}
+
+//==============================================================================
 void ArpEngine::noteOn(int note, int velocity)
 {
-    if (latch && held.empty())
-        latchedNotes.clear(); // a new chord replaces the latched one
-    HeldNote h{ note, std::clamp(velocity, 1, 127), orderCounter++ };
-    held[note] = h;
-    sustainedNotes.erase(note);
+    if (! validNote(note))
+        return;
+    if (latch && heldCount == 0)
+        latchedVel.fill(0); // a new chord replaces the latched one
+    const auto vel = (std::uint8_t) std::clamp(velocity, 1, 127);
+    if (heldVel[(size_t) note] == 0)
+        ++heldCount;
+    heldVel[(size_t) note] = vel;
+    sustainedVel[(size_t) note] = 0;
     if (latch)
-    {
-        latchedNotes.erase(
-            std::remove_if(latchedNotes.begin(), latchedNotes.end(),
-                           [note](const HeldNote& x) { return x.note == note; }),
-            latchedNotes.end());
-        latchedNotes.push_back(h);
-    }
+        latchedVel[(size_t) note] = vel;
 }
 
 void ArpEngine::noteOff(int note)
 {
-    auto it = held.find(note);
-    if (it == held.end())
+    if (! validNote(note) || heldVel[(size_t) note] == 0)
         return;
     if (sustainDown)
-        sustainedNotes.insert(note);
-    if (latch)
-    {
-        // Latch on: a released note stays part of the held chord.
-        latchedNotes.erase(
-            std::remove_if(latchedNotes.begin(), latchedNotes.end(),
-                           [note](const HeldNote& x) { return x.note == note; }),
-            latchedNotes.end());
-        latchedNotes.push_back(it->second);
-    }
-    held.erase(it);
-    if (! bank.programs.empty() && activeProgram().numSteps <= 1)
-        sounding.erase(note);
+        sustainedVel[(size_t) note] = heldVel[(size_t) note];
+    heldVel[(size_t) note] = 0;
+    --heldCount;
 }
 
 void ArpEngine::sustain(bool down)
 {
     sustainDown = down;
     if (! down)
-        sustainedNotes.clear();
+        sustainedVel.fill(0);
 }
 
 void ArpEngine::panic()
 {
-    held.clear();
-    latchedNotes.clear();
-    sustainedNotes.clear();
-    previousStepNotes.clear();
+    heldVel.fill(0);
+    sustainedVel.fill(0);
+    latchedVel.fill(0);
+    heldCount = 0;
     stepsPlayedInProgram = 0;
     currentStep = 0;
+    lastPlayedStep = -1;
     panicPending = true; // render() sends note-offs for everything still sounding
 }
 
-std::vector<HeldNote> ArpEngine::getActiveInput() const { return orderedInput(); }
-
+//==============================================================================
 const Program& ArpEngine::activeProgram() const
 {
     static const Program fallback = makeInitProgram();
-    if (bank.programs.empty())
+    if (bank.numPrograms <= 0)
         return fallback;
-    const int idx = std::clamp(currentProgram, 0, (int) bank.programs.size() - 1);
-    return bank.programs[(size_t) idx];
+    return bank.programs[(size_t) std::clamp(currentProgram, 0, bank.numPrograms - 1)];
 }
 
-std::vector<int> ArpEngine::resolveChainPrograms() const
+bool ArpEngine::chainActive() const
 {
-    if (bank.currentChain < 0 || bank.currentChain >= (int) bank.chains.size())
-        return {};
-    std::vector<int> out;
-    for (int p : bank.chains[(size_t) bank.currentChain].programs)
-        if (p >= 0 && p < (int) bank.programs.size())
-            out.push_back(p);
-    return out;
+    return currentChain >= 0 && currentChain < bank.numChains
+           && bank.chains[(size_t) currentChain].length > 0;
 }
 
-
-std::vector<HeldNote> ArpEngine::orderedInput() const
+int ArpEngine::chainProgramAt(int pos) const
 {
-    std::vector<HeldNote> notes;
-    notes.reserve(held.size() + sustainedNotes.size());
-    for (const auto& kv : held)
-        notes.push_back(kv.second);
-    for (int n : sustainedNotes)
+    const auto& c = bank.chains[(size_t) currentChain];
+    const int len = std::clamp(c.length, 1, maxChainSteps);
+    const int p = c.programs[(size_t) (((pos % len) + len) % len)];
+    return std::clamp(p, 0, std::max(0, bank.numPrograms - 1));
+}
+
+void ArpEngine::collectInput(InputNotes& out) const
+{
+    out.size = 0;
+    for (int n = 0; n < 128; ++n) // ascending pitch: no sort needed
     {
-        if (held.count(n) != 0)
-            continue;
-        auto it = std::find_if(latchedNotes.begin(), latchedNotes.end(),
-                               [n](const HeldNote& h) { return h.note == n; });
-        notes.push_back(it != latchedNotes.end() ? *it : HeldNote{ n, 96, 0 });
+        const int v = heldVel[(size_t) n] != 0 ? heldVel[(size_t) n] : sustainedVel[(size_t) n];
+        if (v != 0)
+            out.notes[(size_t) out.size++] = HeldNote{ n, v };
     }
-    if (notes.empty() && latch && ! latchedNotes.empty())
-        notes = latchedNotes;
-
-    // No pre-filtering: input is always sorted by ascending pitch; each step's KEY SELECT picks the note.
-    std::sort(notes.begin(), notes.end(),
-              [](const HeldNote& a, const HeldNote& b) { return a.note < b.note; });
-    return notes;
+    if (out.size == 0 && latch)
+        for (int n = 0; n < 128; ++n)
+            if (latchedVel[(size_t) n] != 0)
+                out.notes[(size_t) out.size++] = HeldNote{ n, latchedVel[(size_t) n] };
 }
 
-double ArpEngine::stepBars() const { return syncRateToBars(activeProgram().sync); }
-
-double ArpEngine::swingOffsetBars(int stepIndex) const
+InputNotes ArpEngine::getActiveInput() const
 {
-    const int swing = activeProgram().swingPercent;
-    if (swing == 0 || (stepIndex % 2) == 0)
+    InputNotes in;
+    collectInput(in);
+    return in;
+}
+
+double ArpEngine::stepQuarters(const Program& prog) { return syncRateToBars(prog.sync) * 4.0; }
+
+double ArpEngine::swingQuarters(const Program& prog, long long index, double stepQ) const
+{
+    // Swing delays (or with a negative amount, advances) every odd step of the grid.
+    if (prog.swingPercent == 0 || (index & 1) == 0)
         return 0.0;
-    return stepBars() * (swing / 100.0);
+    return stepQ * (std::clamp(prog.swingPercent, -50, 50) / 100.0);
 }
 
-std::vector<int> ArpEngine::pickStepNotes(const Program& prog, const Step& step,
-                                          const std::vector<HeldNote>& input)
+double ArpEngine::stepTime(const Program& prog, long long index, double stepQ) const
 {
-    std::vector<int> picked;
-    if (input.empty())
-        return picked;
-    const int n = (int) input.size();
-    if (step.type == StepType::Chord)
-    {
-        for (const auto& h : input)
-            picked.push_back(clampNote(h.note + step.scaleStep + step.octave * 12
-                                       + prog.transposeOct * 12 + prog.octaveShift * 12));
-        return picked;
-    }
-    // KEY SELECT: k1..k5 index into the sorted input; wraps around if fewer notes are held.
-    int pick = 0;
-    if (step.type == StepType::Random)
-        pick = randomFn ? randomFn(0, n - 1) : (int) (rng() % (unsigned) n);
-    else
-        pick = std::clamp((int) step.keyIndex, 0, maxInputKeys - 1) % n;
-    const auto& h = input[(size_t) std::clamp(pick, 0, n - 1)];
-    const int tr = step.scaleStep + step.octave * 12 + prog.transposeOct * 12 + prog.octaveShift * 12;
-    picked.push_back(clampNote(h.note + tr));
-    return picked;
+    return gridOriginPpq + (double) index * stepQ + swingQuarters(prog, index, stepQ);
 }
 
-void ArpEngine::emitOnBuf(int note, int vel, int at)
+int ArpEngine::sampleAt(double ppq) const
 {
-    if (outBuf == nullptr)
-        return;
+    const double s = (ppq - blockStartPpq) * samplesPerQuarter;
+    return (int) std::clamp(std::llround(s), 0LL, (long long) std::max(0, outSamples - 1));
+}
+
+//==============================================================================
+void ArpEngine::emitOn(int note, int vel, int at)
+{
     note = clampNote(note);
-    at = std::clamp(at, 0, outSamples - 1);
-    if (sounding.count(note) != 0) // retrigger: close the old note first
-        outBuf->push_back(EngineEvent{ at, false, 1, note, 0 });
-    sounding[note] = 1;
-    pendingOffs.erase(note);
-    outBuf->push_back(EngineEvent{ at, true, 1, note, std::clamp(vel, 1, 127) });
+    if (sounding[(size_t) note]) // retrigger: close the old note first
+        outBuf->push(EngineEvent{ at, false, outChannel, note, 0 });
+    sounding[(size_t) note] = true;
+    hasPendingOff[(size_t) note] = false;
+    outBuf->push(EngineEvent{ at, true, outChannel, note, std::clamp(vel, 1, 127) });
 }
 
-void ArpEngine::emitOffBuf(int note, int at)
+void ArpEngine::emitOff(int note, int at)
 {
-    if (outBuf == nullptr)
+    hasPendingOff[(size_t) note] = false;
+    if (! sounding[(size_t) note])
         return;
-    pendingOffs.erase(note);
-    if (sounding.erase(note) != 0)
-        outBuf->push_back(EngineEvent{ std::clamp(at, 0, outSamples - 1), false, 1, note, 0 });
+    sounding[(size_t) note] = false;
+    outBuf->push(EngineEvent{ at, false, outChannel, note, 0 });
 }
 
-void ArpEngine::scheduleOff(int note, double ppq) { pendingOffs[note] = ppq; }
-
-void ArpEngine::flushOffs(double uptoPpq, double blockStartPpq, double samplesPerQuarter)
+void ArpEngine::killAll(int at)
 {
-    std::vector<std::pair<int, double>> due;
-    for (const auto& kv : pendingOffs)
-        if (kv.second <= uptoPpq)
-            due.emplace_back(kv.first, kv.second);
-    for (const auto& d : due)
-        emitOffBuf(d.first,
-                   (int) std::llround((d.second - blockStartPpq) * samplesPerQuarter));
+    for (int n = 0; n < 128; ++n)
+        emitOff(n, at);
 }
 
-void ArpEngine::killAllBuf(int at)
+void ArpEngine::scheduleOff(int note, double ppq)
 {
-    std::vector<int> toKill;
-    for (const auto& kv : sounding)
-        toKill.push_back(kv.first);
-    for (int nn : toKill)
-        emitOffBuf(nn, at);
+    hasPendingOff[(size_t) note] = true;
+    pendingOffPpq[(size_t) note] = ppq;
 }
 
-void ArpEngine::playOneStep(Program& prog, const std::vector<HeldNote>& input,
-                            int at, int numSamples, double samplesPerQuarter)
+void ArpEngine::flushOffs(double uptoPpq)
+{
+    for (int n = 0; n < 128; ++n)
+        if (hasPendingOff[(size_t) n] && pendingOffPpq[(size_t) n] <= uptoPpq)
+            emitOff(n, sampleAt(pendingOffPpq[(size_t) n]));
+}
+
+//==============================================================================
+void ArpEngine::resync(double ppq, bool hostSynced)
+{
+    // Host sync: the grid is anchored to ppq 0, so steps land on the bar grid and the
+    // pattern position follows the song position. Free-run: anchored to "now".
+    const auto& prog = activeProgram();
+    const double stepQ = stepQuarters(prog);
+    gridOriginPpq = hostSynced ? 0.0 : ppq;
+    gridIndex = (long long) std::ceil((ppq - gridOriginPpq) / stepQ - gridEpsilon);
+    lastStepQ = stepQ;
+    const int numSteps = std::clamp(prog.numSteps, 0, maxSteps);
+    if (hostSynced && numSteps > 1)
+    {
+        currentStep = (int) (((gridIndex % numSteps) + numSteps) % numSteps);
+        stepsPlayedInProgram = currentStep;
+    }
+    else
+    {
+        currentStep = 0;
+        stepsPlayedInProgram = 0;
+    }
+    positionInit = true;
+}
+
+void ArpEngine::switchProgram(int index)
+{
+    currentProgram = std::clamp(index, 0, std::max(0, bank.numPrograms - 1));
+    pendingProgram = -1;
+    currentStep = 0;
+    stepsPlayedInProgram = 0;
+}
+
+void ArpEngine::advanceProgram()
+{
+    currentStep = 0;
+    stepsPlayedInProgram = 0;
+    if (chainActive())
+    {
+        chainPos = (chainPos + 1) % std::clamp(bank.chains[(size_t) currentChain].length, 1, maxChainSteps);
+        currentProgram = chainProgramAt(chainPos);
+    }
+    else if (pendingProgram >= 0)
+    {
+        switchProgram(pendingProgram);
+    }
+}
+
+void ArpEngine::applyPendingChain(double blockEndPpq)
+{
+    if (pendingChain == -2)
+        return;
+    const double gridQ = std::max(bank.chainQuantizeBars * 4.0, 1.0 / 256.0);
+    if (pendingChainAtPpq < 0.0)
+        pendingChainAtPpq = std::ceil(blockStartPpq / gridQ - gridEpsilon) * gridQ;
+    if (blockEndPpq < pendingChainAtPpq)
+        return;
+
+    currentChain = pendingChain < bank.numChains ? pendingChain : -1;
+    pendingChain = -2;
+    if (chainActive())
+    {
+        if (bank.restartChainOnSwitch)
+        {
+            chainPos = 0;
+            switchProgram(chainProgramAt(0));
+        }
+    }
+    else
+    {
+        // Chain off: go back to the program that is selected.
+        switchProgram(selectedProgram);
+    }
+}
+
+void ArpEngine::playOneStep(const Program& prog, const InputNotes& input, double t, double stepQ)
 {
     const int numSteps = std::clamp(prog.numSteps, 2, maxSteps);
-    const Step& step = prog.steps[(size_t) (currentStep % numSteps)];
-    const double swBars = swingOffsetBars(currentStep);
-    const int swung = std::clamp(
-        at + (int) std::llround((swBars * 4.0) * samplesPerQuarter), 0, numSamples - 1);
+    const int stepIndex = currentStep % numSteps;
+    const Step& step = prog.steps[(size_t) stepIndex];
+    const int at = sampleAt(t);
+    const double oneSample = 1.0 / samplesPerQuarter;
 
     bool play = step.chance >= 100;
     if (! play)
@@ -258,209 +317,202 @@ void ArpEngine::playOneStep(Program& prog, const std::vector<HeldNote>& input,
         play = roll <= std::clamp((int) step.chance, 1, 100);
     }
 
-    const double stepQ = barsToQuarters(stepBars());
-    const double startPpq = nextStepPpq + swBars * 4.0;
-
-    if (play && step.type == StepType::Rest)
+    if (play && step.type != StepType::Off && step.type != StepType::Rest)
     {
-        // Nothing to trigger: the preceding note was already extended when it was scheduled.
-    }
-    else if (play && step.type != StepType::Off)
-    {
-        auto newNotes = pickStepNotes(prog, step, input);
-        // Tie overlaps: the previous notes are released as the new ones start.
-        // Otherwise old notes end by their own gate (which may exceed 100%).
-        if (step.type == StepType::Tie)
+        // Rest is silent here: the preceding note was lengthened when it was scheduled.
+        std::array<int, 128> picked {};
+        int numPicked = 0;
+        const int shift = step.scaleStep + step.octave * 12 + prog.transposeOct * 12
+                          + prog.octaveShift * 12;
+        if (step.type == StepType::Chord)
         {
-            std::vector<int> olds;
-            for (const auto& kv : sounding)
-                if (std::find(newNotes.begin(), newNotes.end(), kv.first) == newNotes.end())
-                    olds.push_back(kv.first);
-            for (int nn : newNotes)
-                emitOnBuf(nn, step.velocity, swung);
-            for (int nn : olds)
-                emitOffBuf(nn, swung);
+            for (int i = 0; i < input.size; ++i)
+                picked[(size_t) numPicked++] = clampNote(input.notes[(size_t) i].note + shift);
         }
         else
         {
-            for (int nn : newNotes)
-                emitOnBuf(nn, step.velocity, swung);
+            // KEY SELECT: k1..k5 index into the sorted input; wraps around if fewer notes are held.
+            int pick = 0;
+            if (step.type == StepType::Random)
+                pick = randomFn ? randomFn(0, input.size - 1) : (int) (rng() % (unsigned) input.size);
+            else
+                pick = std::clamp((int) step.keyIndex, 0, maxInputKeys - 1) % input.size;
+            pick = std::clamp(pick, 0, input.size - 1);
+            picked[(size_t) numPicked++] = clampNote(input.notes[(size_t) pick].note + shift);
         }
+        const auto isPicked = [&](int note)
+        {
+            return std::find(picked.begin(), picked.begin() + numPicked, note) != picked.begin() + numPicked;
+        };
+
+        if (step.type == StepType::Tie)
+        {
+            // Legato: the new note starts first, the old ones end one sample later, and a
+            // note that is tied to itself keeps sounding without a retrigger.
+            for (int n = 0; n < 128; ++n)
+                if (sounding[(size_t) n] && ! isPicked(n))
+                    scheduleOff(n, t + oneSample);
+            for (int i = 0; i < numPicked; ++i)
+                if (! sounding[(size_t) picked[(size_t) i]])
+                    emitOn(picked[(size_t) i], step.velocity, at);
+        }
+        else
+        {
+            // Notes without a gate (left over from quantized thru) end here.
+            for (int n = 0; n < 128; ++n)
+                if (sounding[(size_t) n] && ! hasPendingOff[(size_t) n] && ! isPicked(n))
+                    emitOff(n, at);
+            for (int i = 0; i < numPicked; ++i)
+                emitOn(picked[(size_t) i], step.velocity, at);
+        }
+
+        // Gate, lengthened by directly following Rest steps (up to the pattern end) and
+        // held over into a following Tie step.
         const double gateQ = stepQ * (std::clamp(prog.gatePercent, 1, 125) / 100.0)
                              * (std::clamp((int) step.gateScalePercent, 10, 800) / 100.0);
-        // Rest steps directly after this one lengthen the note (up to the pattern end).
         int restSteps = 0;
-        for (int k = currentStep + 1; k < numSteps && prog.steps[(size_t) k].type == StepType::Rest; ++k)
+        int k = stepIndex + 1;
+        for (; k < numSteps && prog.steps[(size_t) k].type == StepType::Rest; ++k)
             ++restSteps;
-        for (int nn : newNotes)
-            scheduleOff(clampNote(nn), startPpq + std::max(gateQ, 1.0e-4) + restSteps * stepQ);
-        previousStepNotes = newNotes;
-    }
-    else if (step.type == StepType::Off)
-    {
-        previousStepNotes.clear();
+        double offAt = t + std::max(gateQ, oneSample) + restSteps * stepQ;
+        if (k < numSteps && prog.steps[(size_t) k].type == StepType::Tie)
+            offAt = std::max(offAt, stepTime(prog, gridIndex + 1 + restSteps, stepQ) + oneSample);
+        for (int i = 0; i < numPicked; ++i)
+            scheduleOff(picked[(size_t) i], offAt);
     }
 
-    currentStep = (currentStep + 1) % numSteps;
-    stepsPlayedInProgram++;
+    lastPlayedStep = stepIndex;
+    currentStep = (stepIndex + 1) % numSteps;
+    ++stepsPlayedInProgram;
 }
 
-std::vector<EngineEvent> ArpEngine::render(int numSamples, const HostPosition& host,
-                                                     const std::vector<EngineEvent>& thru)
+void ArpEngine::playQuantizedThru(const InputNotes& input, int at)
 {
-    std::vector<EngineEvent> out;
-    out.reserve(thru.size() + 32);
-    for (auto e : thru)
-    {
-        e.sampleOffset = std::clamp(e.sampleOffset, 0, std::max(0, numSamples - 1));
-        out.push_back(e);
-    }
+    for (int i = 0; i < input.size; ++i)
+        if (! sounding[(size_t) input.notes[(size_t) i].note])
+            emitOn(input.notes[(size_t) i].note, input.notes[(size_t) i].velocity, at);
+    for (int n = 0; n < 128; ++n)
+        if (sounding[(size_t) n] && ! input.contains(n))
+            emitOff(n, at);
+}
+
+//==============================================================================
+void ArpEngine::render(int numSamples, const HostPosition& host, EventBuffer& out)
+{
+    if (numSamples <= 0 || bank.numPrograms <= 0)
+        return;
+
     outBuf = &out;
     outSamples = numSamples;
-    if (numSamples <= 0 || bank.programs.empty())
-    {
-        outBuf = nullptr;
-        return out;
-    }
+    const int firstEvent = out.size();
 
-    const double safeBpm = host.bpm > 0.0 ? host.bpm : 120.0;
+    const double bpm = host.bpm > 0.0 ? host.bpm : 120.0;
     const double sr = host.sampleRate > 0.0 ? host.sampleRate : 44100.0;
-    const double samplesPerQuarter = sr * 60.0 / safeBpm;
+    samplesPerQuarter = sr * 60.0 / bpm;
 
-    double blockStartPpq = freePpq;
-    double blockEndPpq = freePpq + numSamples / samplesPerQuarter;
-    if (host.isPlaying)
-    {
-        blockStartPpq = host.ppqPosition;
-        blockEndPpq = blockStartPpq + numSamples / samplesPerQuarter;
-        if (positionInit && std::abs(blockStartPpq - freePpq) > stepBars() * 2.0 + 1.0)
-            positionInit = false;
-    }
+    blockStartPpq = host.isPlaying ? host.ppqPosition : freePpq;
+    const double blockEndPpq = blockStartPpq + numSamples / samplesPerQuarter;
+    // Anything that rounds to the next block's first sample belongs to the next block.
+    const double blockLimitPpq = blockStartPpq + (numSamples - 0.5) / samplesPerQuarter;
+
+    // Transport start, stop or jump (loop, locate): realign to the new position.
+    if (host.isPlaying != wasPlaying
+        || (host.isPlaying && std::abs(blockStartPpq - freePpq) > jumpToleranceQuarters))
+        positionInit = false;
+    wasPlaying = host.isPlaying;
     freePpq = blockEndPpq;
 
-    if (! positionInit)
+    if (panicPending || ! positionInit)
     {
-        killAllBuf(0);
-        pendingOffs.clear();
-        nextStepPpq = blockStartPpq;
-        positionInit = true;
-    }
-    if (nextStepPpq < blockStartPpq - stepBars() * 64.0)
-        nextStepPpq = blockStartPpq;
-
-    if (pendingChain != -2)
-    {
-        const double gridQ = std::max(barsToQuarters(bank.chainQuantizeBars), 1.0 / 256.0);
-        if (pendingChainAtPpq < 0.0)
-            pendingChainAtPpq = std::ceil(blockStartPpq / gridQ) * gridQ;
-        if (blockEndPpq >= pendingChainAtPpq)
-        {
-            bank.currentChain = std::clamp(pendingChain, -1, (int) bank.chains.size() - 1);
-            pendingChain = -2;
-            if (bank.restartChainOnSwitch)
-            {
-                chainStepPos = 0;
-                stepsPlayedInProgram = 0;
-                currentStep = 0;
-                const auto seq = resolveChainPrograms();
-                if (! seq.empty())
-                    currentProgram = seq[0];
-            }
-        }
-    }
-
-    if (panicPending)
-    {
-        killAllBuf(0);
-        pendingOffs.clear();
+        killAll(0);
         panicPending = false;
     }
+    if (! positionInit)
+        resync(blockStartPpq, host.isPlaying);
 
-    while (nextStepPpq < blockEndPpq)
+    collectInput(scratchInput);
+    if (! host.isPlaying && ! hadInput && ! scratchInput.empty())
     {
-        const double stepQuarters = barsToQuarters(stepBars());
-        flushOffs(nextStepPpq, blockStartPpq, samplesPerQuarter);
-        const int at = std::clamp(
-            (int) std::llround((nextStepPpq - blockStartPpq) * samplesPerQuarter),
-            0, numSamples - 1);
-        const int progIdx = std::clamp(currentProgram, 0, (int) bank.programs.size() - 1);
-        Program& prog = bank.programs[(size_t) progIdx];
+        // Free-run: the first key of a new phrase starts the pattern right away.
+        if (pendingProgram >= 0 && ! chainActive())
+            switchProgram(pendingProgram);
+        resync(blockStartPpq, false);
+        currentStep = 0;
+        stepsPlayedInProgram = 0;
+    }
+
+    applyPendingChain(blockEndPpq);
+
+    for (int guard = 0; guard < 4 * EventBuffer::capacity; ++guard)
+    {
+        const Program& prog = activeProgram();
+        const double stepQ = stepQuarters(prog);
+        if (std::abs(stepQ - lastStepQ) > 1.0e-12)
+        {
+            // Rate change: continue on the next point of the new grid.
+            const double nextBase = gridOriginPpq + (double) gridIndex * lastStepQ;
+            gridIndex = (long long) std::ceil((nextBase - gridOriginPpq) / stepQ - gridEpsilon);
+            lastStepQ = stepQ;
+        }
+
+        const double t = stepTime(prog, gridIndex, stepQ);
+        if (t >= blockLimitPpq)
+            break;
+        flushOffs(t);
+        const int at = sampleAt(t);
         const int numSteps = std::clamp(prog.numSteps, 0, maxSteps);
 
-        if (prog.numSteps > 1 && stepsPlayedInProgram >= numSteps)
+        if (numSteps > 1 && stepsPlayedInProgram >= numSteps)
         {
-            stepsPlayedInProgram = 0;
-            currentStep = 0;
-            const auto seq = resolveChainPrograms();
-            if (! seq.empty())
-            {
-                chainStepPos = (chainStepPos + 1) % (int) seq.size();
-                currentProgram = seq[(size_t) chainStepPos];
-            }
-            else if (pendingProgram >= 0)
-            {
-                currentProgram = pendingProgram;
-                pendingProgram = -1;
-            }
+            advanceProgram();
             continue;
         }
 
-        const auto input = orderedInput();
-
+        collectInput(scratchInput);
         if (numSteps <= 1)
         {
-            // No pattern end to wait for: switch program right away.
-            if (pendingProgram >= 0 && resolveChainPrograms().empty())
-            {
-                currentProgram = pendingProgram;
-                pendingProgram = -1;
-                continue;
-            }
-            if (numSteps == 1 && ! input.empty())
-            {
-                for (const auto& h : input)
-                    if (sounding.count(h.note) == 0)
-                        emitOnBuf(h.note, h.velocity, at);
-                std::vector<int> toKill;
-                for (const auto& kv : sounding)
-                {
-                    bool alive = false;
-                    for (const auto& h : input)
-                        if (h.note == kv.first)
-                            alive = true;
-                    if (! alive)
-                        toKill.push_back(kv.first);
-                }
-                for (int nn : toKill)
-                    emitOffBuf(nn, at);
-            }
+            // 0 steps = MIDI thru (handled by the caller), 1 step = quantized thru.
+            // There is no pattern end to wait for, so program switches happen at once.
+            if (numSteps == 0)
+                killAll(at);
+            else
+                playQuantizedThru(scratchInput, at);
+            lastPlayedStep = scratchInput.empty() ? -1 : 0;
+            ++gridIndex;
+            if (chainActive())
+                advanceProgram();
+            else if (pendingProgram >= 0)
+                switchProgram(pendingProgram);
+            continue;
         }
-        else if (! input.empty())
+
+        if (scratchInput.empty())
         {
-            playOneStep(prog, input, at, numSamples, samplesPerQuarter);
+            killAll(at);
+            lastPlayedStep = -1;
+            if (pendingProgram >= 0 && ! chainActive())
+                switchProgram(pendingProgram);
         }
         else
         {
-            killAllBuf(at);
-            previousStepNotes.clear();
+            playOneStep(prog, scratchInput, t, stepQ);
         }
-
-        nextStepPpq += stepQuarters;
-        if (stepQuarters <= 0.0)
-            break;
+        ++gridIndex;
     }
 
-    flushOffs(blockEndPpq - 1.0e-9, blockStartPpq, samplesPerQuarter);
+    flushOffs(blockLimitPpq - gridEpsilon);
+    collectInput(scratchInput);
+    hadInput = ! scratchInput.empty();
     outBuf = nullptr;
+
     // Time order; at the same sample, note-offs come before note-ons.
-    std::stable_sort(out.begin(), out.end(),
-                     [](const EngineEvent& a, const EngineEvent& b)
-                     {
-                         if (a.sampleOffset != b.sampleOffset)
-                             return a.sampleOffset < b.sampleOffset;
-                         return ! a.isNoteOn && b.isNoteOn;
-                     });
-    return out;
+    std::sort(out.begin() + firstEvent, out.end(),
+              [](const EngineEvent& a, const EngineEvent& b)
+              {
+                  if (a.sampleOffset != b.sampleOffset)
+                      return a.sampleOffset < b.sampleOffset;
+                  return ! a.isNoteOn && b.isNoteOn;
+              });
 }
 
 } // namespace mnArpee

@@ -3,32 +3,64 @@
 
 namespace
 {
+constexpr int stateMagic = 0x324e4d41; // "AMN2"
+
 juce::AudioProcessorValueTreeState::ParameterLayout makeLayout()
 {
-    juce::StringArray rates { "1/64", "1/48", "1/32", "1/24", "1/16", "1/12",
-                              "1/8", "1/6", "1/4", "3/64", "3/32", "3/16", "3/8" };
+    juce::StringArray rates;
+    for (int i = 0; i < mnArpee::numSyncRates; ++i)
+        rates.add(mnArpee::syncRateName((mnArpee::SyncRate) i));
     std::vector<std::unique_ptr<juce::RangedAudioParameter>> params;
     params.push_back(std::make_unique<juce::AudioParameterChoice>("rate", "Rate", rates, 4));
     params.push_back(std::make_unique<juce::AudioParameterInt>("octave", "Octave", -2, 2, 0));
     params.push_back(std::make_unique<juce::AudioParameterInt>("gate", "Gate %", 1, 125, 80));
     params.push_back(std::make_unique<juce::AudioParameterInt>("swing", "Swing %", -50, 50, 0));
-    params.push_back(std::make_unique<juce::AudioParameterInt>("program", "Program", 1, 8, 1));
+    params.push_back(std::make_unique<juce::AudioParameterInt>(
+        "program", "Program", 1, MnArpeeAudioProcessor::numUserPrograms, 1));
     params.push_back(std::make_unique<juce::AudioParameterInt>("chain", "Chain", 0, 2, 0));
     params.push_back(std::make_unique<juce::AudioParameterBool>("latch", "Latch", false));
-    params.push_back(std::make_unique<juce::AudioParameterInt>("steps", "Steps", 0, 64, 16));
+    params.push_back(std::make_unique<juce::AudioParameterInt>("steps", "Steps", 0, mnArpee::maxSteps, 16));
     return { params.begin(), params.end() };
 }
+
+int toInt(const std::atomic<float>* p) { return (int) std::lround(p->load()); }
+
+void writeName(juce::OutputStream& out, const mnArpee::Name& n)
+{
+    out.writeString(juce::String::fromUTF8(n.chars.data()));
 }
+
+void readName(juce::InputStream& in, mnArpee::Name& n)
+{
+    n.set(in.readString().toStdString());
+}
+} // namespace
 
 MnArpeeAudioProcessor::MnArpeeAudioProcessor()
     : AudioProcessor(BusesProperties())
     , apvts(*this, nullptr, "mnArpee", makeLayout())
-    , bank(mnArpee::makeFactoryBank())
+    , model(mnArpee::makeFactoryBank())
 {
-    engine.setBank(bank);
+    programParam = apvts.getRawParameterValue("program");
+    chainParam = apvts.getRawParameterValue("chain");
+    rateParam = apvts.getRawParameterValue("rate");
+    gateParam = apvts.getRawParameterValue("gate");
+    swingParam = apvts.getRawParameterValue("swing");
+    octaveParam = apvts.getRawParameterValue("octave");
+    stepsParam = apvts.getRawParameterValue("steps");
+    latchParam = apvts.getRawParameterValue("latch");
+
+    model.numPrograms = std::min(model.numPrograms, numUserPrograms);
+    loadParamsFrom(model.programs[0]);
+    engine.setBank(model);
+    apvts.addParameterListener("program", this);
 }
 
-MnArpeeAudioProcessor::~MnArpeeAudioProcessor() = default;
+MnArpeeAudioProcessor::~MnArpeeAudioProcessor()
+{
+    apvts.removeParameterListener("program", this);
+    cancelPendingUpdate();
+}
 
 const juce::String MnArpeeAudioProcessor::getName() const { return "mnArpee"; }
 bool MnArpeeAudioProcessor::acceptsMidi() const { return true; }
@@ -41,181 +73,327 @@ juce::AudioProcessorEditor* MnArpeeAudioProcessor::createEditor()
     return new MnArpeeAudioEditor(*this);
 }
 
-const char* MnArpeeAudioProcessor::syncName(mnArpee::SyncRate r)
+//==============================================================================
+// Model (message thread)
+
+MnArpeeAudioProcessor::ParamValues MnArpeeAudioProcessor::readParams() const
 {
-    switch (r)
+    ParamValues v;
+    v.program = juce::jlimit(0, numUserPrograms - 1, toInt(programParam) - 1);
+    v.chain = juce::jlimit(0, 2, toInt(chainParam)) - 1;
+    v.rate = juce::jlimit(0, mnArpee::numSyncRates - 1, toInt(rateParam));
+    v.gate = juce::jlimit(1, 125, toInt(gateParam));
+    v.swing = juce::jlimit(-50, 50, toInt(swingParam));
+    v.octave = juce::jlimit(-2, 2, toInt(octaveParam));
+    v.steps = juce::jlimit(0, mnArpee::maxSteps, toInt(stepsParam));
+    v.latch = latchParam->load() > 0.5f;
+    return v;
+}
+
+void MnArpeeAudioProcessor::storeParamsInto(mnArpee::Program& prog) const
+{
+    const auto v = readParams();
+    prog.sync = (mnArpee::SyncRate) v.rate;
+    prog.gatePercent = v.gate;
+    prog.swingPercent = v.swing;
+    prog.octaveShift = v.octave;
+    prog.numSteps = v.steps;
+}
+
+void MnArpeeAudioProcessor::setParamValue(const char* id, float plainValue)
+{
+    if (auto* p = apvts.getParameter(id))
     {
-        case mnArpee::SyncRate::R1_64: return "1/64";
-        case mnArpee::SyncRate::R1_48: return "1/48";
-        case mnArpee::SyncRate::R1_32: return "1/32";
-        case mnArpee::SyncRate::R1_24: return "1/24";
-        case mnArpee::SyncRate::R1_16: return "1/16";
-        case mnArpee::SyncRate::R1_12: return "1/12";
-        case mnArpee::SyncRate::R1_8:  return "1/8";
-        case mnArpee::SyncRate::R1_6:  return "1/6";
-        case mnArpee::SyncRate::R1_4:  return "1/4";
-        case mnArpee::SyncRate::R3_64: return "3/64";
-        case mnArpee::SyncRate::R3_32: return "3/32";
-        case mnArpee::SyncRate::R3_16: return "3/16";
-        default:                       return "3/8";
+        const float norm = p->convertTo0to1(plainValue);
+        if (std::abs(p->getValue() - norm) > 1.0e-6f)
+            p->setValueNotifyingHost(norm);
     }
 }
 
+void MnArpeeAudioProcessor::loadParamsFrom(const mnArpee::Program& prog)
+{
+    setParamValue("rate", (float) prog.sync);
+    setParamValue("gate", (float) prog.gatePercent);
+    setParamValue("swing", (float) prog.swingPercent);
+    setParamValue("octave", (float) prog.octaveShift);
+    setParamValue("steps", (float) prog.numSteps);
+}
+
+void MnArpeeAudioProcessor::publishBank(bool restartPlayback)
+{
+    // Called with modelLock held. The parameters hold the newest values of the edited program.
+    storeParamsInto(model.programs[(size_t) editedProgram]);
+    {
+        const juce::SpinLock::ScopedLockType lock(pendingLock);
+        pendingBank = model;
+    }
+    if (restartPlayback)
+        bankRestart.store(true);
+    bankDirty.store(true, std::memory_order_release);
+    ++modelVersion;
+}
+
+void MnArpeeAudioProcessor::parameterChanged(const juce::String& parameterID, float)
+{
+    // May arrive on any thread (host automation): handle on the message thread.
+    if (parameterID == "program")
+        triggerAsyncUpdate();
+}
+
+void MnArpeeAudioProcessor::handleAsyncUpdate()
+{
+    const juce::ScopedLock lock(modelLock);
+    const int newProgram = readParams().program;
+    if (newProgram == editedProgram)
+        return;
+    storeParamsInto(model.programs[(size_t) editedProgram]);
+    editedProgram = newProgram;
+    loadParamsFrom(model.programs[(size_t) editedProgram]);
+    publishBank();
+}
+
+mnArpee::Program MnArpeeAudioProcessor::getProgramCopy(int index) const
+{
+    const juce::ScopedLock lock(modelLock);
+    auto prog = model.programs[(size_t) juce::jlimit(0, numUserPrograms - 1, index)];
+    if (index == editedProgram)
+        storeParamsInto(prog);
+    return prog;
+}
+
+void MnArpeeAudioProcessor::setStep(int programIndex, int stepIndex, const mnArpee::Step& step)
+{
+    if (programIndex < 0 || programIndex >= numUserPrograms || stepIndex < 0
+        || stepIndex >= mnArpee::maxSteps)
+        return;
+    const juce::ScopedLock lock(modelLock);
+    model.programs[(size_t) programIndex].steps[(size_t) stepIndex] = step;
+    publishBank();
+}
+
+int MnArpeeAudioProcessor::getNumPrograms() { return numUserPrograms; }
+
+int MnArpeeAudioProcessor::getCurrentProgram() { return readParams().program; }
+
+void MnArpeeAudioProcessor::setCurrentProgram(int index)
+{
+    setParamValue("program", (float) (juce::jlimit(0, numUserPrograms - 1, index) + 1));
+}
+
+const juce::String MnArpeeAudioProcessor::getProgramName(int index)
+{
+    if (index < 0 || index >= numUserPrograms)
+        return {};
+    const juce::ScopedLock lock(modelLock);
+    return juce::String::fromUTF8(model.programs[(size_t) index].name.chars.data());
+}
+
+void MnArpeeAudioProcessor::changeProgramName(int index, const juce::String& newName)
+{
+    if (index < 0 || index >= numUserPrograms)
+        return;
+    const juce::ScopedLock lock(modelLock);
+    model.programs[(size_t) index].name.set(newName.toStdString());
+    publishBank();
+}
+
+//==============================================================================
+// Audio thread
+
 void MnArpeeAudioProcessor::prepareToPlay(double, int)
 {
-    const juce::ScopedLock lock(engineLock);
-    engine.setBank(bank);
-    lastProgramParam = -1;
-    lastChainParam = -1;
+    {
+        const juce::ScopedLock lock(modelLock);
+        storeParamsInto(model.programs[(size_t) editedProgram]);
+        engine.setBank(model);
+    }
+    bankDirty.store(false);
+    bankRestart.store(false);
+    applied = readParams(); // the engine bank above already holds these values
+    applied.chain = -2;     // but chain, latch and program still have to be sent
+    applied.latch = ! applied.latch;
+    resendProgram = true;
+    events.clear();
+    outMidi.ensureSize(4096);
+    for (auto& ch : thruOn)
+        ch.fill(false);
+    wasThru = false;
 }
 
 void MnArpeeAudioProcessor::releaseResources() {}
 
-void MnArpeeAudioProcessor::applyApvtsToEngine()
+void MnArpeeAudioProcessor::pickUpPendingBank()
 {
-    auto* rateP = apvts.getRawParameterValue("rate");
-    auto* octP = apvts.getRawParameterValue("octave");
-    auto* gateP = apvts.getRawParameterValue("gate");
-    auto* swingP = apvts.getRawParameterValue("swing");
-    auto* progP = apvts.getRawParameterValue("program");
-    auto* chainP = apvts.getRawParameterValue("chain");
-    auto* latchP = apvts.getRawParameterValue("latch");
-    auto* stepsP = apvts.getRawParameterValue("steps");
+    if (! bankDirty.load(std::memory_order_acquire))
+        return;
+    const juce::SpinLock::ScopedTryLockType lock(pendingLock);
+    if (! lock.isLocked())
+        return; // the editor is publishing right now: take it next block
+    if (bankRestart.exchange(false))
+        engine.setBank(pendingBank);
+    else
+        engine.updateBank(pendingBank); // step edits must not restart the pattern
+    bankDirty.store(false);
+    resendProgram = true; // the new bank may not know the selected program yet
+}
 
-    const int progIdx = juce::jlimit(0, (int) bank.programs.size() - 1,
-                                     (int) progP->load() - 1);
-    auto& prog = bank.programs[(size_t) progIdx];
-    prog.sync = (mnArpee::SyncRate) juce::jlimit(0, 12, (int) rateP->load());
-    prog.octaveShift = juce::jlimit(-2, 2, (int) octP->load());
-    prog.gatePercent = juce::jlimit(1, 125, (int) gateP->load());
-    prog.swingPercent = juce::jlimit(-50, 50, (int) swingP->load());
-    prog.numSteps = juce::jlimit(0, 64, (int) stepsP->load());
-    engine.setProgramParams(progIdx, prog.sync, prog.gatePercent, prog.swingPercent,
-                            prog.octaveShift, prog.numSteps);
+void MnArpeeAudioProcessor::applyParamsToEngine()
+{
+    const auto v = readParams();
+    const bool programChanged = v.program != applied.program;
+    if (programChanged || resendProgram)
+        engine.setCurrentProgram(v.program);
+    resendProgram = false;
+    // During a program change the parameters still hold the previous program's values
+    // until the message thread loads the new ones: they must not go into the new program.
+    if (! programChanged
+        && (v.rate != applied.rate || v.gate != applied.gate || v.swing != applied.swing
+            || v.octave != applied.octave || v.steps != applied.steps))
+    {
+        engine.setProgramParams(v.program, (mnArpee::SyncRate) v.rate, v.gate, v.swing,
+                                v.octave, v.steps);
+    }
+    if (v.chain != applied.chain)
+        engine.setCurrentChain(v.chain);
+    if (v.latch != applied.latch)
+        engine.setLatch(v.latch);
+    applied = v;
+}
 
-    if (progIdx != lastProgramParam)
+void MnArpeeAudioProcessor::releaseThruNotes(int at)
+{
+    for (int ch = 0; ch < 16; ++ch)
+        for (int n = 0; n < 128; ++n)
+            if (thruOn[(size_t) ch][(size_t) n])
+            {
+                outMidi.addEvent(juce::MidiMessage::noteOff(ch + 1, n), at);
+                thruOn[(size_t) ch][(size_t) n] = false;
+            }
+}
+
+void MnArpeeAudioProcessor::handleMidiMessage(const juce::MidiMessage& msg, int at)
+{
+    if (msg.isNoteOn())
     {
-        lastProgramParam = progIdx;
-        engine.setCurrentProgram(progIdx);
+        const int ch = msg.getChannel();
+        engine.setOutputChannel(ch);
+        engine.noteOn(msg.getNoteNumber(), msg.getVelocity());
+        if (engine.isThru())
+        {
+            outMidi.addEvent(msg, at);
+            thruOn[(size_t) (ch - 1)][(size_t) msg.getNoteNumber()] = true;
+        }
     }
-    const int chainIdx = juce::jlimit(-1, (int) bank.chains.size() - 1,
-                                      (int) chainP->load() - 1);
-    if (chainIdx != lastChainParam)
+    else if (msg.isNoteOff())
     {
-        lastChainParam = chainIdx;
-        engine.setCurrentChain(chainIdx);
+        engine.noteOff(msg.getNoteNumber());
+        auto& on = thruOn[(size_t) (msg.getChannel() - 1)][(size_t) msg.getNoteNumber()];
+        if (on)
+        {
+            outMidi.addEvent(msg, at);
+            on = false;
+        }
     }
-    const bool latch = latchP->load() > 0.5f;
-    if (latch != lastLatchParam)
+    else if (msg.isSustainPedalOn() || msg.isSustainPedalOff())
     {
-        lastLatchParam = latch;
-        engine.setLatch(latch);
+        engine.sustain(msg.isSustainPedalOn());
+        if (engine.isThru())
+            outMidi.addEvent(msg, at);
+    }
+    else if (msg.isAllNotesOff() || msg.isAllSoundOff())
+    {
+        engine.panic();
+        releaseThruNotes(at);
+        outMidi.addEvent(msg, at);
+    }
+    else
+    {
+        outMidi.addEvent(msg, at); // CC, pitch bend, aftertouch, ... pass through
     }
 }
 
-void MnArpeeAudioProcessor::pushEngineBankToProcessor()
+void MnArpeeAudioProcessor::renderSegment(int start, int length, const mnArpee::HostPosition& host)
 {
-    const juce::ScopedLock lock(engineLock);
-    engine.setBank(bank);
-    lastProgramParam = -1;
-    lastChainParam = -1;
+    auto seg = host;
+    if (host.isPlaying)
+        seg.ppqPosition += start * host.bpm / (60.0 * host.sampleRate);
+    events.clear();
+    engine.render(length, seg, events);
+    for (const auto& e : events)
+    {
+        const auto msg = e.isNoteOn
+            ? juce::MidiMessage::noteOn(e.channel, e.note, (juce::uint8) e.velocity)
+            : juce::MidiMessage::noteOff(e.channel, e.note);
+        outMidi.addEvent(msg, start + e.sampleOffset);
+    }
+
+    const bool thru = engine.isThru();
+    if (wasThru && ! thru)
+        releaseThruNotes(start + length - 1);
+    wasThru = thru;
 }
 
-void MnArpeeAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer,
-                                         juce::MidiBuffer& midi)
+void MnArpeeAudioProcessor::updateUiStatus()
 {
-    juce::ScopedLock lock(engineLock);
+    ui.playStep.store(engine.getLastPlayedStep(), std::memory_order_relaxed);
+    ui.playingProgram.store(engine.getCurrentProgram(), std::memory_order_relaxed);
+    const auto input = engine.getActiveInput();
+    const int n = std::min(input.size, mnArpee::maxInputKeys);
+    for (int i = 0; i < n; ++i)
+        ui.input[(size_t) i].store(input.notes[(size_t) i].note, std::memory_order_relaxed);
+    ui.numInput.store(n, std::memory_order_release);
+}
+
+void MnArpeeAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midi)
+{
+    juce::ScopedNoDenormals noDenormals;
     buffer.clear();
+    const int numSamples = buffer.getNumSamples();
 
-    if (consumeBankRefresh())
-        engine.updateBank(bank); // step edits must not restart the pattern
-    applyApvtsToEngine();
+    pickUpPendingBank();
+    applyParamsToEngine();
 
     mnArpee::HostPosition host;
-    host.sampleRate = getSampleRate();
+    host.sampleRate = getSampleRate() > 0.0 ? getSampleRate() : 44100.0;
     if (auto* ph = getPlayHead())
     {
-        auto pos = ph->getPosition();
-        if (pos.hasValue())
+        if (auto pos = ph->getPosition())
         {
             host.bpm = pos->getBpm().orFallback(120.0);
             host.isPlaying = pos->getIsPlaying();
             host.ppqPosition = pos->getPpqPosition().orFallback(0.0);
         }
     }
+    if (host.bpm <= 0.0)
+        host.bpm = 120.0;
 
+    outMidi.clear();
+    outMidi.ensureSize(4096);
+    int pos = 0;
     for (const auto meta : midi)
     {
-        const auto msg = meta.getMessage();
-        if (msg.isNoteOn())
-            engine.noteOn(msg.getNoteNumber(), msg.getVelocity());
-        else if (msg.isNoteOff())
-            engine.noteOff(msg.getNoteNumber());
-        else if (msg.isSustainPedalOn())
-            engine.sustain(true);
-        else if (msg.isSustainPedalOff())
-            engine.sustain(false);
-        else if (msg.isAllNotesOff() || msg.isAllSoundOff())
-            engine.panic();
+        const int at = juce::jlimit(0, std::max(0, numSamples - 1), meta.samplePosition);
+        if (at > pos)
+        {
+            renderSegment(pos, at - pos, host);
+            pos = at;
+        }
+        handleMidiMessage(meta.getMessage(), at);
     }
+    if (pos < numSamples)
+        renderSegment(pos, numSamples - pos, host);
 
-    auto events = engine.render(buffer.getNumSamples(), host, {});
-
-    juce::MidiBuffer out;
-    for (const auto& e : events)
-    {
-        auto msg = e.isNoteOn
-            ? juce::MidiMessage::noteOn(e.channel, e.note, (juce::uint8) e.velocity)
-            : juce::MidiMessage::noteOff(e.channel, e.note);
-        out.addEvent(msg, e.sampleOffset);
-    }
-
-    for (const auto meta : midi)
-    {
-        const auto msg = meta.getMessage();
-        if (! msg.isNoteOn() && ! msg.isNoteOff() && ! msg.isSustainPedalOn()
-            && ! msg.isSustainPedalOff() && ! msg.isAllNotesOff() && ! msg.isAllSoundOff())
-            out.addEvent(msg, meta.samplePosition);
-    }
-    midi.swapWith(out);
+    midi.swapWith(outMidi);
+    updateUiStatus();
 }
+
 juce::AudioProcessor* JUCE_CALLTYPE createPluginFilter()
 {
     return new MnArpeeAudioProcessor();
 }
 
-int MnArpeeAudioProcessor::getNumPrograms() { return (int) bank.programs.size(); }
-
-int MnArpeeAudioProcessor::getCurrentProgram()
-{
-    auto* p = apvts.getRawParameterValue("program");
-    return juce::jlimit(1, getNumPrograms(), p != nullptr ? (int) p->load() : 1) - 1;
-}
-
-void MnArpeeAudioProcessor::setCurrentProgram(int index)
-{
-    if (auto* p = dynamic_cast<juce::AudioParameterInt*>(apvts.getParameter("program")))
-        p->setValueNotifyingHost(p->convertTo0to1((float) (index + 1)));
-}
-
-const juce::String MnArpeeAudioProcessor::getProgramName(int index)
-{
-    if (index >= 0 && index < (int) bank.programs.size())
-        return juce::String(bank.programs[(size_t) index].name);
-    return {};
-}
-
-void MnArpeeAudioProcessor::changeProgramName(int index, const juce::String& newName)
-{
-    if (index >= 0 && index < (int) bank.programs.size())
-        bank.programs[(size_t) index].name = newName.toStdString();
-}
-
-void MnArpeeAudioProcessor::setLatchDirect(bool on)
-{
-    if (auto* p = dynamic_cast<juce::AudioParameterBool*>(apvts.getParameter("latch")))
-        p->setValueNotifyingHost(on ? 1.0f : 0.0f);
-}
+//==============================================================================
+// State
 
 void MnArpeeAudioProcessor::getStateInformation(juce::MemoryBlock& destData)
 {
@@ -223,21 +401,23 @@ void MnArpeeAudioProcessor::getStateInformation(juce::MemoryBlock& destData)
     // a single, self-describing state blob (copyXmlToBinary overwrites destData).
     juce::MemoryBlock bankBlock;
     {
-        const juce::ScopedLock lock(engineLock);
+        const juce::ScopedLock lock(modelLock);
+        storeParamsInto(model.programs[(size_t) editedProgram]);
         juce::MemoryOutputStream out(bankBlock, false);
-        out.writeInt((int) bank.programs.size());
-        for (const auto& prog : bank.programs)
+        out.writeInt(stateMagic);
+        out.writeInt(model.numPrograms);
+        for (int pi = 0; pi < model.numPrograms; ++pi)
         {
-            out.writeString(juce::String(prog.name));
+            const auto& prog = model.programs[(size_t) pi];
+            writeName(out, prog.name);
             out.writeInt(prog.numSteps);
             out.writeInt((int) prog.sync);
             out.writeInt(prog.gatePercent);
             out.writeInt(prog.swingPercent);
             out.writeInt(prog.octaveShift);
             out.writeInt(prog.transposeOct);
-            for (int i = 0; i < mnArpee::maxSteps; ++i)
+            for (const auto& s : prog.steps)
             {
-                const auto& s = prog.steps[(size_t) i];
                 out.writeByte((char) s.type);
                 out.writeByte(s.keyIndex);
                 out.writeByte(s.scaleStep);
@@ -247,7 +427,17 @@ void MnArpeeAudioProcessor::getStateInformation(juce::MemoryBlock& destData)
                 out.writeByte((char) s.chance);
             }
         }
-        out.writeInt(bank.currentChain);
+        out.writeInt(model.numChains);
+        for (int ci = 0; ci < model.numChains; ++ci)
+        {
+            const auto& c = model.chains[(size_t) ci];
+            writeName(out, c.name);
+            out.writeInt(c.length);
+            for (int i = 0; i < c.length; ++i)
+                out.writeByte(c.programs[(size_t) i]);
+        }
+        out.writeDouble(model.chainQuantizeBars);
+        out.writeBool(model.restartChainOnSwitch);
     }
     auto state = apvts.copyState();
     if (auto xml = state.createXml())
@@ -265,28 +455,30 @@ void MnArpeeAudioProcessor::setStateInformation(const void* data, int sizeInByte
     if (xml == nullptr || ! xml->hasTagName(apvts.state.getType()))
         return;
 
+    // Parse into a heap copy first; the model is only replaced when everything is valid.
+    auto loaded = std::make_unique<mnArpee::Bank>(mnArpee::makeFactoryBank());
+    bool bankOk = false;
     juce::MemoryBlock bankBlock;
-    if (bankBlock.fromBase64Encoding(xml->getStringAttribute("bankData")) && bankBlock.getSize() > 4)
+    if (bankBlock.fromBase64Encoding(xml->getStringAttribute("bankData")))
     {
         juce::MemoryInputStream in(bankBlock, false);
-        const int numProgs = in.readInt();
-        if (numProgs > 0 && numProgs <= mnArpee::maxPrograms)
+        const auto size = (juce::int64) bankBlock.getSize();
+        if (in.readInt() == stateMagic)
         {
-            mnArpee::Bank loaded;
-            loaded.programs.reserve((size_t) numProgs);
-            for (int pi = 0; pi < numProgs; ++pi)
+            const int numProgs = in.readInt();
+            bankOk = numProgs > 0 && numProgs <= mnArpee::maxPrograms;
+            for (int pi = 0; bankOk && pi < numProgs; ++pi)
             {
-                mnArpee::Program prog;
-                prog.name = in.readString().toStdString();
-                prog.numSteps = juce::jlimit(0, 64, in.readInt());
-                prog.sync = (mnArpee::SyncRate) juce::jlimit(0, 12, in.readInt());
+                auto& prog = loaded->programs[(size_t) pi];
+                readName(in, prog.name);
+                prog.numSteps = juce::jlimit(0, mnArpee::maxSteps, in.readInt());
+                prog.sync = (mnArpee::SyncRate) juce::jlimit(0, mnArpee::numSyncRates - 1, in.readInt());
                 prog.gatePercent = juce::jlimit(1, 125, in.readInt());
                 prog.swingPercent = juce::jlimit(-50, 50, in.readInt());
                 prog.octaveShift = juce::jlimit(-2, 2, in.readInt());
                 prog.transposeOct = juce::jlimit(-3, 3, in.readInt());
-                for (int i = 0; i < mnArpee::maxSteps; ++i)
+                for (auto& s : prog.steps)
                 {
-                    auto& s = prog.steps[(size_t) i];
                     s.type = (mnArpee::StepType) juce::jlimit(0, 5, (int) in.readByte());
                     s.keyIndex = (std::int8_t) juce::jlimit(0, 4, (int) in.readByte());
                     s.scaleStep = (std::int8_t) juce::jlimit(-12, 12, (int) in.readByte());
@@ -295,27 +487,37 @@ void MnArpeeAudioProcessor::setStateInformation(const void* data, int sizeInByte
                     s.gateScalePercent = (std::uint16_t) juce::jlimit(10, 800, (int) in.readShort());
                     s.chance = (std::uint8_t) juce::jlimit(1, 100, (int) (unsigned char) in.readByte());
                 }
-                loaded.programs.push_back(prog);
             }
-            // Reads past the end return 0, so check that the trailing int really exists.
-            const bool complete = in.getPosition() + 4 <= (juce::int64) bankBlock.getSize();
-            loaded.currentChain = in.readInt();
-            if (complete)
+            // Slots that are not in the state keep their factory content.
+            loaded->numPrograms = numUserPrograms;
+
+            const int numChains = in.readInt();
+            bankOk = bankOk && numChains >= 0 && numChains <= mnArpee::maxChains;
+            for (int ci = 0; bankOk && ci < numChains; ++ci)
             {
-                // Chains and quantize settings are not stored; keep the factory ones.
-                loaded.chains = bank.chains;
-                loaded.numChains = bank.numChains;
-                loaded.chainQuantizeBars = bank.chainQuantizeBars;
-                loaded.restartChainOnSwitch = bank.restartChainOnSwitch;
-                loaded.currentChain = juce::jlimit(-1, (int) loaded.chains.size() - 1,
-                                                   loaded.currentChain);
-                const juce::ScopedLock lock(engineLock);
-                bank = loaded;
-                engine.setBank(bank);
-                lastProgramParam = -1;
-                lastChainParam = -1;
+                auto& c = loaded->chains[(size_t) ci];
+                readName(in, c.name);
+                c.length = in.readInt();
+                bankOk = c.length >= 0 && c.length <= mnArpee::maxChainSteps;
+                for (int i = 0; bankOk && i < c.length; ++i)
+                    c.programs[(size_t) i] = (std::int8_t) juce::jlimit(0, numUserPrograms - 1,
+                                                                         (int) in.readByte());
             }
+            if (bankOk)
+                loaded->numChains = numChains;
+            // Reads past the end return 0, so check that the trailing fields really exist.
+            bankOk = bankOk && in.getPosition() + 9 <= size;
+            loaded->chainQuantizeBars = juce::jlimit(1.0 / 64.0, 4.0, in.readDouble());
+            loaded->restartChainOnSwitch = in.readBool();
         }
     }
+
     apvts.replaceState(juce::ValueTree::fromXml(*xml));
+    {
+        const juce::ScopedLock lock(modelLock);
+        if (bankOk)
+            model = *loaded;
+        editedProgram = readParams().program;
+        publishBank(true);
+    }
 }
