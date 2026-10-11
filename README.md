@@ -59,8 +59,7 @@ On Linux the editor checks need an X display (`xvfb-run ctest ...`); without one
 
 ## License
 
+AGPLv3 (following the mnKord pattern); JUCE's AGPL option is compatible.
+
 The bundled fonts (Montserrat for the title, Roboto Condensed for all other text) are licensed
 under the SIL Open Font License.
-
-
-AGPLv3 (following the mnKord pattern); JUCE's AGPL option is compatible.
