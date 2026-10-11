@@ -20,7 +20,7 @@
 //  - chains: max 16, chain quantize, restart-on-switch
 // MVP simplifications (by request):
 //  - no input range filter / wrap, no missing-keys substitution,
-//    no chord detection / scale derivation, no input quantize,
+//    chord detection only for the Root key (no scale derivation), no input quantize,
 //    no fixed-key sequencer mode, no scale enforcement,
 //  - no arp modes: the step matrix defines the whole pattern.
 //
@@ -33,6 +33,8 @@ namespace mnArpee
 
 constexpr int maxSteps = 64;
 constexpr int maxInputKeys = 5;
+// Step::keyIndex value for the root of the held chord (KEY SELECT "Root").
+constexpr std::int8_t rootKeyIndex = -1;
 constexpr int maxPrograms = 16;
 constexpr int maxChains = 16;
 constexpr int maxChainSteps = 64;
@@ -102,7 +104,8 @@ struct Name
 struct Step
 {
     StepType type = StepType::Normal;
-    // Which sorted input note: 0..4 (k1..k5). Ignored for Random.
+    // Which input note: 0..4 = k1..k5 (sorted by pitch), rootKeyIndex = root of the held
+    // chord. Ignored for Random.
     std::int8_t keyIndex = 0;
     std::int8_t scaleStep = 0;   // -12..+12 semitones up (MVP: chromatic)
     std::int8_t octave = 0;      // -3..+3

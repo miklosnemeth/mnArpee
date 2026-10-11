@@ -7,6 +7,7 @@
 #include <algorithm>
 #include <cstdio>
 #include <cstdlib>
+#include <initializer_list>
 #include <memory>
 #include <string>
 #include <vector>
@@ -429,6 +430,37 @@ int main()
         auto tail = runFor(*e, 1.0, 333);
         evs.insert(evs.end(), tail.begin(), tail.end());
         check(countOn(evs) > 30 && balanced(evs), "long-run-balanced");
+    }
+
+    // 24. Chord root detection: inversions, 7th chords, symmetric chords, no chord.
+    {
+        const auto root = [](std::initializer_list<int> notes)
+        {
+            InputNotes in;
+            for (int n : notes)
+                in.notes[(size_t) in.size++] = HeldNote { n, 100 };
+            return chordRootNote(in);
+        };
+        check(root({ 60, 64, 67 }) == 60, "root-c-major");
+        check(root({ 52, 55, 60 }) == 60, "root-first-inversion");   // E G C -> C
+        check(root({ 55, 60, 64 }) == 60, "root-second-inversion");  // G C E -> C
+        check(root({ 57, 60, 64, 67 }) == 57, "root-am7-not-c6");     // A C E G -> A
+        check(root({ 64, 67, 69, 72 }) == 69, "root-am7-inverted");   // E G A C -> A
+        check(root({ 62, 66, 69, 72 }) == 62, "root-d7");
+        check(root({ 59, 62, 65, 68 }) == 59, "root-dim7-uses-bass");
+        check(root({ 48, 55 }) == 48, "root-power-chord");
+        check(root({ 60, 61 }) == 60 && root({}) == -1, "root-fallback-lowest");
+    }
+
+    // 25. A Root step plays the chord root, in the octave it is held.
+    {
+        auto e = std::make_unique<ArpEngine>();
+        auto b = singleProgramBank(2, SyncRate::R1_8, 50);
+        b->programs[0].steps[0].keyIndex = rootKeyIndex;
+        e->setBank(*b);
+        for (int n : { 64, 67, 72 }) // E G C: C major, first inversion
+            e->noteOn(n, 100);
+        check(noteOnSequence(runFor(*e, 0.1)).front() == 72, "root-step-plays-root");
     }
 
     std::printf("%d checks, %d failures\n", checks, failures);

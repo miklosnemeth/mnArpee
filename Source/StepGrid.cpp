@@ -2,7 +2,7 @@
 
 namespace
 {
-constexpr int labelW = 56;   // row label strip on the left
+constexpr int labelW = 64;   // row label strip on the left
 constexpr int stepH = 24;    // step row height
 constexpr int gutterTop = 20; // column labels (1,5,9,...)
 constexpr int cellGap = 3;
@@ -60,8 +60,8 @@ int StepGrid::rowForStep(const mnArpee::Step& s) const
     if (s.type == StepType::Off || s.type == StepType::Rest)
         return -1;
     if (s.type == StepType::Random)
-        return 5;
-    return std::clamp((int) s.keyIndex, 0, 4);
+        return randomRow;
+    return rowForKey(s.keyIndex);
 }
 
 juce::Rectangle<int> StepGrid::boardArea() const
@@ -126,11 +126,11 @@ void StepGrid::paint(juce::Graphics& g)
                    juce::Justification::centredLeft);
     }
 
-    static const char* rowNames[numRows] = { "k1", "k2", "k3", "k4", "k5", "Rnd" };
+    static const char* rowNames[numRows] = { "Key 5", "Key 4", "Key 3", "Key 2", "Key 1", "Root", "Random" };
     for (int r = 0; r < numRows; ++r)
     {
         auto first = cellRect(0, r);
-        g.setColour(r <= 4 ? Palette::dimText() : Palette::accent2());
+        g.setColour(r < rootRow ? Palette::dimText() : Palette::accent2());
         g.drawText(rowNames[r], 8, first.getY(), labelW - 14, first.getHeight(),
                    juce::Justification::centredRight);
     }

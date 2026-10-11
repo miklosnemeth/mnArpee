@@ -118,7 +118,10 @@ MnArpeeAudioEditor::MnArpeeAudioEditor(MnArpeeAudioProcessor& p)
     stepTypeBox.addItem("Rest", (int) mnArpee::StepType::Rest + 1);
     stepTypeBox.addItem("Tie", (int) mnArpee::StepType::Tie + 1);
     stepTypeBox.addItem("Random", (int) mnArpee::StepType::Random + 1);
-    stepKeyBox.addItemList({ "k1", "k2", "k3", "k4", "k5" }, 1);
+    // Item id = KEY SELECT value + 2 (Root = -1).
+    stepKeyBox.addItem("Root", mnArpee::rootKeyIndex + 2);
+    for (int k = 0; k < mnArpee::maxInputKeys; ++k)
+        stepKeyBox.addItem("Key " + juce::String(k + 1), k + 2);
     for (auto* cb : { &programBox, &chainBox, &rateBox, &stepTypeBox, &stepKeyBox })
         addAndMakeVisible(*cb);
 
@@ -334,7 +337,8 @@ void MnArpeeAudioEditor::refreshStepEditor()
 {
     const auto& st = shownProgram.steps[(size_t) std::clamp(editStep, 0, mnArpee::maxSteps - 1)];
     stepTypeBox.setSelectedId((int) st.type + 1, juce::dontSendNotification);
-    stepKeyBox.setSelectedItemIndex(std::clamp((int) st.keyIndex, 0, 4), juce::dontSendNotification);
+    stepKeyBox.setSelectedId(std::clamp((int) st.keyIndex, (int) mnArpee::rootKeyIndex, 4) + 2,
+                           juce::dontSendNotification);
     stepOctSlider.setValue(st.octave, juce::dontSendNotification);
     stepVelSlider.setValue(std::max(1, (int) st.velocity), juce::dontSendNotification);
     repaint(editCard);
@@ -353,14 +357,16 @@ void MnArpeeAudioEditor::onGridClicked(int step, int row)
     using mnArpee::StepType;
     editStep = step;
     auto st = shownProgram.steps[(size_t) step];
-    if (row <= 4)
+    if (row != StepGrid::randomRow)
     {
+        // Key and Root rows: toggle the step on that key (a Tie step stays a Tie).
+        const int key = StepGrid::keyForRow(row);
         const bool pitched = st.type == StepType::Normal || st.type == StepType::Tie;
-        if (pitched && st.keyIndex == row)
+        if (pitched && st.keyIndex == key)
             st.type = StepType::Off;
         else if (st.type != StepType::Tie)
             st.type = StepType::Normal;
-        st.keyIndex = (std::int8_t) row;
+        st.keyIndex = (std::int8_t) key;
     }
     else
         st.type = st.type == StepType::Random ? StepType::Off : StepType::Random;
@@ -373,7 +379,7 @@ void MnArpeeAudioEditor::onStepEditorChanged()
 {
     auto st = shownProgram.steps[(size_t) editStep];
     st.type = mnArpee::stepTypeFromInt(stepTypeBox.getSelectedId() - 1);
-    st.keyIndex = (std::int8_t) juce::jlimit(0, 4, stepKeyBox.getSelectedItemIndex());
+    st.keyIndex = (std::int8_t) juce::jlimit((int) mnArpee::rootKeyIndex, 4, stepKeyBox.getSelectedId() - 2);
     st.octave = (std::int8_t) stepOctSlider.getValue();
     st.velocity = (std::uint8_t) stepVelSlider.getValue();
     commitStep(st);

@@ -5,7 +5,7 @@
 #include "ArpEngine.h"
 
 //==============================================================================
-// StepGrid: 64-step matrix. Row = KEY SELECT (k1..k5 + Rnd),
+// StepGrid: 64-step matrix. Rows, bottom to top: Random, Root, Key 1 .. Key 5;
 // column = step. Clicking a cell toggles that setting. Tie steps are drawn linked
 // to the previous column, Rest and Off steps as a mark in the first row.
 //==============================================================================
@@ -44,7 +44,12 @@ public:
     void mouseMove(const juce::MouseEvent& e) override;
     void mouseExit(const juce::MouseEvent&) override;
 
-    static constexpr int numRows = 6; // k1..k5, Rnd
+    static constexpr int numRows = 7; // top to bottom: Key 5 .. Key 1, Root, Random
+    static constexpr int rootRow = 5;
+    static constexpr int randomRow = 6;
+    // KEY SELECT value of a key row (Key 5 .. Key 1, Root); -2 for the Random row.
+    static int keyForRow(int row) { return row == rootRow ? mnArpee::rootKeyIndex : (row < rootRow ? 4 - row : -2); }
+    static int rowForKey(int key) { return key == mnArpee::rootKeyIndex ? rootRow : 4 - std::clamp(key, 0, 4); }
 
 private:
     juce::Rectangle<int> boardArea() const;
