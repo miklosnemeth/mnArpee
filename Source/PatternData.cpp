@@ -63,13 +63,14 @@ Bank makeFactoryBank()
             add(p);
     }
     {
-        auto p = makeInitProgram("Chord Stabs");
+        auto p = makeInitProgram("Offbeat Stabs");
         p.numSteps = 8;
         p.sync = SyncRate::R1_8;
         p.gatePercent = 70;
         for (int i = 0; i < 8; ++i)
         {
-            p.steps[(size_t) i].type = (i % 2 == 0) ? StepType::Chord : StepType::Off;
+            p.steps[(size_t) i].type = (i % 2 == 0) ? StepType::Normal : StepType::Off;
+            p.steps[(size_t) i].keyIndex = static_cast<std::int8_t>((i / 2) % 3);
             p.steps[(size_t) i].velocity = (i % 2 == 0) ? 110 : 96;
         }
         add(p);

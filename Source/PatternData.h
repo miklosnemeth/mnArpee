@@ -13,14 +13,14 @@
 //  - steps: 0..64 (0 = MIDI thru, 1 = quantized thru)
 //  - sync: 1/64..3/8 as fractions of a bar
 //  - gate 1..125%, swing -50..+50%
-//  - STEP TYPE: Off/Nrm/Rst/Tie/Chr/Rnd
+//  - STEP TYPE: Off/Nrm/Rst/Tie/Rnd (no Chr: every step plays a single note)
 //  - KEY SELECT: Fixed/Root/k1..k5
 //  - SCALE STEP -12..+12, OCTAVE -3..+3
 //  - VELOCITY 0..127, GATE TIME mult, CHANCE 1..100%
 //  - chains: max 16, chain quantize, restart-on-switch
 // MVP simplifications (by request):
 //  - no input range filter / wrap, no missing-keys substitution,
-//    no chord detection / scale derivation, no input quantize,
+//    chord detection only for the Root key (no scale derivation), no input quantize,
 //    no fixed-key sequencer mode, no scale enforcement,
 //  - no arp modes: the step matrix defines the whole pattern.
 //
@@ -33,6 +33,8 @@ namespace mnArpee
 
 constexpr int maxSteps = 64;
 constexpr int maxInputKeys = 5;
+// Step::keyIndex value for the root of the held chord (KEY SELECT "Root").
+constexpr std::int8_t rootKeyIndex = -1;
 constexpr int maxPrograms = 16;
 constexpr int maxChains = 16;
 constexpr int maxChainSteps = 64;
@@ -44,8 +46,7 @@ enum class StepType : std::uint8_t
     Normal,     // normal note
     Rest,       // continues the previous step's note (extends it)
     Tie,        // overlaps the previous note (glide on mono/legato synths)
-    Chord,      // all input notes at once
-    Random,     // random input note
+    Random = 5, // random input note (4 was Chord, which has been removed)
 };
 
 enum class SyncRate : std::uint8_t
@@ -103,7 +104,8 @@ struct Name
 struct Step
 {
     StepType type = StepType::Normal;
-    // Which sorted input note: 0..4 (k1..k5). Ignored for Chord/Random.
+    // Which input note: 0..4 = k1..k5 (sorted by pitch), rootKeyIndex = root of the held
+    // chord. Ignored for Random.
     std::int8_t keyIndex = 0;
     std::int8_t scaleStep = 0;   // -12..+12 semitones up (MVP: chromatic)
     std::int8_t octave = 0;      // -3..+3
@@ -142,6 +144,19 @@ struct Bank
     double chainQuantizeBars = 0.25; // in bars; 0.25 = one beat in 4/4
     bool restartChainOnSwitch = true;
 };
+
+// Step types read from older states: the removed Chord (4) becomes Normal.
+constexpr StepType stepTypeFromInt(int v) noexcept
+{
+    switch (v)
+    {
+        case 0: return StepType::Off;
+        case 2: return StepType::Rest;
+        case 3: return StepType::Tie;
+        case 5: return StepType::Random;
+        default: return StepType::Normal;
+    }
+}
 
 static_assert(std::is_trivially_copyable_v<Bank>, "Bank must be copyable without allocation");
 

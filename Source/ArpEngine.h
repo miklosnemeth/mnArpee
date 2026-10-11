@@ -74,6 +74,11 @@ struct InputNotes
     }
 };
 
+// Root of the chord formed by the input notes (triads, sus, 7th chords, power chord;
+// inversions included), returned as the lowest held note of that pitch class. Without a
+// recognisable chord it is the lowest note. Returns -1 for empty input.
+int chordRootNote(const InputNotes& input) noexcept;
+
 //==============================================================================
 // ArpEngine: plays the step patterns of a Bank. render() is allocation-free and
 // intended for the audio thread; all setters are cheap and must be called from

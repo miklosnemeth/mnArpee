@@ -479,8 +479,8 @@ void MnArpeeAudioProcessor::setStateInformation(const void* data, int sizeInByte
                 prog.transposeOct = juce::jlimit(-3, 3, in.readInt());
                 for (auto& s : prog.steps)
                 {
-                    s.type = (mnArpee::StepType) juce::jlimit(0, 5, (int) in.readByte());
-                    s.keyIndex = (std::int8_t) juce::jlimit(0, 4, (int) in.readByte());
+                    s.type = mnArpee::stepTypeFromInt((int) in.readByte());
+                    s.keyIndex = (std::int8_t) juce::jlimit((int) mnArpee::rootKeyIndex, 4, (int) in.readByte());
                     s.scaleStep = (std::int8_t) juce::jlimit(-12, 12, (int) in.readByte());
                     s.octave = (std::int8_t) juce::jlimit(-3, 3, (int) in.readByte());
                     s.velocity = (std::uint8_t) juce::jlimit(0, 127, (int) (unsigned char) in.readByte());

@@ -5,10 +5,12 @@ No input pre-filtering: held notes are sorted by pitch before they reach the eng
 
 ## Features (MVP)
 
-- No arp modes: the step matrix draws the whole pattern (KEY SELECT k1..k5 picks from the pitch-sorted input; fewer held notes wrap around)
-- 64 steps / program, step types: Off / Normal / Rest / Tie / Chord / Random
+- No arp modes: the step matrix draws the whole pattern. Rows, bottom to top: Random, Root, Key 1 .. Key 5
+  - Key 1..5 pick from the pitch-sorted input (fewer held notes wrap around)
+  - Root plays the root of the held chord (triads, sus, 7th chords, power chords, inversions too), else the lowest note
+- 64 steps / program, step types: Off / Normal / Rest / Tie / Random (every step plays one note)
   - Rest lengthens the previous note by a step, Tie plays legato (new note starts before the old one ends; a note tied to itself keeps sounding)
-- Per step: KEY SELECT k1..k5, octave -3..+3, velocity, chance
+- Per step: KEY SELECT (Root, Key 1..5), octave -3..+3, velocity, chance
 - Per program: rate 1/64..3/8 (bar fractions, BlueArp manual), gate 1..125%, swing -50..+50%, octave -2..+2, steps 0..64
   - The header controls always show the selected program; switching programs stores and reloads them
   - Steps 0 = MIDI thru, 1 = quantized thru

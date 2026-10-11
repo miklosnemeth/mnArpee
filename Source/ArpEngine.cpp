@@ -1,7 +1,9 @@
 #include "ArpEngine.h"
 
 #include <algorithm>
+#include <bit>
 #include <cmath>
+#include <initializer_list>
 
 namespace mnArpee
 {
@@ -13,6 +15,69 @@ bool validNote(int n) { return n >= 0 && n < 128; }
 constexpr double gridEpsilon = 1.0e-9;
 // Host positions that differ from the expected one by more than this are a jump.
 constexpr double jumpToleranceQuarters = 0.01;
+}
+
+int chordRootNote(const InputNotes& input) noexcept
+{
+    if (input.empty())
+        return -1;
+
+    // Chord shapes as interval masks from the root, larger (more specific) ones first.
+    constexpr auto mask = [](std::initializer_list<int> intervals)
+    {
+        unsigned m = 0;
+        for (int i : intervals)
+            m |= 1u << i;
+        return m;
+    };
+    constexpr unsigned shapes[] = {
+        mask({ 0, 4, 7, 11 }), // maj7
+        mask({ 0, 4, 7, 10 }), // 7
+        mask({ 0, 3, 7, 10 }), // m7
+        mask({ 0, 3, 6, 10 }), // m7b5
+        mask({ 0, 3, 6, 9 }),  // dim7
+        mask({ 0, 4, 7 }),     // major
+        mask({ 0, 3, 7 }),     // minor
+        mask({ 0, 3, 6 }),     // diminished
+        mask({ 0, 4, 8 }),     // augmented
+        mask({ 0, 5, 7 }),     // sus4
+        mask({ 0, 2, 7 }),     // sus2
+        mask({ 0, 7 }),        // power chord
+    };
+
+    unsigned present = 0;
+    for (int i = 0; i < input.size; ++i)
+        present |= 1u << (input.notes[(size_t) i].note % 12);
+    const int bassPc = input.notes[0].note % 12;
+
+    // Score: notes explained by the shape, minus notes it leaves out. Ties go to the bass
+    // note (inversions of symmetric chords), then to the earlier, more specific shape.
+    int bestPc = bassPc;
+    int bestScore = -1000;
+    for (int pc = 0; pc < 12; ++pc)
+    {
+        if ((present & (1u << pc)) == 0)
+            continue;
+        const unsigned rotated = ((present >> pc) | (present << (12 - pc))) & 0xfffu;
+        for (unsigned shape : shapes)
+        {
+            if ((rotated & shape) != shape)
+                continue;
+            const int score = std::popcount(shape) * 10 - std::popcount(rotated & ~shape) * 11
+                              + (pc == bassPc ? 1 : 0);
+            if (score > bestScore)
+            {
+                bestScore = score;
+                bestPc = pc;
+            }
+            break; // shapes are ordered: the first match is the best one for this root
+        }
+    }
+
+    for (int i = 0; i < input.size; ++i)
+        if (input.notes[(size_t) i].note % 12 == bestPc)
+            return input.notes[(size_t) i].note;
+    return input.notes[0].note;
 }
 
 ArpEngine::ArpEngine() { setBank(makeFactoryBank()); }
@@ -320,50 +385,42 @@ void ArpEngine::playOneStep(const Program& prog, const InputNotes& input, double
     if (play && step.type != StepType::Off && step.type != StepType::Rest)
     {
         // Rest is silent here: the preceding note was lengthened when it was scheduled.
-        std::array<int, 128> picked {};
-        int numPicked = 0;
-        const int shift = step.scaleStep + step.octave * 12 + prog.transposeOct * 12
-                          + prog.octaveShift * 12;
-        if (step.type == StepType::Chord)
+        // KEY SELECT: k1..k5 index into the sorted input (wrapping around if fewer notes are
+        // held), Root is the root of the held chord.
+        int source = 0;
+        if (step.type == StepType::Random)
         {
-            for (int i = 0; i < input.size; ++i)
-                picked[(size_t) numPicked++] = clampNote(input.notes[(size_t) i].note + shift);
+            const int pick = randomFn ? randomFn(0, input.size - 1) : (int) (rng() % (unsigned) input.size);
+            source = input.notes[(size_t) std::clamp(pick, 0, input.size - 1)].note;
+        }
+        else if (step.keyIndex == rootKeyIndex)
+        {
+            source = chordRootNote(input);
         }
         else
         {
-            // KEY SELECT: k1..k5 index into the sorted input; wraps around if fewer notes are held.
-            int pick = 0;
-            if (step.type == StepType::Random)
-                pick = randomFn ? randomFn(0, input.size - 1) : (int) (rng() % (unsigned) input.size);
-            else
-                pick = std::clamp((int) step.keyIndex, 0, maxInputKeys - 1) % input.size;
-            pick = std::clamp(pick, 0, input.size - 1);
-            picked[(size_t) numPicked++] = clampNote(input.notes[(size_t) pick].note + shift);
+            source = input.notes[(size_t) (std::clamp((int) step.keyIndex, 0, maxInputKeys - 1) % input.size)].note;
         }
-        const auto isPicked = [&](int note)
-        {
-            return std::find(picked.begin(), picked.begin() + numPicked, note) != picked.begin() + numPicked;
-        };
+        const int note = clampNote(source + step.scaleStep + step.octave * 12 + prog.transposeOct * 12
+                                   + prog.octaveShift * 12);
 
         if (step.type == StepType::Tie)
         {
             // Legato: the new note starts first, the old ones end one sample later, and a
             // note that is tied to itself keeps sounding without a retrigger.
             for (int n = 0; n < 128; ++n)
-                if (sounding[(size_t) n] && ! isPicked(n))
+                if (sounding[(size_t) n] && n != note)
                     scheduleOff(n, t + oneSample);
-            for (int i = 0; i < numPicked; ++i)
-                if (! sounding[(size_t) picked[(size_t) i]])
-                    emitOn(picked[(size_t) i], step.velocity, at);
+            if (! sounding[(size_t) note])
+                emitOn(note, step.velocity, at);
         }
         else
         {
             // Notes without a gate (left over from quantized thru) end here.
             for (int n = 0; n < 128; ++n)
-                if (sounding[(size_t) n] && ! hasPendingOff[(size_t) n] && ! isPicked(n))
+                if (sounding[(size_t) n] && ! hasPendingOff[(size_t) n] && n != note)
                     emitOff(n, at);
-            for (int i = 0; i < numPicked; ++i)
-                emitOn(picked[(size_t) i], step.velocity, at);
+            emitOn(note, step.velocity, at);
         }
 
         // Gate, lengthened by directly following Rest steps (up to the pattern end) and
@@ -377,8 +434,7 @@ void ArpEngine::playOneStep(const Program& prog, const InputNotes& input, double
         double offAt = t + std::max(gateQ, oneSample) + restSteps * stepQ;
         if (k < numSteps && prog.steps[(size_t) k].type == StepType::Tie)
             offAt = std::max(offAt, stepTime(prog, gridIndex + 1 + restSteps, stepQ) + oneSample);
-        for (int i = 0; i < numPicked; ++i)
-            scheduleOff(picked[(size_t) i], offAt);
+        scheduleOff(note, offAt);
     }
 
     lastPlayedStep = stepIndex;
