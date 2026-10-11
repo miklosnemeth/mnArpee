@@ -59,10 +59,8 @@ int StepGrid::rowForStep(const mnArpee::Step& s) const
     using mnArpee::StepType;
     if (s.type == StepType::Off || s.type == StepType::Rest)
         return -1;
-    if (s.type == StepType::Chord)
-        return 5;
     if (s.type == StepType::Random)
-        return 6;
+        return 5;
     return std::clamp((int) s.keyIndex, 0, 4);
 }
 
@@ -128,7 +126,7 @@ void StepGrid::paint(juce::Graphics& g)
                    juce::Justification::centredLeft);
     }
 
-    static const char* rowNames[numRows] = { "k1", "k2", "k3", "k4", "k5", "Chr", "Rnd" };
+    static const char* rowNames[numRows] = { "k1", "k2", "k3", "k4", "k5", "Rnd" };
     for (int r = 0; r < numRows; ++r)
     {
         auto first = cellRect(0, r);
@@ -199,8 +197,7 @@ void StepGrid::paint(juce::Graphics& g)
             }
             else if (active)
             {
-                mark = step.type == mnArpee::StepType::Chord    ? "C"
-                     : step.type == mnArpee::StepType::Random   ? "?"
+                mark = step.type == mnArpee::StepType::Random   ? "?"
                      : step.type == mnArpee::StepType::Tie      ? "~"
                                                                 : "";
             }

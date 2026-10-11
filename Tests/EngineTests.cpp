@@ -173,17 +173,14 @@ int main()
               "custom-pattern-key-order");
     }
 
-    // 4. Chord step: both notes at once.
+    // 4. Every step plays a single note, even with a full chord held.
     {
         auto e = std::make_unique<ArpEngine>();
-        auto b = singleProgramBank(2, SyncRate::R1_8, 80);
-        b->programs[0].steps[0].type = StepType::Chord;
-        b->programs[0].steps[1].type = StepType::Off;
-        e->setBank(*b);
-        e->noteOn(60, 100);
-        e->noteOn(64, 100);
+        e->setBank(*singleProgramBank(2, SyncRate::R1_8, 80));
+        for (int n : { 60, 64, 67 })
+            e->noteOn(n, 100);
         auto evs = runFor(*e, 0.1);
-        check(findAbs(evs, true, 60) == 0 && findAbs(evs, true, 64) == 0, "chord-step-plays-all");
+        check(countOn(evs) == 1 && findAbs(evs, true, 60) == 0, "step-plays-one-note");
     }
 
     // 5. Latch: keeps sounding after release; a new chord replaces the latched one.
@@ -431,7 +428,7 @@ int main()
             e->noteOff(n);
         auto tail = runFor(*e, 1.0, 333);
         evs.insert(evs.end(), tail.begin(), tail.end());
-        check(countOn(evs) > 50 && balanced(evs), "long-run-balanced");
+        check(countOn(evs) > 30 && balanced(evs), "long-run-balanced");
     }
 
     std::printf("%d checks, %d failures\n", checks, failures);

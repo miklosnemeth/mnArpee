@@ -320,50 +320,33 @@ void ArpEngine::playOneStep(const Program& prog, const InputNotes& input, double
     if (play && step.type != StepType::Off && step.type != StepType::Rest)
     {
         // Rest is silent here: the preceding note was lengthened when it was scheduled.
-        std::array<int, 128> picked {};
-        int numPicked = 0;
-        const int shift = step.scaleStep + step.octave * 12 + prog.transposeOct * 12
-                          + prog.octaveShift * 12;
-        if (step.type == StepType::Chord)
-        {
-            for (int i = 0; i < input.size; ++i)
-                picked[(size_t) numPicked++] = clampNote(input.notes[(size_t) i].note + shift);
-        }
+        // KEY SELECT: k1..k5 index into the sorted input; wraps around if fewer notes are held.
+        int pick = 0;
+        if (step.type == StepType::Random)
+            pick = randomFn ? randomFn(0, input.size - 1) : (int) (rng() % (unsigned) input.size);
         else
-        {
-            // KEY SELECT: k1..k5 index into the sorted input; wraps around if fewer notes are held.
-            int pick = 0;
-            if (step.type == StepType::Random)
-                pick = randomFn ? randomFn(0, input.size - 1) : (int) (rng() % (unsigned) input.size);
-            else
-                pick = std::clamp((int) step.keyIndex, 0, maxInputKeys - 1) % input.size;
-            pick = std::clamp(pick, 0, input.size - 1);
-            picked[(size_t) numPicked++] = clampNote(input.notes[(size_t) pick].note + shift);
-        }
-        const auto isPicked = [&](int note)
-        {
-            return std::find(picked.begin(), picked.begin() + numPicked, note) != picked.begin() + numPicked;
-        };
+            pick = std::clamp((int) step.keyIndex, 0, maxInputKeys - 1) % input.size;
+        pick = std::clamp(pick, 0, input.size - 1);
+        const int note = clampNote(input.notes[(size_t) pick].note + step.scaleStep + step.octave * 12
+                                   + prog.transposeOct * 12 + prog.octaveShift * 12);
 
         if (step.type == StepType::Tie)
         {
             // Legato: the new note starts first, the old ones end one sample later, and a
             // note that is tied to itself keeps sounding without a retrigger.
             for (int n = 0; n < 128; ++n)
-                if (sounding[(size_t) n] && ! isPicked(n))
+                if (sounding[(size_t) n] && n != note)
                     scheduleOff(n, t + oneSample);
-            for (int i = 0; i < numPicked; ++i)
-                if (! sounding[(size_t) picked[(size_t) i]])
-                    emitOn(picked[(size_t) i], step.velocity, at);
+            if (! sounding[(size_t) note])
+                emitOn(note, step.velocity, at);
         }
         else
         {
             // Notes without a gate (left over from quantized thru) end here.
             for (int n = 0; n < 128; ++n)
-                if (sounding[(size_t) n] && ! hasPendingOff[(size_t) n] && ! isPicked(n))
+                if (sounding[(size_t) n] && ! hasPendingOff[(size_t) n] && n != note)
                     emitOff(n, at);
-            for (int i = 0; i < numPicked; ++i)
-                emitOn(picked[(size_t) i], step.velocity, at);
+            emitOn(note, step.velocity, at);
         }
 
         // Gate, lengthened by directly following Rest steps (up to the pattern end) and
@@ -377,8 +360,7 @@ void ArpEngine::playOneStep(const Program& prog, const InputNotes& input, double
         double offAt = t + std::max(gateQ, oneSample) + restSteps * stepQ;
         if (k < numSteps && prog.steps[(size_t) k].type == StepType::Tie)
             offAt = std::max(offAt, stepTime(prog, gridIndex + 1 + restSteps, stepQ) + oneSample);
-        for (int i = 0; i < numPicked; ++i)
-            scheduleOff(picked[(size_t) i], offAt);
+        scheduleOff(note, offAt);
     }
 
     lastPlayedStep = stepIndex;
