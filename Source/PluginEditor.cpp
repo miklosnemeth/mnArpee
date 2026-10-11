@@ -1,6 +1,8 @@
 #include "PluginEditor.h"
 #include "PluginProcessor.h"
 
+#include "Fonts.h"
+
 using Pal = StepGrid::Palette;
 
 //==============================================================================
@@ -75,14 +77,23 @@ void MnArpeeLookAndFeel::drawToggleButton(juce::Graphics& g, juce::ToggleButton&
         g.strokePath(p, juce::PathStrokeType(2.0f));
     }
     g.setColour(Pal::text());
-    g.setFont(juce::Font(juce::FontOptions(12.0f)));
+    g.setFont(mnArpee::fonts::text(13.0f));
     g.drawText(btn.getButtonText(), r.reduced(6.0f, 0.0f), juce::Justification::centredLeft);
 }
+
+juce::Font MnArpeeLookAndFeel::getComboBoxFont(juce::ComboBox& box)
+{
+    return mnArpee::fonts::text(juce::jmin(15.0f, (float) box.getHeight() * 0.6f));
+}
+
+juce::Font MnArpeeLookAndFeel::getPopupMenuFont() { return mnArpee::fonts::text(15.0f); }
+
+juce::Font MnArpeeLookAndFeel::getSliderPopupFont(juce::Slider&) { return mnArpee::fonts::text(14.0f); }
 
 juce::Label* MnArpeeLookAndFeel::createSliderTextBox(juce::Slider& s)
 {
     auto* l = LookAndFeel_V4::createSliderTextBox(s);
-    l->setFont(juce::Font(juce::FontOptions(11.0f, juce::Font::bold)));
+    l->setFont(mnArpee::fonts::text(12.0f, true));
     l->setColour(juce::Label::textColourId, Pal::text());
     l->setColour(juce::Label::backgroundColourId, juce::Colours::transparentBlack);
     return l;
@@ -96,11 +107,6 @@ MnArpeeAudioEditor::MnArpeeAudioEditor(MnArpeeAudioProcessor& p)
     setSize(900, 560);
     setResizable(true, true);
     setResizeLimits(760, 480, 1600, 1000);
-
-    brandLabel.setText("mnArpee", juce::dontSendNotification);
-    brandLabel.setFont(juce::Font(juce::FontOptions(24.0f, juce::Font::bold)));
-    brandLabel.setColour(juce::Label::textColourId, Pal::accent());
-    addAndMakeVisible(brandLabel);
 
     addAndMakeVisible(grid);
     grid.onStepClicked([this](int step, int row) { onGridClicked(step, row); });
@@ -152,7 +158,7 @@ MnArpeeAudioEditor::MnArpeeAudioEditor(MnArpeeAudioProcessor& p)
     auto setupLabel = [this](juce::Label& l, const char* text)
     {
         l.setText(text, juce::dontSendNotification);
-        l.setFont(juce::Font(juce::FontOptions(11.0f, juce::Font::bold)));
+        l.setFont(mnArpee::fonts::text(12.0f, true));
         l.setColour(juce::Label::textColourId, Pal::dimText());
         l.setJustificationType(juce::Justification::centredLeft);
         addAndMakeVisible(l);
@@ -217,8 +223,15 @@ void MnArpeeAudioEditor::paint(juce::Graphics& g)
     g.setColour(Pal::border());
     g.drawRoundedRectangle(editCard.toFloat(), 8.0f, 1.0f);
 
+    // Title. The variable font's default instance plus synthetic bold is a bit light,
+    // so the text is stroked twice with a small offset (as in mnKord).
+    g.setColour(Pal::accent());
+    g.setFont(mnArpee::fonts::title(28.0f));
+    for (const float dx : { 0.0f, 0.6f })
+        g.drawText("mnArpee", brandArea.toFloat().translated(dx, 0.0f), juce::Justification::centredLeft);
+
     // Section labels.
-    g.setFont(juce::Font(juce::FontOptions(11.0f, juce::Font::bold)));
+    g.setFont(mnArpee::fonts::text(12.0f, true));
     g.setColour(Pal::dimText());
     g.drawText("PATTERN", gridCard.getX() + 14, gridCard.getY() + 7, 120, 16,
                juce::Justification::centredLeft);
@@ -227,7 +240,7 @@ void MnArpeeAudioEditor::paint(juce::Graphics& g)
                juce::Justification::centredLeft);
 
     // Info line in the header (between brand and latch): held notes.
-    g.setFont(juce::Font(juce::FontOptions(12.0f)));
+    g.setFont(mnArpee::fonts::text(13.0f));
     g.setColour(Pal::text());
     const int sx = 12 + 180;
     const int sw = getWidth() - 12 - 150 - sx - 10;
@@ -241,7 +254,7 @@ void MnArpeeAudioEditor::resized()
     // Header: brand on the left, latch + status on the right.
     auto header = area.removeFromTop(56);
     auto latchArea = header.removeFromRight(150);
-    brandLabel.setBounds(header.removeFromLeft(170));
+    brandArea = header.removeFromLeft(170);
     latchButton.setBounds(latchArea.getX(), latchArea.getCentreY() - 12, 100, 24);
 
     // Parameter card.

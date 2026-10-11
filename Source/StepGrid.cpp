@@ -1,5 +1,7 @@
 #include "StepGrid.h"
 
+#include "Fonts.h"
+
 namespace
 {
 constexpr int labelW = 64;   // row label strip on the left
@@ -117,7 +119,7 @@ void StepGrid::paint(juce::Graphics& g)
     auto board = boardArea();
 
     // Column labels (every 4th step highlighted).
-    g.setFont(juce::Font(juce::FontOptions(11.0f)));
+    g.setFont(mnArpee::fonts::text(12.0f));
     g.setColour(Palette::dimText());
     for (int s = 0; s < n; s += 4)
     {
@@ -136,7 +138,7 @@ void StepGrid::paint(juce::Graphics& g)
     }
 
     const auto clip = g.getClipBounds();
-    const auto markFont = juce::Font(juce::FontOptions(10.0f, juce::Font::bold));
+    const auto markFont = mnArpee::fonts::text(11.0f, true);
     for (int s = 0; s < n; ++s)
     {
         if (! clip.intersects(columnBounds(s)))
