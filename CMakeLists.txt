@@ -43,12 +43,20 @@ juce_add_plugin(mnArpee
 
 juce_generate_juce_header(mnArpee)
 
+# Montserrat (title) and Roboto Condensed (UI text), SIL Open Font License.
+juce_add_binary_data(mnArpeeFonts
+    SOURCES
+        Resources/Fonts/Montserrat.ttf
+        Resources/Fonts/RobotoCondensed.ttf
+)
+
 target_sources(mnArpee PRIVATE
     Source/PatternData.cpp
     Source/ArpEngine.cpp
     Source/PluginProcessor.cpp
     Source/PluginEditor.cpp
     Source/StepGrid.cpp
+    Source/Fonts.cpp
 )
 
 target_compile_definitions(mnArpee
@@ -65,6 +73,7 @@ endif()
 
 target_link_libraries(mnArpee
     PRIVATE
+        mnArpeeFonts
         juce::juce_audio_devices
         juce::juce_audio_utils
         juce::juce_gui_extra

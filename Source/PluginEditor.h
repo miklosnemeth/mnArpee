@@ -22,6 +22,9 @@ public:
                           bool shouldDrawButtonAsHighlighted,
                           bool shouldDrawButtonAsDown) override;
     juce::Label* createSliderTextBox(juce::Slider&) override;
+    juce::Font getComboBoxFont(juce::ComboBox&) override;
+    juce::Font getPopupMenuFont() override;
+    juce::Font getSliderPopupFont(juce::Slider&) override;
 };
 
 //==============================================================================
@@ -61,7 +64,7 @@ private:
     juce::ComboBox programBox, chainBox, rateBox;
     juce::Slider octaveSlider, gateSlider, swingSlider, stepsSlider;
     juce::ToggleButton latchButton;
-    juce::Label brandLabel;
+    juce::Rectangle<int> brandArea;
 
     // Matrix
     StepGrid grid;
