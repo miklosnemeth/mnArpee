@@ -4,6 +4,7 @@
 // On Linux the editor checks need an X display (e.g. xvfb-run); they are skipped without one.
 
 #include "PluginProcessor.h"
+#include "StepGrid.h"
 
 #include <cstdio>
 #include <cstdlib>
@@ -200,6 +201,17 @@ int main()
             off = off || (meta.getMessage().isNoteOff() && meta.getMessage().getNoteNumber() == 60);
         }
         check(cc && off && run(*p, 20).empty(), "cc-thru-and-all-notes-off");
+    }
+
+    // Matrix lanes: row <-> value mapping.
+    {
+        using mnArpee::StepType;
+        bool ok = StepGrid::typeForRow(0) == StepType::Normal && StepGrid::typeForRow(4) == StepType::Off
+                  && StepGrid::octaveForRow(0) == 3 && StepGrid::octaveForRow(6) == -3
+                  && StepGrid::velocityForRow(0) == 127 && StepGrid::velocityForRow(StepGrid::velocityLevels - 1) < 20;
+        for (int r = 1; r < StepGrid::velocityLevels; ++r)
+            ok = ok && StepGrid::velocityForRow(r) < StepGrid::velocityForRow(r - 1);
+        check(ok && StepGrid::rowsFor(StepGrid::Lane::Key) == 7, "matrix-lane-values");
     }
 
     // Editor: opens, follows a state load without dangling data.

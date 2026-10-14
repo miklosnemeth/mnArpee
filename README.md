@@ -19,7 +19,8 @@ No input pre-filtering: held notes are sorted by pitch before they reach the eng
 - 8 programs + 2 chains (Verse/Chorus), quantized chain switching; turning a chain off returns to the selected program
 - Latch (a new chord replaces the latched one), sustain pedal, panic / all-notes-off, CC/bend/aftertouch pass-through, output on the input channel
 - Sample-accurate MIDI handling; the engine is allocation-free on the audio thread and edits reach it without locks
-- Matrix UI: clicking a cell sets the step; the bottom strip edits the selected step
+- Matrix UI: the lane captions (Type, Key, Octave, Velocity) choose what the matrix shows; clicking a cell sets the step, in the value lanes dragging paints across steps
+- Value lanes under the matrix (as in BlueARP): drag a box up and down or use the mouse wheel
 
 ## Build (Windows)
 

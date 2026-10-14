@@ -77,23 +77,23 @@ void MnArpeeLookAndFeel::drawToggleButton(juce::Graphics& g, juce::ToggleButton&
         g.strokePath(p, juce::PathStrokeType(2.0f));
     }
     g.setColour(Pal::text());
-    g.setFont(mnArpee::fonts::text(13.0f));
+    g.setFont(mnArpee::fonts::text(17.0f));
     g.drawText(btn.getButtonText(), r.reduced(6.0f, 0.0f), juce::Justification::centredLeft);
 }
 
 juce::Font MnArpeeLookAndFeel::getComboBoxFont(juce::ComboBox& box)
 {
-    return mnArpee::fonts::text(juce::jmin(15.0f, (float) box.getHeight() * 0.6f));
+    return mnArpee::fonts::text(juce::jmin(17.0f, (float) box.getHeight() * 0.62f));
 }
 
-juce::Font MnArpeeLookAndFeel::getPopupMenuFont() { return mnArpee::fonts::text(15.0f); }
+juce::Font MnArpeeLookAndFeel::getPopupMenuFont() { return mnArpee::fonts::text(17.0f); }
 
-juce::Font MnArpeeLookAndFeel::getSliderPopupFont(juce::Slider&) { return mnArpee::fonts::text(14.0f); }
+juce::Font MnArpeeLookAndFeel::getSliderPopupFont(juce::Slider&) { return mnArpee::fonts::text(16.0f); }
 
 juce::Label* MnArpeeLookAndFeel::createSliderTextBox(juce::Slider& s)
 {
     auto* l = LookAndFeel_V4::createSliderTextBox(s);
-    l->setFont(mnArpee::fonts::text(12.0f, true));
+    l->setFont(mnArpee::fonts::text(15.0f, true));
     l->setColour(juce::Label::textColourId, Pal::text());
     l->setColour(juce::Label::backgroundColourId, juce::Colours::transparentBlack);
     return l;
@@ -110,6 +110,7 @@ MnArpeeAudioEditor::MnArpeeAudioEditor(MnArpeeAudioProcessor& p)
 
     addAndMakeVisible(grid);
     grid.onStepClicked([this](int step, int row) { onGridClicked(step, row); });
+    grid.onLaneAdjusted([this](int step, StepGrid::Lane lane, int delta) { onLaneAdjusted(step, lane, delta); });
 
     juce::StringArray progNames;
     for (int i = 0; i < MnArpeeAudioProcessor::numUserPrograms; ++i)
@@ -118,27 +119,14 @@ MnArpeeAudioEditor::MnArpeeAudioEditor(MnArpeeAudioProcessor& p)
     chainBox.addItemList({ "Off", "Chain 1", "Chain 2" }, 1);
     for (int i = 0; i < mnArpee::numSyncRates; ++i)
         rateBox.addItem(mnArpee::syncRateName((mnArpee::SyncRate) i), i + 1);
-    // Item id = StepType value + 1 (the values have a gap where Chord used to be).
-    stepTypeBox.addItem("Off", (int) mnArpee::StepType::Off + 1);
-    stepTypeBox.addItem("Normal", (int) mnArpee::StepType::Normal + 1);
-    stepTypeBox.addItem("Rest", (int) mnArpee::StepType::Rest + 1);
-    stepTypeBox.addItem("Tie", (int) mnArpee::StepType::Tie + 1);
-    stepTypeBox.addItem("Random", (int) mnArpee::StepType::Random + 1);
-    // Item id = KEY SELECT value + 2 (Root = -1).
-    stepKeyBox.addItem("Root", mnArpee::rootKeyIndex + 2);
-    for (int k = 0; k < mnArpee::maxInputKeys; ++k)
-        stepKeyBox.addItem("Key " + juce::String(k + 1), k + 2);
     velModeBox.addItem("Lane", 1);
     velModeBox.addItem("Input", 2);
     velModeBox.addItem("Lane x Input", 3);
-    for (auto* cb : { &programBox, &chainBox, &rateBox, &velModeBox, &stepTypeBox, &stepKeyBox })
+    for (auto* cb : { &programBox, &chainBox, &rateBox, &velModeBox })
         addAndMakeVisible(*cb);
 
-    for (auto* s : { &octaveSlider, &gateSlider, &swingSlider, &stepsSlider, &stepOctSlider,
-                     &stepVelSlider })
+    for (auto* s : { &octaveSlider, &gateSlider, &swingSlider, &stepsSlider })
         setupSlider(*s);
-    stepOctSlider.setRange(-3, 3, 1);
-    stepVelSlider.setRange(1, 127, 1);
 
     addAndMakeVisible(latchButton);
     latchButton.setButtonText("Latch");
@@ -154,15 +142,10 @@ MnArpeeAudioEditor::MnArpeeAudioEditor(MnArpeeAudioProcessor& p)
     stepsAtt = std::make_unique<SliderAttachment>(apvts, "steps", stepsSlider);
     latchAtt = std::make_unique<ButtonAttachment>(apvts, "latch", latchButton);
 
-    stepTypeBox.onChange = [this] { onStepEditorChanged(); };
-    stepKeyBox.onChange = [this] { onStepEditorChanged(); };
-    stepOctSlider.onValueChange = [this] { onStepEditorChanged(); };
-    stepVelSlider.onValueChange = [this] { onStepEditorChanged(); };
-
     auto setupLabel = [this](juce::Label& l, const char* text)
     {
         l.setText(text, juce::dontSendNotification);
-        l.setFont(mnArpee::fonts::text(12.0f, true));
+        l.setFont(mnArpee::fonts::text(15.0f, true));
         l.setColour(juce::Label::textColourId, Pal::dimText());
         l.setJustificationType(juce::Justification::centredLeft);
         addAndMakeVisible(l);
@@ -175,10 +158,6 @@ MnArpeeAudioEditor::MnArpeeAudioEditor(MnArpeeAudioProcessor& p)
     setupLabel(gateLabel, "GATE %");
     setupLabel(swingLabel, "SWING %");
     setupLabel(stepsLabel, "STEPS");
-    setupLabel(stepTypeLabel, "TYPE");
-    setupLabel(stepKeyLabel, "KEY");
-    setupLabel(stepOctLabel, "OCT");
-    setupLabel(stepVelLabel, "VEL");
 
     statusText = "keys  -";
     reloadProgram();
@@ -194,7 +173,7 @@ MnArpeeAudioEditor::~MnArpeeAudioEditor()
 void MnArpeeAudioEditor::setupSlider(juce::Slider& s)
 {
     s.setSliderStyle(juce::Slider::LinearHorizontal);
-    s.setTextBoxStyle(juce::Slider::TextBoxRight, false, 46, 18);
+    s.setTextBoxStyle(juce::Slider::TextBoxRight, false, 44, 24);
     s.setPopupDisplayEnabled(true, true, this);
     addAndMakeVisible(s);
 }
@@ -223,11 +202,6 @@ void MnArpeeAudioEditor::paint(juce::Graphics& g)
     g.setColour(Pal::border());
     g.drawRoundedRectangle(gridCard.toFloat(), 8.0f, 1.0f);
 
-    g.setColour(Pal::card());
-    g.fillRoundedRectangle(editCard.toFloat(), 8.0f);
-    g.setColour(Pal::border());
-    g.drawRoundedRectangle(editCard.toFloat(), 8.0f, 1.0f);
-
     // Title. The variable font's default instance plus synthetic bold is a bit light,
     // so the text is stroked twice with a small offset (as in mnKord).
     g.setColour(Pal::accent());
@@ -236,16 +210,13 @@ void MnArpeeAudioEditor::paint(juce::Graphics& g)
         g.drawText("mnArpee", brandArea.toFloat().translated(dx, 0.0f), juce::Justification::centredLeft);
 
     // Section labels.
-    g.setFont(mnArpee::fonts::text(12.0f, true));
+    g.setFont(mnArpee::fonts::text(16.0f, true));
     g.setColour(Pal::dimText());
     g.drawText("PATTERN", gridCard.getX() + 14, gridCard.getY() + 7, 120, 16,
                juce::Justification::centredLeft);
-    g.drawText("STEP " + juce::String(editStep + 1),
-               editCard.getX() + 14, editCard.getY() + 7, 200, 16,
-               juce::Justification::centredLeft);
 
     // Info line in the header (between brand and latch): held notes.
-    g.setFont(mnArpee::fonts::text(13.0f));
+    g.setFont(mnArpee::fonts::text(17.0f));
     g.setColour(Pal::text());
     const int sx = 12 + 180;
     const int sw = getWidth() - 12 - 150 - sx - 10;
@@ -263,12 +234,10 @@ void MnArpeeAudioEditor::resized()
     latchButton.setBounds(latchArea.getX(), latchArea.getCentreY() - 12, 100, 24);
 
     // Parameter card.
-    paramsCard = area.removeFromTop(74);
+    paramsCard = area.removeFromTop(80);
     area.removeFromTop(10);
 
-    // Bottom: step editor card, with the matrix above it.
-    editCard = area.removeFromBottom(76);
-    area.removeFromBottom(10);
+    // The rest is the matrix card.
     gridCard = area;
 
     auto inner = paramsCard.reduced(12);
@@ -276,8 +245,8 @@ void MnArpeeAudioEditor::resized()
     auto place = [](juce::Rectangle<int>& r, juce::Label& lab, juce::Component& comp, int w)
     {
         auto col = r.removeFromLeft(w);
-        lab.setBounds(col.getX(), col.getY(), col.getWidth(), 14);
-        comp.setBounds(col.getX(), col.getY() + 18, col.getWidth() - 8, 26);
+        lab.setBounds(col.getX(), col.getY(), col.getWidth(), 19);
+        comp.setBounds(col.getX(), col.getY() + 20, col.getWidth() - 8, 28);
         r.removeFromLeft(8);
     };
     place(inner, programLabel, programBox, 80);
@@ -292,21 +261,6 @@ void MnArpeeAudioEditor::resized()
     // Grid inside the card (label strip on top).
     grid.setBounds(gridCard.getX() + 6, gridCard.getY() + 24,
                    gridCard.getWidth() - 12, gridCard.getHeight() - 30);
-
-    // Step editor strip.
-    auto edit = editCard.reduced(12);
-    edit.removeFromTop(18);
-    auto place2 = [](juce::Rectangle<int>& r, juce::Label& lab, juce::Component& comp, int w)
-    {
-        auto col = r.removeFromLeft(w);
-        lab.setBounds(col.getX(), col.getY(), col.getWidth(), 14);
-        comp.setBounds(col.getX(), col.getY() + 18, col.getWidth() - 8, 26);
-        r.removeFromLeft(10);
-    };
-    place2(edit, stepTypeLabel, stepTypeBox, 140);
-    place2(edit, stepKeyLabel, stepKeyBox, 100);
-    place2(edit, stepOctLabel, stepOctSlider, 150);
-    place2(edit, stepVelLabel, stepVelSlider, 170);
 }
 
 void MnArpeeAudioEditor::timerCallback()
@@ -349,18 +303,6 @@ void MnArpeeAudioEditor::reloadProgram()
     shownProgram = proc.getProgramCopy(shownProgramIndex);
     grid.setProgram(shownProgram);
     grid.setEditStep(editStep);
-    refreshStepEditor();
-}
-
-void MnArpeeAudioEditor::refreshStepEditor()
-{
-    const auto& st = shownProgram.steps[(size_t) std::clamp(editStep, 0, mnArpee::maxSteps - 1)];
-    stepTypeBox.setSelectedId((int) st.type + 1, juce::dontSendNotification);
-    stepKeyBox.setSelectedId(std::clamp((int) st.keyIndex, (int) mnArpee::rootKeyIndex, 4) + 2,
-                           juce::dontSendNotification);
-    stepOctSlider.setValue(st.octave, juce::dontSendNotification);
-    stepVelSlider.setValue(std::max(1, (int) st.velocity), juce::dontSendNotification);
-    repaint(editCard);
 }
 
 void MnArpeeAudioEditor::commitStep(const mnArpee::Step& step)
@@ -371,12 +313,53 @@ void MnArpeeAudioEditor::commitStep(const mnArpee::Step& step)
     grid.setProgram(shownProgram);
 }
 
+void MnArpeeAudioEditor::onLaneAdjusted(int step, StepGrid::Lane lane, int delta)
+{
+    using mnArpee::StepType;
+    editStep = step;
+    auto st = shownProgram.steps[(size_t) step];
+    if (delta != 0)
+    {
+        switch (lane)
+        {
+            case StepGrid::Lane::Type:
+            {
+                // Ascending as in BlueARP's list.
+                constexpr StepType order[] = { StepType::Off, StepType::Normal, StepType::Rest,
+                                               StepType::Tie, StepType::Random };
+                int i = 0;
+                while (i < 4 && order[i] != st.type)
+                    ++i;
+                st.type = order[std::clamp(i + delta, 0, 4)];
+                break;
+            }
+            case StepGrid::Lane::Key:
+                st.keyIndex = (std::int8_t) std::clamp((int) st.keyIndex + delta, (int) mnArpee::rootKeyIndex, 4);
+                break;
+            case StepGrid::Lane::Octave:
+                st.octave = (std::int8_t) std::clamp((int) st.octave + delta, -3, 3);
+                break;
+            case StepGrid::Lane::Velocity:
+                st.velocity = (std::uint8_t) std::clamp((int) st.velocity + delta, 1, 127);
+                break;
+        }
+        commitStep(st);
+    }
+    grid.setEditStep(step);
+}
+
 void MnArpeeAudioEditor::onGridClicked(int step, int row)
 {
     using mnArpee::StepType;
     editStep = step;
     auto st = shownProgram.steps[(size_t) step];
-    if (row != StepGrid::randomRow)
+    if (grid.getLane() == StepGrid::Lane::Type)
+        st.type = StepGrid::typeForRow(row);
+    else if (grid.getLane() == StepGrid::Lane::Octave)
+        st.octave = (std::int8_t) StepGrid::octaveForRow(row);
+    else if (grid.getLane() == StepGrid::Lane::Velocity)
+        st.velocity = (std::uint8_t) StepGrid::velocityForRow(row);
+    else if (row != StepGrid::randomRow)
     {
         // Key and Root rows: toggle the step on that key (a Tie step stays a Tie).
         const int key = StepGrid::keyForRow(row);
@@ -391,15 +374,4 @@ void MnArpeeAudioEditor::onGridClicked(int step, int row)
         st.type = st.type == StepType::Random ? StepType::Off : StepType::Random;
     commitStep(st);
     grid.setEditStep(step);
-    refreshStepEditor();
-}
-
-void MnArpeeAudioEditor::onStepEditorChanged()
-{
-    auto st = shownProgram.steps[(size_t) editStep];
-    st.type = mnArpee::stepTypeFromInt(stepTypeBox.getSelectedId() - 1);
-    st.keyIndex = (std::int8_t) juce::jlimit((int) mnArpee::rootKeyIndex, 4, stepKeyBox.getSelectedId() - 2);
-    st.octave = (std::int8_t) stepOctSlider.getValue();
-    st.velocity = (std::uint8_t) stepVelSlider.getValue();
-    commitStep(st);
 }
