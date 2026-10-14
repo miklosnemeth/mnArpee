@@ -19,7 +19,7 @@ juce::AudioProcessorValueTreeState::ParameterLayout makeLayout()
     params.push_back(std::make_unique<juce::AudioParameterInt>(
         "program", "Program", 1, MnArpeeAudioProcessor::numUserPrograms, 1));
     params.push_back(std::make_unique<juce::AudioParameterBool>("latch", "Latch", false));
-    params.push_back(std::make_unique<juce::AudioParameterInt>("steps", "Steps", 0, mnArpee::maxSteps, 16));
+    params.push_back(std::make_unique<juce::AudioParameterInt>("steps", "Steps", 0, mnArpee::maxPatternSteps, 16));
     return { params.begin(), params.end() };
 }
 
@@ -83,7 +83,7 @@ MnArpeeAudioProcessor::ParamValues MnArpeeAudioProcessor::readParams() const
     v.gate = juce::jlimit(1, 125, toInt(gateParam));
     v.swing = juce::jlimit(-50, 50, toInt(swingParam));
     v.octave = juce::jlimit(-2, 2, toInt(octaveParam));
-    v.steps = juce::jlimit(0, mnArpee::maxSteps, toInt(stepsParam));
+    v.steps = juce::jlimit(0, mnArpee::maxPatternSteps, toInt(stepsParam));
     v.latch = latchParam->load() > 0.5f;
     return v;
 }
@@ -455,7 +455,7 @@ void MnArpeeAudioProcessor::setStateInformation(const void* data, int sizeInByte
             {
                 auto& prog = loaded->programs[(size_t) pi];
                 readName(in, prog.name);
-                prog.numSteps = juce::jlimit(0, mnArpee::maxSteps, in.readInt());
+                prog.numSteps = juce::jlimit(0, mnArpee::maxPatternSteps, in.readInt());
                 prog.sync = (mnArpee::SyncRate) juce::jlimit(0, mnArpee::numSyncRates - 1, in.readInt());
                 prog.gatePercent = juce::jlimit(1, 125, in.readInt());
                 prog.swingPercent = juce::jlimit(-50, 50, in.readInt());

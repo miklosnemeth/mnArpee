@@ -187,6 +187,13 @@ int main()
               "state-with-chains-still-loads");
     }
 
+    // The pattern is at most 32 steps long.
+    {
+        auto p = makeProcessor();
+        setParam(*p, "steps", 64);
+        check(param(*p, "steps") == 32, "steps-max-32");
+    }
+
     // Steps 0 = MIDI thru: notes pass unchanged and in time.
     {
         auto p = makeProcessor();
