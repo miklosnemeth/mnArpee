@@ -145,6 +145,7 @@ int main()
         setParam(*p, "steps", 4);
         setParam(*p, "swing", 25);
         setParam(*p, "chain", 1);
+        setParam(*p, "velmode", 2);
         juce::MemoryBlock state;
         p->getStateInformation(state);
 
@@ -156,6 +157,8 @@ int main()
                   && prog.gatePercent == 50 && prog.swingPercent == 25 && prog.numSteps == 4
                   && param(*q, "chain") == 1,
               "state-roundtrip");
+        check(prog.velocityMode == mnArpee::VelocityMode::LaneAndInput && param(*q, "velmode") == 2,
+              "state-velocity-mode");
         check(q->getProgramCopy(1).gatePercent == 90 && q->getProgramName(1) == "Bass 8ths",
               "state-other-programs");
 

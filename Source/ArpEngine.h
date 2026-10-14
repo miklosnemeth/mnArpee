@@ -97,7 +97,8 @@ public:
     void updateBank(const Bank& bank);
     // Live program parameters, applied without copying the whole bank.
     void setProgramParams(int programIndex, SyncRate sync, int gatePercent, int swingPercent,
-                          int octaveShift, int numSteps);
+                          int octaveShift, int numSteps,
+                          VelocityMode velocityMode = VelocityMode::Lane);
     // Selected program: switches at the end of the running pattern, or at once when idle.
     void setCurrentProgram(int index);
     // -1 = chain off. Switches on the bank's chain quantize grid.

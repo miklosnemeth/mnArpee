@@ -19,6 +19,8 @@ juce::AudioProcessorValueTreeState::ParameterLayout makeLayout()
         "program", "Program", 1, MnArpeeAudioProcessor::numUserPrograms, 1));
     params.push_back(std::make_unique<juce::AudioParameterInt>("chain", "Chain", 0, 2, 0));
     params.push_back(std::make_unique<juce::AudioParameterBool>("latch", "Latch", false));
+    params.push_back(std::make_unique<juce::AudioParameterChoice>(
+        "velmode", "Velocity source", juce::StringArray { "Lane", "Input", "Lane x Input" }, 0));
     params.push_back(std::make_unique<juce::AudioParameterInt>("steps", "Steps", 0, mnArpee::maxSteps, 16));
     return { params.begin(), params.end() };
 }
@@ -49,6 +51,7 @@ MnArpeeAudioProcessor::MnArpeeAudioProcessor()
     octaveParam = apvts.getRawParameterValue("octave");
     stepsParam = apvts.getRawParameterValue("steps");
     latchParam = apvts.getRawParameterValue("latch");
+    velModeParam = apvts.getRawParameterValue("velmode");
 
     model.numPrograms = std::min(model.numPrograms, numUserPrograms);
     loadParamsFrom(model.programs[0]);
@@ -86,6 +89,7 @@ MnArpeeAudioProcessor::ParamValues MnArpeeAudioProcessor::readParams() const
     v.swing = juce::jlimit(-50, 50, toInt(swingParam));
     v.octave = juce::jlimit(-2, 2, toInt(octaveParam));
     v.steps = juce::jlimit(0, mnArpee::maxSteps, toInt(stepsParam));
+    v.velMode = juce::jlimit(0, mnArpee::numVelocityModes - 1, toInt(velModeParam));
     v.latch = latchParam->load() > 0.5f;
     return v;
 }
@@ -98,6 +102,7 @@ void MnArpeeAudioProcessor::storeParamsInto(mnArpee::Program& prog) const
     prog.swingPercent = v.swing;
     prog.octaveShift = v.octave;
     prog.numSteps = v.steps;
+    prog.velocityMode = (mnArpee::VelocityMode) v.velMode;
 }
 
 void MnArpeeAudioProcessor::setParamValue(const char* id, float plainValue)
@@ -117,6 +122,7 @@ void MnArpeeAudioProcessor::loadParamsFrom(const mnArpee::Program& prog)
     setParamValue("swing", (float) prog.swingPercent);
     setParamValue("octave", (float) prog.octaveShift);
     setParamValue("steps", (float) prog.numSteps);
+    setParamValue("velmode", (float) prog.velocityMode);
 }
 
 void MnArpeeAudioProcessor::publishBank(bool restartPlayback)
@@ -248,10 +254,11 @@ void MnArpeeAudioProcessor::applyParamsToEngine()
     // until the message thread loads the new ones: they must not go into the new program.
     if (! programChanged
         && (v.rate != applied.rate || v.gate != applied.gate || v.swing != applied.swing
-            || v.octave != applied.octave || v.steps != applied.steps))
+            || v.octave != applied.octave || v.steps != applied.steps
+            || v.velMode != applied.velMode))
     {
         engine.setProgramParams(v.program, (mnArpee::SyncRate) v.rate, v.gate, v.swing,
-                                v.octave, v.steps);
+                                v.octave, v.steps, (mnArpee::VelocityMode) v.velMode);
     }
     if (v.chain != applied.chain)
         engine.setCurrentChain(v.chain);
@@ -438,6 +445,9 @@ void MnArpeeAudioProcessor::getStateInformation(juce::MemoryBlock& destData)
         }
         out.writeDouble(model.chainQuantizeBars);
         out.writeBool(model.restartChainOnSwitch);
+        // Added later: kept at the end so states from before still load.
+        for (int pi = 0; pi < model.numPrograms; ++pi)
+            out.writeByte((char) model.programs[(size_t) pi].velocityMode);
     }
     auto state = apvts.copyState();
     if (auto xml = state.createXml())
@@ -509,6 +519,10 @@ void MnArpeeAudioProcessor::setStateInformation(const void* data, int sizeInByte
             bankOk = bankOk && in.getPosition() + 9 <= size;
             loaded->chainQuantizeBars = juce::jlimit(1.0 / 64.0, 4.0, in.readDouble());
             loaded->restartChainOnSwitch = in.readBool();
+            if (bankOk && in.getPosition() + numProgs <= size)
+                for (int pi = 0; pi < numProgs; ++pi)
+                    loaded->programs[(size_t) pi].velocityMode = (mnArpee::VelocityMode) juce::jlimit(
+                        0, mnArpee::numVelocityModes - 1, (int) in.readByte());
         }
     }
 

@@ -13,6 +13,7 @@ No input pre-filtering: held notes are sorted by pitch before they reach the eng
 - Per step: KEY SELECT (Root, Key 1..5), octave -3..+3, velocity, chance
 - Per program: rate 1/64..3/8 (bar fractions, BlueArp manual), gate 1..125%, swing -50..+50%, octave -2..+2, steps 0..64
   - The header controls always show the selected program; switching programs stores and reloads them
+  - Velocity source: Lane (the step's velocity), Input (the velocity of the input note the step plays) or Lane x Input (step velocity scaled by the input velocity)
   - Steps 0 = MIDI thru, 1 = quantized thru
 - Host sync: steps lock to the song position (bar grid) and the pattern position follows it; free-run when the transport is stopped (a new phrase starts the pattern right away)
 - 8 programs + 2 chains (Verse/Chorus), quantized chain switching; turning a chain off returns to the selected program

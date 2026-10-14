@@ -463,6 +463,50 @@ int main()
         check(noteOnSequence(runFor(*e, 0.1)).front() == 72, "root-step-plays-root");
     }
 
+    // 26. Velocity source: lane, input key, or both multiplied.
+    {
+        auto firstVel = [](VelocityMode mode, int stepVel)
+        {
+            auto e = std::make_unique<ArpEngine>();
+            auto b = singleProgramBank(2, SyncRate::R1_8, 50);
+            b->programs[0].velocityMode = mode;
+            b->programs[0].steps[0].velocity = (std::uint8_t) stepVel;
+            b->programs[0].steps[1].keyIndex = 1;
+            b->programs[0].steps[1].velocity = (std::uint8_t) stepVel;
+            e->setBank(*b);
+            e->noteOn(60, 40);
+            e->noteOn(64, 100);
+            std::vector<int> vels;
+            for (const auto& ev : runFor(*e, 0.6))
+                if (ev.ev.isNoteOn)
+                    vels.push_back(ev.ev.velocity);
+            return vels;
+        };
+        const auto lane = firstVel(VelocityMode::Lane, 80);
+        check(lane.size() >= 2 && lane[0] == 80 && lane[1] == 80, "velocity-lane");
+        const auto input = firstVel(VelocityMode::Input, 80);
+        check(input.size() >= 2 && input[0] == 40 && input[1] == 100, "velocity-input-per-key");
+        const auto both = firstVel(VelocityMode::LaneAndInput, 127);
+        check(both.size() >= 2 && both[0] == 40 && both[1] == 100, "velocity-both-full-lane");
+        const auto half = firstVel(VelocityMode::LaneAndInput, 64);
+        check(half.size() >= 2 && half[0] == 20 && half[1] == 50, "velocity-both-scaled");
+    }
+
+    // 27. Root step takes the velocity of the root note in Input mode.
+    {
+        auto e = std::make_unique<ArpEngine>();
+        auto b = singleProgramBank(2, SyncRate::R1_8, 50);
+        b->programs[0].velocityMode = VelocityMode::Input;
+        b->programs[0].steps[0].keyIndex = rootKeyIndex;
+        e->setBank(*b);
+        e->noteOn(64, 50);
+        e->noteOn(67, 60);
+        e->noteOn(72, 110); // E G C: the root is C (72)
+        auto evs = runFor(*e, 0.1);
+        check(! evs.empty() && evs.front().ev.note == 72 && evs.front().ev.velocity == 110,
+              "velocity-input-root");
+    }
+
     std::printf("%d checks, %d failures\n", checks, failures);
     return failures == 0 ? 0 : 1;
 }
