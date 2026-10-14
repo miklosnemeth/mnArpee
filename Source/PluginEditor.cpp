@@ -92,7 +92,7 @@ void MnArpeeLookAndFeel::drawLinearSlider(juce::Graphics& g, int x, int y, int w
                                           float sliderPos, float minSliderPos, float maxSliderPos,
                                           juce::Slider::SliderStyle style, juce::Slider& slider)
 {
-    if (style != juce::Slider::LinearBar)
+    if (style != juce::Slider::LinearBar && style != juce::Slider::LinearBarVertical)
     {
         LookAndFeel_V4::drawLinearSlider(g, x, y, width, height, sliderPos, minSliderPos, maxSliderPos, style, slider);
         return;
@@ -176,7 +176,10 @@ void MnArpeeAudioEditor::setupValueBar(juce::Slider& s, std::function<juce::Stri
     // otherwise it keeps the default grey outline.
     addAndMakeVisible(s);
     s.setColour(juce::Slider::textBoxOutlineColourId, juce::Colours::transparentBlack);
-    s.setSliderStyle(juce::Slider::LinearBar);
+    // Dragging up and down changes the value (a click does not jump to a position).
+    s.setSliderStyle(juce::Slider::LinearBarVertical);
+    s.setSliderSnapsToMousePosition(false);
+    s.setMouseDragSensitivity((int) juce::jlimit(60.0, 250.0, (s.getMaximum() - s.getMinimum()) * 6.0));
     s.setTextBoxStyle(juce::Slider::TextBoxLeft, true, 80, 20);
     s.setTextBoxIsEditable(false);
     s.setDoubleClickReturnValue(true, defaultValue);

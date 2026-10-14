@@ -10,7 +10,7 @@
 // PatternData: simplified data model based on the BlueArp manual (no input pre-filtering).
 //
 // Manual coverage (v2.8.0):
-//  - steps: 0..64 (0 = MIDI thru, 1 = quantized thru)
+//  - steps: 0..32 (0 = MIDI thru, 1 = quantized thru)
 //  - sync: 1/64..3/8 as fractions of a bar
 //  - gate 1..125%, swing -50..+50%
 //  - STEP TYPE: Off/Nrm/Rst/Tie/Rnd (no Chr: every step plays a single note)
@@ -30,7 +30,8 @@
 namespace mnArpee
 {
 
-constexpr int maxSteps = 64;
+constexpr int maxSteps = 64;         // storage per program (kept so saved states stay readable)
+constexpr int maxPatternSteps = 32;  // the longest pattern that can be set
 constexpr int maxInputKeys = 5;
 // Step::keyIndex value for the root of the held chord (KEY SELECT "Root").
 constexpr std::int8_t rootKeyIndex = -1;
@@ -115,7 +116,7 @@ struct Step
 struct Program
 {
     Name name;
-    int numSteps = 16;               // 0..64
+    int numSteps = 16;               // 0..32
     SyncRate sync = SyncRate::R1_16;
     int gatePercent = 80;            // 1..125
     int swingPercent = 0;            // -50..+50
