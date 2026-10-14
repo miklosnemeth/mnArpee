@@ -26,6 +26,15 @@ MnArpeeLookAndFeel::MnArpeeLookAndFeel()
     setColour(juce::ToggleButton::tickDisabledColourId, Pal::border());
     setColour(juce::TextButton::buttonColourId, Pal::cardHi());
     setColour(juce::TextButton::textColourOffId, Pal::text());
+    setColour(juce::AlertWindow::backgroundColourId, Pal::card());
+    setColour(juce::AlertWindow::textColourId, Pal::text());
+    setColour(juce::AlertWindow::outlineColourId, Pal::border());
+    setColour(juce::TextEditor::backgroundColourId, Pal::bg());
+    setColour(juce::TextEditor::textColourId, Pal::text());
+    setColour(juce::TextEditor::outlineColourId, Pal::border());
+    setColour(juce::TextEditor::focusedOutlineColourId, Pal::accent());
+    setColour(juce::TextEditor::highlightColourId, Pal::accent().withAlpha(0.35f));
+    setColour(juce::CaretComponent::caretColourId, Pal::accent());
 }
 
 void MnArpeeLookAndFeel::drawComboBox(juce::Graphics& g, int width, int height,
@@ -204,6 +213,11 @@ MnArpeeAudioEditor::MnArpeeAudioEditor(MnArpeeAudioProcessor& p)
 MnArpeeAudioEditor::~MnArpeeAudioEditor()
 {
     stopTimer();
+    if (browserBox != nullptr)
+    {
+        browserBox->setLookAndFeel(nullptr);
+        browserBox->dismiss();
+    }
     setLookAndFeel(nullptr);
 }
 
@@ -369,6 +383,7 @@ void MnArpeeAudioEditor::showPresetBrowser()
                 safe->showPresetContextMenu(index);
         });
     auto& box = juce::CallOutBox::launchAsynchronously(std::move(content), presetButton.getScreenBounds(), nullptr);
+    box.setLookAndFeel(&lnf);
     browserBox = &box;
 }
 
@@ -379,6 +394,7 @@ void MnArpeeAudioEditor::showPresetContextMenu(int libraryIndex)
         return;
     const auto& entry = list[(size_t) libraryIndex];
     juce::PopupMenu menu;
+    menu.setLookAndFeel(&lnf);
     menu.addItem(1, "Load");
     menu.addItem(2, "Duplicate");
     menu.addItem(3, "Rename...", ! entry.factory);
@@ -469,6 +485,7 @@ void MnArpeeAudioEditor::promptName(const juce::String& title, const juce::Strin
                                     const juce::String& initial, std::function<void(juce::String)> done)
 {
     auto* window = new juce::AlertWindow(title, message, juce::MessageBoxIconType::NoIcon, this);
+    window->setLookAndFeel(&lnf);
     window->addTextEditor("name", initial);
     window->addButton("OK", 1, juce::KeyPress(juce::KeyPress::returnKey));
     window->addButton("Cancel", 0, juce::KeyPress(juce::KeyPress::escapeKey));
@@ -563,6 +580,7 @@ void MnArpeeAudioEditor::showPresetMenu()
     const auto active = proc.getActivePreset();
     const bool saved = ! active.factory && active.file != juce::File();
     juce::PopupMenu menu;
+    menu.setLookAndFeel(&lnf);
     menu.addItem(1, "Save as...");
     menu.addItem(2, "Revert", active.dirty && active.file != juce::File());
     menu.addItem(3, "Rename...", saved);
