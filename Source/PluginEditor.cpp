@@ -110,6 +110,7 @@ MnArpeeAudioEditor::MnArpeeAudioEditor(MnArpeeAudioProcessor& p)
 
     addAndMakeVisible(grid);
     grid.onStepClicked([this](int step, int row) { onGridClicked(step, row); });
+    grid.onLaneAdjusted([this](int step, StepGrid::Lane lane, int delta) { onLaneAdjusted(step, lane, delta); });
 
     juce::StringArray progNames;
     for (int i = 0; i < MnArpeeAudioProcessor::numUserPrograms; ++i)
@@ -139,29 +140,6 @@ MnArpeeAudioEditor::MnArpeeAudioEditor(MnArpeeAudioProcessor& p)
         setupSlider(*s);
     stepOctSlider.setRange(-3, 3, 1);
     stepVelSlider.setRange(1, 127, 1);
-
-    {
-        struct LaneButton { juce::TextButton* button; const char* text; StepGrid::Lane lane; };
-        const LaneButton buttons[] = { { &laneKeyButton, "KEY", StepGrid::Lane::Key },
-                                       { &laneTypeButton, "TYPE", StepGrid::Lane::Type },
-                                       { &laneOctButton, "OCTAVE", StepGrid::Lane::Octave },
-                                       { &laneVelButton, "VELOCITY", StepGrid::Lane::Velocity } };
-        for (const auto& lb : buttons)
-        {
-            auto* b = lb.button;
-            b->setButtonText(lb.text);
-            b->setClickingTogglesState(true);
-            b->setRadioGroupId(1001);
-            b->setColour(juce::TextButton::buttonColourId, Pal::cardHi());
-            b->setColour(juce::TextButton::buttonOnColourId, Pal::accent2());
-            b->setColour(juce::TextButton::textColourOffId, Pal::dimText());
-            b->setColour(juce::TextButton::textColourOnId, Pal::text());
-            const auto lane = lb.lane;
-            b->onClick = [this, lane, b] { if (b->getToggleState()) setLane(lane); };
-            addAndMakeVisible(*b);
-        }
-        laneKeyButton.setToggleState(true, juce::dontSendNotification);
-    }
 
     addAndMakeVisible(latchButton);
     latchButton.setButtonText("Latch");
@@ -312,16 +290,6 @@ void MnArpeeAudioEditor::resized()
     place(inner, swingLabel, swingSlider, 100);
     place(inner, stepsLabel, stepsSlider, 100);
 
-    // Lane buttons in the card's label strip, right-aligned.
-    {
-        auto strip = juce::Rectangle<int>(gridCard.getX(), gridCard.getY() + 4, gridCard.getWidth() - 12, 22);
-        for (auto* b : { &laneVelButton, &laneOctButton, &laneTypeButton, &laneKeyButton })
-        {
-            b->setBounds(strip.removeFromRight(b == &laneVelButton || b == &laneOctButton ? 84 : 64));
-            strip.removeFromRight(4);
-        }
-    }
-
     // Grid inside the card (label strip on top).
     grid.setBounds(gridCard.getX() + 6, gridCard.getY() + 24,
                    gridCard.getWidth() - 12, gridCard.getHeight() - 30);
@@ -404,9 +372,40 @@ void MnArpeeAudioEditor::commitStep(const mnArpee::Step& step)
     grid.setProgram(shownProgram);
 }
 
-void MnArpeeAudioEditor::setLane(StepGrid::Lane lane)
+void MnArpeeAudioEditor::onLaneAdjusted(int step, StepGrid::Lane lane, int delta)
 {
-    grid.setLane(lane);
+    using mnArpee::StepType;
+    editStep = step;
+    auto st = shownProgram.steps[(size_t) step];
+    if (delta != 0)
+    {
+        switch (lane)
+        {
+            case StepGrid::Lane::Type:
+            {
+                // Ascending as in BlueARP's list.
+                constexpr StepType order[] = { StepType::Off, StepType::Normal, StepType::Rest,
+                                               StepType::Tie, StepType::Random };
+                int i = 0;
+                while (i < 4 && order[i] != st.type)
+                    ++i;
+                st.type = order[std::clamp(i + delta, 0, 4)];
+                break;
+            }
+            case StepGrid::Lane::Key:
+                st.keyIndex = (std::int8_t) std::clamp((int) st.keyIndex + delta, (int) mnArpee::rootKeyIndex, 4);
+                break;
+            case StepGrid::Lane::Octave:
+                st.octave = (std::int8_t) std::clamp((int) st.octave + delta, -3, 3);
+                break;
+            case StepGrid::Lane::Velocity:
+                st.velocity = (std::uint8_t) std::clamp((int) st.velocity + delta, 1, 127);
+                break;
+        }
+        commitStep(st);
+    }
+    grid.setEditStep(step);
+    refreshStepEditor();
 }
 
 void MnArpeeAudioEditor::onGridClicked(int step, int row)
