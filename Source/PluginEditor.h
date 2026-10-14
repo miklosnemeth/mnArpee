@@ -3,9 +3,9 @@
 #include <JuceHeader.h>
 
 #include "ArpEngine.h"
+#include "PluginProcessor.h"
 #include "StepGrid.h"
 
-class MnArpeeAudioProcessor;
 using Pal = StepGrid::Palette;
 
 //==============================================================================
@@ -64,6 +64,7 @@ public:
     ~MnArpeeAudioEditor() override;
 
     void paint(juce::Graphics&) override;
+    void paintOverChildren(juce::Graphics&) override;
     void resized() override;
 
 private:
@@ -78,19 +79,35 @@ private:
     // A header value shown as one line ("OCT +3") that is dragged to change.
     void setupValueBar(ValueBar& s, std::function<juce::String(double)> text, double defaultValue,
                        double pixelsPerUnit);
-    int selectedProgram() const;
-    void setProgramIndex(int index);
-    void stepProgram(int delta);
-    void showProgramMenu();
+
+    // Presets (the preset library is managed by the processor; the dialogs are here).
+    void stepPreset(int delta);
+    void showPresetBrowser();
+    void showPresetMenu();
+    void newClicked();
+    void saveClicked();
+    void loadPresetChecked(int libraryIndex);
+    // Runs `proceed` now, or after the user has saved or discarded the unsaved changes.
+    void confirmLeavePreset(std::function<void()> proceed);
+    void promptName(const juce::String& title, const juce::String& message, const juce::String& initial,
+                    std::function<void(juce::String)> done);
+    void saveActiveAs(std::function<void()> then);
+    void renameDialog(int libraryIndex);
+    void deleteDialog(int libraryIndex);
+    void showPresetContextMenu(int libraryIndex);
+    void importPresets();
+    void exportPreset();
+    void refreshPresetUi();
 
     MnArpeeAudioProcessor& proc;
     MnArpeeLookAndFeel lnf;
 
     // Header
-    // Program picker in the header: previous / name (opens the list) / next, as in mnKord.
-    juce::ArrowButton prevProgramButton { "previous program", 0.5f, Pal::text() };
-    juce::ArrowButton nextProgramButton { "next program", 0.0f, Pal::text() };
-    juce::TextButton programButton;
+    // Preset picker in the header, as in mnKord: previous / name (opens the browser) / next,
+    // then New, Save and the preset menu.
+    juce::ArrowButton prevPresetButton { "previous preset", 0.5f, Pal::text() };
+    juce::ArrowButton nextPresetButton { "next preset", 0.0f, Pal::text() };
+    juce::TextButton presetButton, newButton, saveButton, menuButton;
     ValueBar rateSlider, octaveSlider, gateSlider, swingSlider, stepsSlider;
     juce::ToggleButton latchButton;
     juce::Rectangle<int> brandArea, statusArea;
@@ -107,6 +124,11 @@ private:
 
     // Card rectangles (drawn by paint, computed by resized)
     juce::Rectangle<int> paramsCard, gridCard;
+
+    MnArpeeAudioProcessor::ActivePreset shownPreset;
+    bool shownPresetValid = false;
+    std::unique_ptr<juce::FileChooser> fileChooser;
+    juce::Component::SafePointer<juce::CallOutBox> browserBox;
 
     // The program shown in the grid (a copy, so a state load can never leave it dangling).
     mnArpee::Program shownProgram;

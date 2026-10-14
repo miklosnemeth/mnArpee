@@ -53,6 +53,7 @@ juce_add_binary_data(mnArpeeFonts
 target_sources(mnArpee PRIVATE
     Source/PatternData.cpp
     Source/ArpEngine.cpp
+    Source/PresetLibrary.cpp
     Source/PluginProcessor.cpp
     Source/PluginEditor.cpp
     Source/StepGrid.cpp

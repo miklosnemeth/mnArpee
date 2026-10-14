@@ -3,6 +3,7 @@
 #include <JuceHeader.h>
 
 #include "ArpEngine.h"
+#include "PresetLibrary.h"
 
 #include <array>
 #include <atomic>
@@ -10,23 +11,28 @@
 //==============================================================================
 // MnArpeeAudioProcessor: VST3/Standalone MIDI-effect.
 //
+// The plugin plays one arp pattern at a time: the active preset. Presets live in the library
+// (PresetLibrary: factory presets and the user's own files); the project stores the active
+// preset's current state.
+//
 // Threading:
-//  - `model` is the editable bank. It lives on the message thread (editor, host
-//    program calls, state save/load) and is guarded by modelLock, which the audio
-//    thread never takes.
+//  - `model` holds the active pattern in one of two slots. It lives on the message thread
+//    (editor, host program calls, state save/load) and is guarded by modelLock, which the
+//    audio thread never takes. Loading a preset fills the other slot and switches to it, so
+//    the engine changes pattern at the end of the running one.
 //  - publishBank() copies the model into `pendingBank`; the audio thread picks it up
 //    with a try-lock, so it never blocks and never allocates.
-//  - The rate/gate/swing/octave/steps parameters always show the selected program:
-//    switching programs stores them into the old program and loads the new one.
+//  - The rate/gate/swing/octave/steps parameters always show the active pattern.
 //  - MIDI is processed sample-accurately: the engine renders the segments between
 //    incoming events.
 //==============================================================================
 class MnArpeeAudioProcessor : public juce::AudioProcessor,
-                              private juce::AudioProcessorValueTreeState::Listener,
                               private juce::AsyncUpdater
 {
 public:
-    static constexpr int numUserPrograms = 8;
+    // The host's program list mirrors the preset library (a fixed number of slots, so hosts
+    // keep their indices; unused ones show "-").
+    static constexpr int numHostPrograms = 128;
 
     // Written by the audio thread, read by the editor.
     struct UiStatus
@@ -35,6 +41,15 @@ public:
         std::atomic<int> playingProgram { 0 };
         std::atomic<int> numInput { 0 };
         std::array<std::atomic<int>, mnArpee::maxInputKeys> input {};
+    };
+
+    // The active preset as the editor shows it.
+    struct ActivePreset
+    {
+        juce::String name, group, author;
+        juce::File file;      // empty: not saved yet
+        bool factory = false;
+        bool dirty = false;   // changed since it was loaded or saved
     };
 
     MnArpeeAudioProcessor();
@@ -66,14 +81,42 @@ public:
     juce::AudioProcessorValueTreeState& getApvts() { return apvts; }
 
     // Model access for the editor (message thread).
-    mnArpee::Program getProgramCopy(int index) const;
-    void setStep(int programIndex, int stepIndex, const mnArpee::Step& step);
-    // Increments whenever the model changes (edits, program switch, state load).
+    // The slot the engine plays the active pattern from (changes with every preset load).
+    int getActiveSlot() const { return activeSlot.load(); }
+    mnArpee::Program getProgramCopy() const;
+    void setStep(int stepIndex, const mnArpee::Step& step);
+    // Increments whenever the model changes (edits, preset load, state load).
     int getModelVersion() const { return modelVersion.load(); }
     const UiStatus& getUiStatus() const { return ui; }
-    // Message thread: runs a pending program switch now instead of on the next message
+    // Message thread: runs a pending host program switch now instead of on the next message
     // loop iteration (used by the plugin tests).
     void handlePendingUpdates() { handleUpdateNowIfNeeded(); }
+
+    // Presets (message thread).
+    ActivePreset getActivePreset() const;
+    // The library. Keep the copy short-lived: it changes with every save, rename and delete.
+    std::vector<mnArpee::Preset> getPresetList() const;
+    // Library index of the active preset, or -1 when it is not saved (or was deleted).
+    int getActivePresetIndex() const;
+    bool loadPreset(int libraryIndex);
+    // A fresh pattern ("New Arp"), not saved yet.
+    void newPreset();
+    // Writes the active preset into its file; false when it has none (or is a factory preset).
+    bool saveActivePreset();
+    // Saves the active pattern as a user preset with this name (it becomes the active one).
+    bool saveActivePresetAs(const juce::String& name);
+    void revertActivePreset();
+    // Renames the user preset at this library index (also the active one when it is).
+    bool renamePreset(int libraryIndex, const juce::String& newName);
+    bool deletePreset(int libraryIndex);
+    // Duplicates the preset at this library index as a user preset; returns its new index or -1.
+    int duplicatePreset(int libraryIndex);
+    // Saves the presets of a preset or bank file as user presets; returns how many, and loads the first.
+    int importPresets(const juce::File& file);
+    bool exportActivePreset(const juce::File& file) const;
+    juce::File getPresetFolder() const { return library.root(); }
+    juce::File getUserPresetFolder() const { return library.userDir(); }
+    juce::String freePresetName(const juce::String& wanted) const;
 
 private:
     struct ParamValues
@@ -82,7 +125,6 @@ private:
         bool latch = false;
     };
 
-    void parameterChanged(const juce::String& parameterID, float newValue) override;
     void handleAsyncUpdate() override;
 
     ParamValues readParams() const;
@@ -90,6 +132,10 @@ private:
     void loadParamsFrom(const mnArpee::Program& prog);
     void publishBank(bool restartPlayback = false);
     void setParamValue(const char* id, float plainValue);
+
+    // Message thread, with modelLock held.
+    mnArpee::Preset currentPresetLocked() const;
+    void activatePresetLocked(const mnArpee::Preset& preset, bool saved, bool restartPlayback);
 
     void pickUpPendingBank();
     void applyParamsToEngine();
@@ -99,7 +145,6 @@ private:
     void updateUiStatus();
 
     juce::AudioProcessorValueTreeState apvts;
-    std::atomic<float>* programParam = nullptr;
     std::atomic<float>* rateParam = nullptr;
     std::atomic<float>* gateParam = nullptr;
     std::atomic<float>* swingParam = nullptr;
@@ -109,9 +154,13 @@ private:
 
     // Message thread.
     mutable juce::CriticalSection modelLock;
-    mnArpee::Bank model;
-    int editedProgram = 0;
+    mnArpee::Bank model;                 // two slots; the active pattern is in activeSlot
+    std::atomic<int> activeSlot { 0 };
     std::atomic<int> modelVersion { 0 };
+    mnArpee::PresetLibrary library;
+    mnArpee::Preset active;              // name, group, author and file of the active preset
+    juce::String savedSnapshot;          // its content when it was loaded or saved
+    std::atomic<int> pendingHostProgram { -1 };
 
     // Hand-over to the audio thread.
     juce::SpinLock pendingLock;
