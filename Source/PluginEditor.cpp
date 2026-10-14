@@ -128,7 +128,10 @@ MnArpeeAudioEditor::MnArpeeAudioEditor(MnArpeeAudioProcessor& p)
     stepKeyBox.addItem("Root", mnArpee::rootKeyIndex + 2);
     for (int k = 0; k < mnArpee::maxInputKeys; ++k)
         stepKeyBox.addItem("Key " + juce::String(k + 1), k + 2);
-    for (auto* cb : { &programBox, &chainBox, &rateBox, &stepTypeBox, &stepKeyBox })
+    velModeBox.addItem("Lane", 1);
+    velModeBox.addItem("Input", 2);
+    velModeBox.addItem("Lane x Input", 3);
+    for (auto* cb : { &programBox, &chainBox, &rateBox, &velModeBox, &stepTypeBox, &stepKeyBox })
         addAndMakeVisible(*cb);
 
     for (auto* s : { &octaveSlider, &gateSlider, &swingSlider, &stepsSlider, &stepOctSlider,
@@ -144,6 +147,7 @@ MnArpeeAudioEditor::MnArpeeAudioEditor(MnArpeeAudioProcessor& p)
     programAtt = std::make_unique<ComboAttachment>(apvts, "program", programBox);
     chainAtt = std::make_unique<ComboAttachment>(apvts, "chain", chainBox);
     rateAtt = std::make_unique<ComboAttachment>(apvts, "rate", rateBox);
+    velModeAtt = std::make_unique<ComboAttachment>(apvts, "velmode", velModeBox);
     octaveAtt = std::make_unique<SliderAttachment>(apvts, "octave", octaveSlider);
     gateAtt = std::make_unique<SliderAttachment>(apvts, "gate", gateSlider);
     swingAtt = std::make_unique<SliderAttachment>(apvts, "swing", swingSlider);
@@ -166,6 +170,7 @@ MnArpeeAudioEditor::MnArpeeAudioEditor(MnArpeeAudioProcessor& p)
     setupLabel(programLabel, "PROGRAM");
     setupLabel(chainLabel, "CHAIN");
     setupLabel(rateLabel, "RATE");
+    setupLabel(velModeLabel, "VEL SOURCE");
     setupLabel(octaveLabel, "OCT");
     setupLabel(gateLabel, "GATE %");
     setupLabel(swingLabel, "SWING %");
@@ -278,10 +283,11 @@ void MnArpeeAudioEditor::resized()
     place(inner, programLabel, programBox, 80);
     place(inner, chainLabel, chainBox, 100);
     place(inner, rateLabel, rateBox, 86);
-    place(inner, octaveLabel, octaveSlider, 112);
-    place(inner, gateLabel, gateSlider, 112);
-    place(inner, swingLabel, swingSlider, 112);
-    place(inner, stepsLabel, stepsSlider, 112);
+    place(inner, velModeLabel, velModeBox, 110);
+    place(inner, octaveLabel, octaveSlider, 100);
+    place(inner, gateLabel, gateSlider, 100);
+    place(inner, swingLabel, swingSlider, 100);
+    place(inner, stepsLabel, stepsSlider, 100);
 
     // Grid inside the card (label strip on top).
     grid.setBounds(gridCard.getX() + 6, gridCard.getY() + 24,

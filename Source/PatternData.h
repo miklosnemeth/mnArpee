@@ -49,6 +49,15 @@ enum class StepType : std::uint8_t
     Random = 5, // random input note (4 was Chord, which has been removed)
 };
 
+// Where generated notes take their velocity from (the manual's "output note velocity").
+enum class VelocityMode : std::uint8_t
+{
+    Lane = 0,      // the step's VELOCITY
+    Input,         // the velocity of the input note the step plays
+    LaneAndInput,  // step velocity scaled by the input velocity (multiplied, normalized to 127)
+};
+constexpr int numVelocityModes = 3;
+
 enum class SyncRate : std::uint8_t
 {
     R1_64 = 0, R1_48, R1_32, R1_24, R1_16, R1_12, R1_8, R1_6, R1_4,
@@ -124,6 +133,7 @@ struct Program
     int swingPercent = 0;            // -50..+50
     int octaveShift = 0;             // -2..+2 global arp octave
     int transposeOct = 0;            // -3..+3 program-level
+    VelocityMode velocityMode = VelocityMode::Lane;
     std::array<Step, maxSteps> steps {};
 };
 

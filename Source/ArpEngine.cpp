@@ -17,6 +17,28 @@ constexpr double gridEpsilon = 1.0e-9;
 constexpr double jumpToleranceQuarters = 0.01;
 }
 
+namespace
+{
+int inputVelocityOf(const InputNotes& input, int note) noexcept
+{
+    for (int i = 0; i < input.size; ++i)
+        if (input.notes[(size_t) i].note == note)
+            return input.notes[(size_t) i].velocity;
+    return input.empty() ? 96 : input.notes[0].velocity;
+}
+
+int outputVelocity(VelocityMode mode, int stepVelocity, int inputVelocity) noexcept
+{
+    switch (mode)
+    {
+        case VelocityMode::Input: return std::clamp(inputVelocity, 1, 127);
+        case VelocityMode::LaneAndInput:
+            return std::clamp((stepVelocity * inputVelocity + 63) / 127, 1, 127);
+        default: return stepVelocity;
+    }
+}
+} // namespace
+
 int chordRootNote(const InputNotes& input) noexcept
 {
     if (input.empty())
@@ -110,7 +132,8 @@ void ArpEngine::updateBank(const Bank& b)
 }
 
 void ArpEngine::setProgramParams(int programIndex, SyncRate sync, int gatePercent,
-                                 int swingPercent, int octaveShift, int numSteps)
+                                 int swingPercent, int octaveShift, int numSteps,
+                                 VelocityMode velocityMode)
 {
     if (programIndex < 0 || programIndex >= bank.numPrograms)
         return;
@@ -120,6 +143,7 @@ void ArpEngine::setProgramParams(int programIndex, SyncRate sync, int gatePercen
     p.swingPercent = std::clamp(swingPercent, -50, 50);
     p.octaveShift = std::clamp(octaveShift, -2, 2);
     p.numSteps = std::clamp(numSteps, 0, maxSteps);
+    p.velocityMode = velocityMode;
 }
 
 void ArpEngine::setCurrentProgram(int index)
@@ -401,6 +425,8 @@ void ArpEngine::playOneStep(const Program& prog, const InputNotes& input, double
         {
             source = input.notes[(size_t) (std::clamp((int) step.keyIndex, 0, maxInputKeys - 1) % input.size)].note;
         }
+        const int velocity = outputVelocity(prog.velocityMode, step.velocity,
+                                            inputVelocityOf(input, source));
         const int note = clampNote(source + step.scaleStep + step.octave * 12 + prog.transposeOct * 12
                                    + prog.octaveShift * 12);
 
@@ -412,7 +438,7 @@ void ArpEngine::playOneStep(const Program& prog, const InputNotes& input, double
                 if (sounding[(size_t) n] && n != note)
                     scheduleOff(n, t + oneSample);
             if (! sounding[(size_t) note])
-                emitOn(note, step.velocity, at);
+                emitOn(note, velocity, at);
         }
         else
         {
@@ -420,7 +446,7 @@ void ArpEngine::playOneStep(const Program& prog, const InputNotes& input, double
             for (int n = 0; n < 128; ++n)
                 if (sounding[(size_t) n] && ! hasPendingOff[(size_t) n] && n != note)
                     emitOff(n, at);
-            emitOn(note, step.velocity, at);
+            emitOn(note, velocity, at);
         }
 
         // Gate, lengthened by directly following Rest steps (up to the pattern end) and

@@ -61,7 +61,7 @@ private:
     MnArpeeLookAndFeel lnf;
 
     // Header
-    juce::ComboBox programBox, chainBox, rateBox;
+    juce::ComboBox programBox, chainBox, rateBox, velModeBox;
     juce::Slider octaveSlider, gateSlider, swingSlider, stepsSlider;
     juce::ToggleButton latchButton;
     juce::Rectangle<int> brandArea;
@@ -74,12 +74,12 @@ private:
     juce::Slider stepOctSlider, stepVelSlider;
 
     // Labels
-    juce::Label programLabel, chainLabel, rateLabel;
+    juce::Label programLabel, chainLabel, rateLabel, velModeLabel;
     juce::Label octaveLabel, gateLabel, swingLabel, stepsLabel;
     juce::Label stepTypeLabel, stepKeyLabel, stepOctLabel, stepVelLabel;
 
     // Attachments (declared after the controls, so they are destroyed first)
-    std::unique_ptr<ComboAttachment> programAtt, chainAtt, rateAtt;
+    std::unique_ptr<ComboAttachment> programAtt, chainAtt, rateAtt, velModeAtt;
     std::unique_ptr<SliderAttachment> octaveAtt, gateAtt, swingAtt, stepsAtt;
     std::unique_ptr<ButtonAttachment> latchAtt;
 
