@@ -3,8 +3,6 @@
 
 #include "Fonts.h"
 
-using Pal = StepGrid::Palette;
-
 //==============================================================================
 // MnArpeeLookAndFeel
 //==============================================================================
@@ -90,6 +88,22 @@ juce::Font MnArpeeLookAndFeel::getPopupMenuFont() { return mnArpee::fonts::text(
 
 juce::Font MnArpeeLookAndFeel::getSliderPopupFont(juce::Slider&) { return mnArpee::fonts::text(16.0f); }
 
+void MnArpeeLookAndFeel::drawLinearSlider(juce::Graphics& g, int x, int y, int width, int height,
+                                          float sliderPos, float minSliderPos, float maxSliderPos,
+                                          juce::Slider::SliderStyle style, juce::Slider& slider)
+{
+    if (style != juce::Slider::LinearBar)
+    {
+        LookAndFeel_V4::drawLinearSlider(g, x, y, width, height, sliderPos, minSliderPos, maxSliderPos, style, slider);
+        return;
+    }
+
+    // Value box: flat, the value text is drawn over it by the slider's own label.
+    const auto r = juce::Rectangle<float>((float) x, (float) y, (float) width, (float) height);
+    g.setColour(Pal::cardHi());
+    g.fillRoundedRectangle(r, 5.0f);
+}
+
 juce::Label* MnArpeeLookAndFeel::createSliderTextBox(juce::Slider& s)
 {
     auto* l = LookAndFeel_V4::createSliderTextBox(s);
@@ -112,44 +126,37 @@ MnArpeeAudioEditor::MnArpeeAudioEditor(MnArpeeAudioProcessor& p)
     grid.onStepClicked([this](int step, int row) { onGridClicked(step, row); });
     grid.onLaneAdjusted([this](int step, StepGrid::Lane lane, int delta) { onLaneAdjusted(step, lane, delta); });
 
-    juce::StringArray progNames;
-    for (int i = 0; i < MnArpeeAudioProcessor::numUserPrograms; ++i)
-        progNames.add("P" + juce::String(i + 1));
-    programBox.addItemList(progNames, 1);
-    for (int i = 0; i < mnArpee::numSyncRates; ++i)
-        rateBox.addItem(mnArpee::syncRateName((mnArpee::SyncRate) i), i + 1);
-    for (auto* cb : { &programBox, &rateBox })
-        addAndMakeVisible(*cb);
+    prevProgramButton.onClick = [this] { stepProgram(-1); };
+    nextProgramButton.onClick = [this] { stepProgram(1); };
+    prevProgramButton.setTooltip("Previous program");
+    nextProgramButton.setTooltip("Next program");
+    programButton.onClick = [this] { showProgramMenu(); };
+    programButton.setTooltip("Choose the program");
+    for (auto* b : { static_cast<juce::Component*>(&prevProgramButton), static_cast<juce::Component*>(&programButton),
+                     static_cast<juce::Component*>(&nextProgramButton) })
+        addAndMakeVisible(*b);
 
-    for (auto* s : { &octaveSlider, &gateSlider, &swingSlider, &stepsSlider })
-        setupSlider(*s);
-
-    addAndMakeVisible(latchButton);
-    latchButton.setButtonText("Latch");
-
+    auto signedValue = [](double v) { return (v > 0.0 ? "+" : "") + juce::String((int) std::lround(v)); };
     auto& apvts = proc.getApvts();
-    programAtt = std::make_unique<ComboAttachment>(apvts, "program", programBox);
-    rateAtt = std::make_unique<ComboAttachment>(apvts, "rate", rateBox);
+    rateAtt = std::make_unique<SliderAttachment>(apvts, "rate", rateSlider);
     octaveAtt = std::make_unique<SliderAttachment>(apvts, "octave", octaveSlider);
     gateAtt = std::make_unique<SliderAttachment>(apvts, "gate", gateSlider);
     swingAtt = std::make_unique<SliderAttachment>(apvts, "swing", swingSlider);
     stepsAtt = std::make_unique<SliderAttachment>(apvts, "steps", stepsSlider);
-    latchAtt = std::make_unique<ButtonAttachment>(apvts, "latch", latchButton);
 
-    auto setupLabel = [this](juce::Label& l, const char* text)
-    {
-        l.setText(text, juce::dontSendNotification);
-        l.setFont(mnArpee::fonts::text(15.0f, true));
-        l.setColour(juce::Label::textColourId, Pal::dimText());
-        l.setJustificationType(juce::Justification::centredLeft);
-        addAndMakeVisible(l);
-    };
-    setupLabel(programLabel, "PROGRAM");
-    setupLabel(rateLabel, "RATE");
-    setupLabel(octaveLabel, "OCT");
-    setupLabel(gateLabel, "GATE %");
-    setupLabel(swingLabel, "SWING %");
-    setupLabel(stepsLabel, "STEPS");
+    // The attachments come first: they set their own value text, which is replaced here.
+    setupValueBar(rateSlider, [](double v)
+                  { return "RATE " + juce::String(mnArpee::syncRateName((mnArpee::SyncRate) juce::jlimit(
+                                         0, mnArpee::numSyncRates - 1, (int) std::lround(v)))); },
+                  4.0);
+    setupValueBar(octaveSlider, [signedValue](double v) { return "OCT " + signedValue(v); }, 0.0);
+    setupValueBar(gateSlider, [](double v) { return "GATE " + juce::String((int) std::lround(v)) + "%"; }, 80.0);
+    setupValueBar(swingSlider, [signedValue](double v) { return "SWING " + signedValue(v) + "%"; }, 0.0);
+    setupValueBar(stepsSlider, [](double v) { return "STEPS " + juce::String((int) std::lround(v)); }, 16.0);
+
+    addAndMakeVisible(latchButton);
+    latchButton.setButtonText("Latch");
+    latchAtt = std::make_unique<ButtonAttachment>(apvts, "latch", latchButton);
 
     statusText = "keys  -";
     reloadProgram();
@@ -162,12 +169,50 @@ MnArpeeAudioEditor::~MnArpeeAudioEditor()
     setLookAndFeel(nullptr);
 }
 
-void MnArpeeAudioEditor::setupSlider(juce::Slider& s)
+void MnArpeeAudioEditor::setupValueBar(juce::Slider& s, std::function<juce::String(double)> text,
+                                       double defaultValue)
 {
-    s.setSliderStyle(juce::Slider::LinearHorizontal);
-    s.setTextBoxStyle(juce::Slider::TextBoxRight, false, 44, 24);
-    s.setPopupDisplayEnabled(true, true, this);
+    // Added first: the value label takes its colours from the look and feel it is created under,
+    // otherwise it keeps the default grey outline.
     addAndMakeVisible(s);
+    s.setColour(juce::Slider::textBoxOutlineColourId, juce::Colours::transparentBlack);
+    s.setSliderStyle(juce::Slider::LinearBar);
+    s.setTextBoxStyle(juce::Slider::TextBoxLeft, true, 80, 20);
+    s.setTextBoxIsEditable(false);
+    s.setDoubleClickReturnValue(true, defaultValue);
+    s.textFromValueFunction = std::move(text);
+    s.updateText();
+}
+
+void MnArpeeAudioEditor::setProgramIndex(int index)
+{
+    if (auto* p = proc.getApvts().getParameter("program"))
+    {
+        const int i = juce::jlimit(0, MnArpeeAudioProcessor::numUserPrograms - 1, index);
+        p->beginChangeGesture();
+        p->setValueNotifyingHost(p->convertTo0to1((float) (i + 1)));
+        p->endChangeGesture();
+    }
+}
+
+void MnArpeeAudioEditor::stepProgram(int delta)
+{
+    const int n = MnArpeeAudioProcessor::numUserPrograms;
+    setProgramIndex((selectedProgram() + delta + n) % n);
+}
+
+void MnArpeeAudioEditor::showProgramMenu()
+{
+    juce::PopupMenu menu;
+    const int current = selectedProgram();
+    for (int i = 0; i < MnArpeeAudioProcessor::numUserPrograms; ++i)
+        menu.addItem(i + 1, juce::String(i + 1) + "  " + proc.getProgramName(i), true, i == current);
+    menu.showMenuAsync(juce::PopupMenu::Options().withTargetComponent(&programButton).withMinimumWidth(programButton.getWidth()),
+                       [safe = juce::Component::SafePointer<MnArpeeAudioEditor>(this)](int result)
+                       {
+                           if (safe != nullptr && result > 0)
+                               safe->setProgramIndex(result - 1);
+                       });
 }
 
 int MnArpeeAudioEditor::selectedProgram() const
@@ -210,43 +255,44 @@ void MnArpeeAudioEditor::paint(juce::Graphics& g)
     // Info line in the header (between brand and latch): held notes.
     g.setFont(mnArpee::fonts::text(17.0f));
     g.setColour(Pal::text());
-    const int sx = 12 + 180;
-    const int sw = getWidth() - 12 - 150 - sx - 10;
-    g.drawText(statusText, sx, 26, sw, 24, juce::Justification::centredLeft);
+    g.drawText(statusText, statusArea, juce::Justification::centredLeft);
 }
 
 void MnArpeeAudioEditor::resized()
 {
     auto area = getLocalBounds().reduced(12);
 
-    // Header: brand on the left, latch + status on the right.
+    // Header: brand, the program picker, the held notes, and the latch on the right.
     auto header = area.removeFromTop(56);
     auto latchArea = header.removeFromRight(150);
     brandArea = header.removeFromLeft(170);
     latchButton.setBounds(latchArea.getX(), latchArea.getCentreY() - 12, 100, 24);
 
-    // Parameter card.
-    paramsCard = area.removeFromTop(80);
+    header.removeFromLeft(14);
+    auto picker = header.removeFromLeft(26 + 4 + 230 + 4 + 26).withSizeKeepingCentre(26 + 4 + 230 + 4 + 26, 34);
+    prevProgramButton.setBounds(picker.removeFromLeft(26).reduced(6, 8));
+    picker.removeFromLeft(4);
+    programButton.setBounds(picker.removeFromLeft(230));
+    picker.removeFromLeft(4);
+    nextProgramButton.setBounds(picker.removeFromLeft(26).reduced(6, 8));
+    header.removeFromLeft(18);
+    statusArea = header.withSizeKeepingCentre(header.getWidth(), 24);
+
+    // Values card: one row of "LABEL value" bars.
+    paramsCard = area.removeFromTop(54);
     area.removeFromTop(10);
 
     // The rest is the matrix card.
     gridCard = area;
 
-    auto inner = paramsCard.reduced(12);
-    inner.removeFromTop(4);
-    auto place = [](juce::Rectangle<int>& r, juce::Label& lab, juce::Component& comp, int w)
+    auto inner = paramsCard.reduced(12, 11);
+    const int gap = 10;
+    const int barW = (inner.getWidth() - 4 * gap) / 5;
+    for (auto* bar : { &rateSlider, &octaveSlider, &gateSlider, &swingSlider, &stepsSlider })
     {
-        auto col = r.removeFromLeft(w);
-        lab.setBounds(col.getX(), col.getY(), col.getWidth(), 19);
-        comp.setBounds(col.getX(), col.getY() + 20, col.getWidth() - 8, 28);
-        r.removeFromLeft(8);
-    };
-    place(inner, programLabel, programBox, 80);
-    place(inner, rateLabel, rateBox, 86);
-    place(inner, octaveLabel, octaveSlider, 112);
-    place(inner, gateLabel, gateSlider, 112);
-    place(inner, swingLabel, swingSlider, 112);
-    place(inner, stepsLabel, stepsSlider, 112);
+        bar->setBounds(inner.removeFromLeft(barW));
+        inner.removeFromLeft(gap);
+    }
 
     // Grid inside the card (label strip on top).
     grid.setBounds(gridCard.getX() + 6, gridCard.getY() + 24,
@@ -282,7 +328,7 @@ void MnArpeeAudioEditor::timerCallback()
     if (txt != statusText)
     {
         statusText = txt;
-        repaint(180, 12, getWidth() - 342, 56);
+        repaint(statusArea);
     }
 }
 
@@ -291,6 +337,7 @@ void MnArpeeAudioEditor::reloadProgram()
     shownModelVersion = proc.getModelVersion();
     shownProgramIndex = selectedProgram();
     shownProgram = proc.getProgramCopy(shownProgramIndex);
+    programButton.setButtonText(juce::String(shownProgramIndex + 1) + "  " + proc.getProgramName(shownProgramIndex));
     grid.setProgram(shownProgram);
     grid.setEditStep(editStep);
 }
