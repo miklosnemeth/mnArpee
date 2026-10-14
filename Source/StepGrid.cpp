@@ -16,6 +16,33 @@ StepGrid::StepGrid()
     setBufferedToImage(true);
 }
 
+int StepGrid::rowsFor(Lane l)
+{
+    switch (l)
+    {
+        case Lane::Type:     return 5;
+        case Lane::Octave:   return 7;
+        case Lane::Velocity: return velocityLevels;
+        default:             return 7;
+    }
+}
+
+mnArpee::StepType StepGrid::typeForRow(int row)
+{
+    using mnArpee::StepType;
+    constexpr StepType order[] = { StepType::Normal, StepType::Random, StepType::Tie,
+                                   StepType::Rest, StepType::Off };
+    return order[std::clamp(row, 0, 4)];
+}
+
+void StepGrid::setLane(Lane l)
+{
+    if (l == lane)
+        return;
+    lane = l;
+    repaint();
+}
+
 void StepGrid::setProgram(const mnArpee::Program& prog)
 {
     program = prog;
@@ -52,13 +79,28 @@ juce::Rectangle<int> StepGrid::columnBounds(int step) const
 {
     // Cells of the column plus the header strip with the playhead arrow.
     auto top = cellRect(step, 0);
-    auto bottom = cellRect(step, numRows - 1);
+    auto bottom = cellRect(step, numRows() - 1);
     return top.getUnion(bottom).withTop(0).expanded(4, 2);
 }
 
 int StepGrid::rowForStep(const mnArpee::Step& s) const
 {
     using mnArpee::StepType;
+    switch (lane)
+    {
+        case Lane::Type:
+            for (int r = 0; r < 5; ++r)
+                if (typeForRow(r) == s.type)
+                    return r;
+            return 0;
+        case Lane::Octave:
+            return 3 - std::clamp((int) s.octave, -3, 3);
+        case Lane::Velocity:
+            // Top row of the bar: level 1..8 of the velocity.
+            return velocityLevels - std::clamp((s.velocity * velocityLevels + 126) / 127, 1, velocityLevels);
+        default:
+            break;
+    }
     if (s.type == StepType::Off || s.type == StepType::Rest)
         return -1;
     if (s.type == StepType::Random)
@@ -79,7 +121,7 @@ juce::Rectangle<int> StepGrid::cellRect(int step, int row) const
     auto board = boardArea();
     const int n = visibleSteps();
     const int cw = board.getWidth() / n;
-    const int ch = board.getHeight() / numRows;
+    const int ch = board.getHeight() / numRows();
     return { board.getX() + step * cw + cellGap / 2,
              board.getY() + row * ch + cellGap / 2,
              cw - cellGap, ch - cellGap };
@@ -94,12 +136,12 @@ void StepGrid::cellAt(juce::Point<int> p, int& step, int& row) const
     auto board = boardArea();
     const int n = visibleSteps();
     const int cw = board.getWidth() / n;
-    const int ch = board.getHeight() / numRows;
+    const int ch = board.getHeight() / numRows();
     if (! board.contains(p))
         return;
     const int sx = (p.x - board.getX()) / cw;
     const int ry = (p.y - board.getY()) / ch;
-    if (sx >= 0 && sx < n && ry >= 0 && ry < numRows)
+    if (sx >= 0 && sx < n && ry >= 0 && ry < numRows())
     {
         step = sx;
         row = ry;
@@ -128,12 +170,31 @@ void StepGrid::paint(juce::Graphics& g)
                    juce::Justification::centredLeft);
     }
 
-    static const char* rowNames[numRows] = { "Key 5", "Key 4", "Key 3", "Key 2", "Key 1", "Root", "Random" };
-    for (int r = 0; r < numRows; ++r)
+    const int rows = numRows();
+    for (int r = 0; r < rows; ++r)
     {
+        juce::String name;
+        bool highlight = false;
+        switch (lane)
+        {
+            case Lane::Type:
+                name = juce::StringArray { "Normal", "Random", "Tie", "Rest", "Off" }[r];
+                break;
+            case Lane::Octave:
+                name = octaveForRow(r) > 0 ? "+" + juce::String(octaveForRow(r)) : juce::String(octaveForRow(r));
+                highlight = octaveForRow(r) == 0;
+                break;
+            case Lane::Velocity:
+                name = juce::String(velocityForRow(r));
+                break;
+            default:
+                name = juce::StringArray { "Key 5", "Key 4", "Key 3", "Key 2", "Key 1", "Root", "Random" }[r];
+                highlight = r >= rootRow;
+                break;
+        }
         auto first = cellRect(0, r);
-        g.setColour(r < rootRow ? Palette::dimText() : Palette::accent2());
-        g.drawText(rowNames[r], 8, first.getY(), labelW - 14, first.getHeight(),
+        g.setColour(highlight ? Palette::accent2() : Palette::dimText());
+        g.drawText(name, 8, first.getY(), labelW - 14, first.getHeight(),
                    juce::Justification::centredRight);
     }
 
@@ -149,7 +210,8 @@ void StepGrid::paint(juce::Graphics& g)
         const bool isEdit = (s == editStep);
         const bool isPlay = (s == playStep);
 
-        for (int r = 0; r < numRows; ++r)
+        const bool silent = step.type == mnArpee::StepType::Off || step.type == mnArpee::StepType::Rest;
+        for (int r = 0; r < rows; ++r)
         {
             auto cell = cellRect(s, r);
 
@@ -160,13 +222,16 @@ void StepGrid::paint(juce::Graphics& g)
                 g.fillRect(cell.expanded(0, 1));
             }
 
-            const bool active = (r == stepRow);
+            // Velocity lane: a bar from the bottom up to the step's level.
+            const bool active = lane == Lane::Velocity ? r >= stepRow : r == stepRow;
             juce::Colour col;
             if (active)
             {
                 // Intensity proportional to velocity in the highlight blue.
                 const float vel = juce::jlimit(0.0f, 1.0f, step.velocity / 127.0f);
                 col = Palette::accent().withBrightness(0.45f + 0.30f * vel);
+                if (lane != Lane::Key && lane != Lane::Type && silent)
+                    col = col.withAlpha(0.35f); // the step plays nothing
             }
             else if (s == hoverStep)
                 col = Palette::cellOff().brighter(0.15f);
@@ -178,7 +243,7 @@ void StepGrid::paint(juce::Graphics& g)
             g.setColour(col);
             g.fillRoundedRectangle(cell.toFloat(), 3.0f);
 
-            if (active && step.type == mnArpee::StepType::Tie && s > 0)
+            if (lane == Lane::Key && active && step.type == mnArpee::StepType::Tie && s > 0)
             {
                 // Tie: a bridge into the previous column.
                 g.setColour(col.darker(0.2f));
@@ -187,7 +252,15 @@ void StepGrid::paint(juce::Graphics& g)
 
             const char* mark = "";
             juce::Colour markCol = Palette::bg().withAlpha(0.85f);
-            if (r == 0 && step.type == mnArpee::StepType::Off)
+            if (lane != Lane::Key)
+            {
+                // Type lane: Random and Tie show their mark, the others need none.
+                if (lane == Lane::Type && active && step.type == mnArpee::StepType::Random)
+                    mark = "?";
+                else if (lane == Lane::Type && active && step.type == mnArpee::StepType::Tie)
+                    mark = "~";
+            }
+            else if (r == 0 && step.type == mnArpee::StepType::Off)
             {
                 mark = "x"; // nothing plays
                 markCol = Palette::danger().withAlpha(0.65f);
@@ -197,7 +270,7 @@ void StepGrid::paint(juce::Graphics& g)
                 mark = "-"; // the previous note continues
                 markCol = Palette::accent().withAlpha(0.8f);
             }
-            else if (active)
+            else if (active && lane == Lane::Key)
             {
                 mark = step.type == mnArpee::StepType::Random   ? "?"
                      : step.type == mnArpee::StepType::Tie      ? "~"
@@ -230,12 +303,31 @@ void StepGrid::paint(juce::Graphics& g)
     }
 }
 
-void StepGrid::mouseDown(const juce::MouseEvent& e)
+void StepGrid::clickAt(juce::Point<int> p)
 {
     int step = -1, row = -1;
-    cellAt(e.getPosition(), step, row);
-    if (step >= 0 && row >= 0 && clicked)
-        clicked(step, row);
+    cellAt(p, step, row);
+    if (step < 0 || row < 0 || ! clicked)
+        return;
+    if (step == lastClickStep && row == lastClickRow)
+        return; // dragging inside one cell
+    lastClickStep = step;
+    lastClickRow = row;
+    clicked(step, row);
+}
+
+void StepGrid::mouseDown(const juce::MouseEvent& e)
+{
+    lastClickStep = lastClickRow = -1;
+    clickAt(e.getPosition());
+}
+
+void StepGrid::mouseDrag(const juce::MouseEvent& e)
+{
+    // Painting across the steps only makes sense for the value lanes; in the Key lane a
+    // click toggles, which would flip every cell the mouse passes.
+    if (lane != Lane::Key)
+        clickAt(e.getPosition());
 }
 
 void StepGrid::mouseMove(const juce::MouseEvent& e)

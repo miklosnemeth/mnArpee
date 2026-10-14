@@ -52,6 +52,7 @@ private:
     void reloadProgram();
     void refreshStepEditor();
     void onGridClicked(int step, int row);
+    void setLane(StepGrid::Lane lane);
     void onStepEditorChanged();
     void commitStep(const mnArpee::Step& step);
     void setupSlider(juce::Slider& s);
@@ -66,8 +67,9 @@ private:
     juce::ToggleButton latchButton;
     juce::Rectangle<int> brandArea;
 
-    // Matrix
+    // Matrix: the lane buttons choose what the rows edit.
     StepGrid grid;
+    juce::TextButton laneKeyButton, laneTypeButton, laneOctButton, laneVelButton;
 
     // Step editor
     juce::ComboBox stepTypeBox, stepKeyBox;

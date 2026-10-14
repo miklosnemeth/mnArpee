@@ -5,9 +5,12 @@
 #include "ArpEngine.h"
 
 //==============================================================================
-// StepGrid: 64-step matrix. Rows, bottom to top: Random, Root, Key 1 .. Key 5;
-// column = step. Clicking a cell toggles that setting. Tie steps are drawn linked
-// to the previous column, Rest and Off steps as a mark in the first row.
+// StepGrid: 64-step matrix, column = step. The lane picks what the rows edit:
+//  - Key:      bottom to top Random, Root, Key 1 .. Key 5 (clicking toggles the step on that key;
+//              Tie steps are drawn linked to the previous column, Rest and Off as a mark)
+//  - Type:     Normal, Random, Tie, Rest, Off
+//  - Octave:   +3 .. -3
+//  - Velocity: eight levels, drawn as bars
 //==============================================================================
 class StepGrid : public juce::Component
 {
@@ -30,7 +33,19 @@ public:
         static juce::Colour playHead(){ return juce::Colour(0x40ffee8c); }
     };
 
+    enum class Lane { Key, Type, Octave, Velocity };
+
     StepGrid();
+
+    void setLane(Lane l);
+    Lane getLane() const { return lane; }
+    // Row count of a lane (rows are numbered from the top).
+    static int rowsFor(Lane l);
+    static constexpr int velocityLevels = 8;
+    // Lane values of a row: Type = StepType, Octave = octave, Velocity = velocity.
+    static mnArpee::StepType typeForRow(int row);
+    static int octaveForRow(int row) { return 3 - row; }
+    static int velocityForRow(int row) { return (127 * (velocityLevels - row) + velocityLevels / 2) / velocityLevels; }
 
     // The grid keeps its own copy, so it never points into data that may be replaced.
     void setProgram(const mnArpee::Program& prog);
@@ -41,10 +56,11 @@ public:
 
     void paint(juce::Graphics& g) override;
     void mouseDown(const juce::MouseEvent& e) override;
+    void mouseDrag(const juce::MouseEvent& e) override;
     void mouseMove(const juce::MouseEvent& e) override;
     void mouseExit(const juce::MouseEvent&) override;
 
-    static constexpr int numRows = 7; // top to bottom: Key 5 .. Key 1, Root, Random
+    // Key lane, top to bottom: Key 5 .. Key 1, Root, Random.
     static constexpr int rootRow = 5;
     static constexpr int randomRow = 6;
     // KEY SELECT value of a key row (Key 5 .. Key 1, Root); -2 for the Random row.
@@ -58,11 +74,15 @@ private:
     int visibleSteps() const;
     void cellAt(juce::Point<int> p, int& step, int& row) const;
     int rowForStep(const mnArpee::Step& s) const;
+    int numRows() const { return rowsFor(lane); }
+    void clickAt(juce::Point<int> p);
 
     mnArpee::Program program;
     bool hasProgram = false;
     int playStep = -1;
     int editStep = 0;
     int hoverStep = -1;
+    Lane lane = Lane::Key;
+    int lastClickStep = -1, lastClickRow = -1;
     StepClicked clicked;
 };
