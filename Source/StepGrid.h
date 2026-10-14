@@ -32,7 +32,7 @@ public:
         static juce::Colour text()    { return juce::Colour(0xfff0faf3); }
         static juce::Colour dimText() { return juce::Colour(0xffb4cdbc); }
         static juce::Colour accent()  { return juce::Colour(0xff3ddc84); }
-        static juce::Colour accent2() { return juce::Colour(0xffc6f26b); }
+        static juce::Colour accent2() { return juce::Colour(0xffff5d5d); }
         static juce::Colour danger()  { return juce::Colour(0xffff7a7a); }
         static juce::Colour cellOff() { return juce::Colour(0xff22352b); }
         static juce::Colour playHead(){ return juce::Colour(0x40e8ffa0); }
