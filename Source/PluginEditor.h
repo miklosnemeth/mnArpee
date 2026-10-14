@@ -28,9 +28,9 @@ public:
 };
 
 //==============================================================================
-// MnArpeeAudioEditor: dark card header + StepGrid + step editor strip.
+// MnArpeeAudioEditor: dark card header + StepGrid (matrix and value lanes).
 // Header controls are bound to the parameters with attachments (host automation and
-// state loads show up, gestures are reported); the grid and step strip edit the
+// state loads show up, gestures are reported); the grid (matrix and value lanes) edits the
 // selected program through the processor.
 //==============================================================================
 class MnArpeeAudioEditor : public juce::AudioProcessorEditor,
@@ -50,10 +50,8 @@ private:
 
     void timerCallback() override;
     void reloadProgram();
-    void refreshStepEditor();
     void onGridClicked(int step, int row);
     void onLaneAdjusted(int step, StepGrid::Lane lane, int delta);
-    void onStepEditorChanged();
     void commitStep(const mnArpee::Step& step);
     void setupSlider(juce::Slider& s);
     int selectedProgram() const;
@@ -70,14 +68,9 @@ private:
     // Matrix, with the value lanes below it (a lane caption chooses what the rows edit).
     StepGrid grid;
 
-    // Step editor
-    juce::ComboBox stepTypeBox, stepKeyBox;
-    juce::Slider stepOctSlider, stepVelSlider;
-
     // Labels
     juce::Label programLabel, chainLabel, rateLabel, velModeLabel;
     juce::Label octaveLabel, gateLabel, swingLabel, stepsLabel;
-    juce::Label stepTypeLabel, stepKeyLabel, stepOctLabel, stepVelLabel;
 
     // Attachments (declared after the controls, so they are destroyed first)
     std::unique_ptr<ComboAttachment> programAtt, chainAtt, rateAtt, velModeAtt;
@@ -88,7 +81,7 @@ private:
     juce::String statusText;
 
     // Card rectangles (drawn by paint, computed by resized)
-    juce::Rectangle<int> paramsCard, gridCard, editCard;
+    juce::Rectangle<int> paramsCard, gridCard;
 
     // The program shown in the grid (a copy, so a state load can never leave it dangling).
     mnArpee::Program shownProgram;
