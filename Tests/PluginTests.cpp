@@ -162,29 +162,59 @@ int main()
         q->setStateInformation(garbage, (int) sizeof(garbage));
         check(q->getProgramCopy(0).steps[1].type == mnArpee::StepType::Tie, "state-garbage-ignored");
 
-        // A state from before the chains were removed (magic "AMN2", chain section at the end).
+        // States from before the 32-step limit (64 steps per program; "AMN2" also has a chain section).
         auto xml = juce::AudioProcessor::getXmlFromBinary(state.getData(), (int) state.getSize());
-        juce::MemoryBlock bank;
-        bank.fromBase64Encoding(xml->getStringAttribute("bankData"));
-        juce::MemoryOutputStream legacy;
-        legacy.writeInt(0x324e4d41);
-        legacy.write(static_cast<const char*>(bank.getData()) + 4, bank.getSize() - 4);
-        legacy.writeInt(1);          // one chain
-        legacy.writeString("Verse"); // name
-        legacy.writeInt(2);          // two programs
-        legacy.writeByte(0);
-        legacy.writeByte(1);
-        legacy.writeDouble(0.25);    // chain quantize grid
-        legacy.writeBool(true);      // restart on switch
-        xml->setAttribute("bankData", legacy.getMemoryBlock().toBase64Encoding());
-        juce::MemoryBlock legacyState;
-        juce::AudioProcessor::copyXmlToBinary(*xml, legacyState);
-        auto r = makeProcessor();
-        r->setStateInformation(legacyState.getData(), (int) legacyState.getSize());
-        r->handlePendingUpdates();
-        check(r->getProgramCopy(0).steps[1].type == mnArpee::StepType::Tie && r->getProgramCopy(0).gatePercent == 50
-                  && r->getProgramCopy(1).gatePercent == 90,
-              "state-with-chains-still-loads");
+        auto legacyBank = [](int magic, bool withChains)
+        {
+            juce::MemoryOutputStream o;
+            o.writeInt(magic);
+            o.writeInt(2); // programs
+            for (int pi = 0; pi < 2; ++pi)
+            {
+                o.writeString("Legacy");
+                o.writeInt(40); // more than 32 steps
+                o.writeInt(4);  // rate
+                o.writeInt(pi == 0 ? 55 : 90);
+                o.writeInt(0);
+                o.writeInt(0);
+                o.writeInt(0);
+                for (int si = 0; si < 64; ++si)
+                {
+                    o.writeByte(pi == 0 && si == 1 ? 3 : 1); // Tie / Normal
+                    o.writeByte((char) (si % 3));
+                    o.writeByte(0);
+                    o.writeByte(0);
+                    o.writeByte((char) (si < 32 ? 96 : 17)); // the steps past 32 are dropped
+                    o.writeShort(100);
+                    o.writeByte(100);
+                }
+            }
+            if (withChains)
+            {
+                o.writeInt(1);          // one chain
+                o.writeString("Verse"); // name
+                o.writeInt(2);          // two programs
+                o.writeByte(0);
+                o.writeByte(1);
+                o.writeDouble(0.25);    // chain quantize grid
+                o.writeBool(true);      // restart on switch
+            }
+            return o.getMemoryBlock();
+        };
+        for (const bool withChains : { true, false })
+        {
+            xml->setAttribute("bankData", legacyBank(withChains ? 0x324e4d41 : 0x334e4d41, withChains).toBase64Encoding());
+            juce::MemoryBlock legacyState;
+            juce::AudioProcessor::copyXmlToBinary(*xml, legacyState);
+            auto r = makeProcessor();
+            r->setStateInformation(legacyState.getData(), (int) legacyState.getSize());
+            r->handlePendingUpdates();
+            const auto lp = r->getProgramCopy(0);
+            // (program 0 takes its numeric values from the parameters, so program 1 shows the stored ones)
+            check(lp.steps[1].type == mnArpee::StepType::Tie && r->getProgramCopy(1).numSteps == 32
+                      && lp.steps[31].velocity == 96 && r->getProgramCopy(1).gatePercent == 90,
+                  withChains ? "state-with-chains-still-loads" : "state-with-64-steps-still-loads");
+        }
     }
 
     // The pattern is at most 32 steps long.

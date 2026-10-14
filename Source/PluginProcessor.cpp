@@ -3,8 +3,9 @@
 
 namespace
 {
-constexpr int stateMagic = 0x334e4d41;    // "AMN3"
-constexpr int stateMagicWithChains = 0x324e4d41; // "AMN2": has a chain section, skipped on load
+constexpr int stateMagic = 0x344e4d41;           // "AMN4": 32 steps per program
+constexpr int stateMagic64Steps = 0x334e4d41;    // "AMN3": 64 steps per program, the rest is dropped on load
+constexpr int stateMagicWithChains = 0x324e4d41; // "AMN2": 64 steps and a chain section, skipped on load
 
 juce::AudioProcessorValueTreeState::ParameterLayout makeLayout()
 {
@@ -19,7 +20,7 @@ juce::AudioProcessorValueTreeState::ParameterLayout makeLayout()
     params.push_back(std::make_unique<juce::AudioParameterInt>(
         "program", "Program", 1, MnArpeeAudioProcessor::numUserPrograms, 1));
     params.push_back(std::make_unique<juce::AudioParameterBool>("latch", "Latch", false));
-    params.push_back(std::make_unique<juce::AudioParameterInt>("steps", "Steps", 0, mnArpee::maxPatternSteps, 16));
+    params.push_back(std::make_unique<juce::AudioParameterInt>("steps", "Steps", 0, mnArpee::maxSteps, 16));
     return { params.begin(), params.end() };
 }
 
@@ -83,7 +84,7 @@ MnArpeeAudioProcessor::ParamValues MnArpeeAudioProcessor::readParams() const
     v.gate = juce::jlimit(1, 125, toInt(gateParam));
     v.swing = juce::jlimit(-50, 50, toInt(swingParam));
     v.octave = juce::jlimit(-2, 2, toInt(octaveParam));
-    v.steps = juce::jlimit(0, mnArpee::maxPatternSteps, toInt(stepsParam));
+    v.steps = juce::jlimit(0, mnArpee::maxSteps, toInt(stepsParam));
     v.latch = latchParam->load() > 0.5f;
     return v;
 }
@@ -447,7 +448,7 @@ void MnArpeeAudioProcessor::setStateInformation(const void* data, int sizeInByte
     {
         juce::MemoryInputStream in(bankBlock, false);
         const int magic = in.readInt();
-        if (magic == stateMagic || magic == stateMagicWithChains)
+        if (magic == stateMagic || magic == stateMagic64Steps || magic == stateMagicWithChains)
         {
             const int numProgs = in.readInt();
             bankOk = numProgs > 0 && numProgs <= mnArpee::maxPrograms;
@@ -455,14 +456,18 @@ void MnArpeeAudioProcessor::setStateInformation(const void* data, int sizeInByte
             {
                 auto& prog = loaded->programs[(size_t) pi];
                 readName(in, prog.name);
-                prog.numSteps = juce::jlimit(0, mnArpee::maxPatternSteps, in.readInt());
+                prog.numSteps = juce::jlimit(0, mnArpee::maxSteps, in.readInt());
                 prog.sync = (mnArpee::SyncRate) juce::jlimit(0, mnArpee::numSyncRates - 1, in.readInt());
                 prog.gatePercent = juce::jlimit(1, 125, in.readInt());
                 prog.swingPercent = juce::jlimit(-50, 50, in.readInt());
                 prog.octaveShift = juce::jlimit(-2, 2, in.readInt());
                 prog.transposeOct = juce::jlimit(-3, 3, in.readInt());
-                for (auto& s : prog.steps)
+                // States from before the 32-step limit store 64 steps per program.
+                const int stepsInState = magic == stateMagic ? mnArpee::maxSteps : 64;
+                for (int si = 0; si < stepsInState; ++si)
                 {
+                    mnArpee::Step dropped;
+                    auto& s = si < mnArpee::maxSteps ? prog.steps[(size_t) si] : dropped;
                     s.type = mnArpee::stepTypeFromInt((int) in.readByte());
                     s.keyIndex = (std::int8_t) juce::jlimit((int) mnArpee::rootKeyIndex, 4, (int) in.readByte());
                     s.scaleStep = (std::int8_t) juce::jlimit(-12, 12, (int) in.readByte());
