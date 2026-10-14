@@ -78,6 +78,7 @@ private:
     juce::Rectangle<int> cellRect(int step, int row) const;
     juce::Rectangle<int> columnBounds(int step) const;
     int visibleSteps() const;
+    int activeSteps() const; // columns that are part of the pattern
     void cellAt(juce::Point<int> p, int& step, int& row) const;
     int rowForStep(const mnArpee::Step& s) const;
     int numRows() const { return rowsFor(lane); }

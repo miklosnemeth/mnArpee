@@ -11,6 +11,7 @@ constexpr int cellGap = 3;
 constexpr int laneRowH = 25;  // value lane row height
 constexpr int laneGap = 8;    // between the matrix and the value lanes
 constexpr int numLaneRows = 4;
+constexpr int minVisibleSteps = 16; // columns always shown
 constexpr int dragPixelsPerUnit = 8; // type, key and octave; the velocity moves one unit per pixel
 
 // Value lanes, top to bottom (as in BlueARP): step type, key select, octave, velocity.
@@ -81,7 +82,15 @@ void StepGrid::setEditStep(int step)
 
 int StepGrid::visibleSteps() const
 {
-    return hasProgram ? std::clamp(program.numSteps, 1, mnArpee::maxSteps) : 16;
+    // At least 16 columns: with fewer steps the rest of the row is shown, but not available.
+    return hasProgram ? std::max(minVisibleSteps, std::clamp(program.numSteps, 1, mnArpee::maxSteps))
+                      : minVisibleSteps;
+}
+
+int StepGrid::activeSteps() const
+{
+    // 0 steps = MIDI thru and 1 step = quantized thru: the pattern is not used.
+    return hasProgram && program.numSteps > 1 ? std::min(program.numSteps, mnArpee::maxSteps) : 0;
 }
 
 juce::Rectangle<int> StepGrid::columnBounds(int step) const
@@ -147,7 +156,7 @@ bool StepGrid::laneBoxAt(juce::Point<int> p, int& step, int& laneRow) const
     step = laneRow = -1;
     if (! hasProgram)
         return false;
-    for (int s = 0; s < visibleSteps(); ++s)
+    for (int s = 0; s < activeSteps(); ++s)
         for (int r = 0; r < numLaneRows; ++r)
             if (laneBox(s, r).expanded(cellGap / 2).contains(p))
             {
@@ -183,7 +192,7 @@ void StepGrid::cellAt(juce::Point<int> p, int& step, int& row) const
         return;
     const int sx = (p.x - board.getX()) / cw;
     const int ry = (p.y - board.getY()) / ch;
-    if (sx >= 0 && sx < n && ry >= 0 && ry < numRows())
+    if (sx >= 0 && sx < std::min(n, activeSteps()) && ry >= 0 && ry < numRows())
     {
         step = sx;
         row = ry;
@@ -246,6 +255,18 @@ void StepGrid::paint(juce::Graphics& g)
     {
         if (! clip.intersects(columnBounds(s)))
             continue; // partial repaints (playhead) only touch their own columns
+
+        if (s >= activeSteps())
+        {
+            // Not part of the pattern: faint empty cells, nothing to edit.
+            g.setColour(Palette::cellOff().withAlpha(0.3f));
+            for (int r = 0; r < rows; ++r)
+                g.fillRoundedRectangle(cellRect(s, r).toFloat(), 3.0f);
+            g.setColour(Palette::cardHi().withAlpha(0.3f));
+            for (int lr = 0; lr < numLaneRows; ++lr)
+                g.fillRoundedRectangle(laneBox(s, lr).toFloat(), 3.0f);
+            continue;
+        }
 
         const auto& step = program.steps[(size_t) s];
         const int stepRow = rowForStep(step);
