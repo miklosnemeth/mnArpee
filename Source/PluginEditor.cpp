@@ -98,24 +98,10 @@ void MnArpeeLookAndFeel::drawLinearSlider(juce::Graphics& g, int x, int y, int w
         return;
     }
 
-    // Value bar: the value text is drawn over it by the slider's own label.
-    const auto r = juce::Rectangle<float>((float) x, (float) y, (float) width, (float) height).reduced(0.5f);
+    // Value box: flat, the value text is drawn over it by the slider's own label.
+    const auto r = juce::Rectangle<float>((float) x, (float) y, (float) width, (float) height);
     g.setColour(Pal::cardHi());
     g.fillRoundedRectangle(r, 5.0f);
-
-    // Fills from the left, or from zero for a value that goes both ways.
-    float from = r.getX();
-    if (slider.getMinimum() < 0.0 && slider.getMaximum() > 0.0)
-        from = r.getX() + (float) slider.valueToProportionOfLength(0.0) * r.getWidth();
-    const float to = juce::jlimit(r.getX(), r.getRight(), sliderPos);
-    {
-        juce::Graphics::ScopedSaveState state(g);
-        g.reduceClipRegion(r.toNearestInt());
-        g.setColour(Pal::accent().withAlpha(0.42f));
-        g.fillRect(juce::Rectangle<float>(juce::jmin(from, to), r.getY(), std::abs(to - from), r.getHeight()));
-    }
-    g.setColour(Pal::border());
-    g.drawRoundedRectangle(r, 5.0f, 1.0f);
 }
 
 juce::Label* MnArpeeLookAndFeel::createSliderTextBox(juce::Slider& s)
@@ -186,13 +172,16 @@ MnArpeeAudioEditor::~MnArpeeAudioEditor()
 void MnArpeeAudioEditor::setupValueBar(juce::Slider& s, std::function<juce::String(double)> text,
                                        double defaultValue)
 {
+    // Added first: the value label takes its colours from the look and feel it is created under,
+    // otherwise it keeps the default grey outline.
+    addAndMakeVisible(s);
+    s.setColour(juce::Slider::textBoxOutlineColourId, juce::Colours::transparentBlack);
     s.setSliderStyle(juce::Slider::LinearBar);
     s.setTextBoxStyle(juce::Slider::TextBoxLeft, true, 80, 20);
     s.setTextBoxIsEditable(false);
     s.setDoubleClickReturnValue(true, defaultValue);
     s.textFromValueFunction = std::move(text);
     s.updateText();
-    addAndMakeVisible(s);
 }
 
 void MnArpeeAudioEditor::setProgramIndex(int index)
