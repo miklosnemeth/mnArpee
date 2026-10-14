@@ -83,14 +83,14 @@ void StepGrid::setEditStep(int step)
 int StepGrid::visibleSteps() const
 {
     // At least 16 columns: with fewer steps the rest of the row is shown, but not available.
-    return hasProgram ? std::max(minVisibleSteps, std::clamp(program.numSteps, 1, mnArpee::maxPatternSteps))
+    return hasProgram ? std::max(minVisibleSteps, std::clamp(program.numSteps, 1, mnArpee::maxSteps))
                       : minVisibleSteps;
 }
 
 int StepGrid::activeSteps() const
 {
     // 0 steps = MIDI thru and 1 step = quantized thru: the pattern is not used.
-    return hasProgram && program.numSteps > 1 ? std::min(program.numSteps, mnArpee::maxPatternSteps) : 0;
+    return hasProgram && program.numSteps > 1 ? std::min(program.numSteps, mnArpee::maxSteps) : 0;
 }
 
 juce::Rectangle<int> StepGrid::columnBounds(int step) const

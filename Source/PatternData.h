@@ -30,8 +30,7 @@
 namespace mnArpee
 {
 
-constexpr int maxSteps = 64;         // storage per program (kept so saved states stay readable)
-constexpr int maxPatternSteps = 32;  // the longest pattern that can be set
+constexpr int maxSteps = 32;
 constexpr int maxInputKeys = 5;
 // Step::keyIndex value for the root of the held chord (KEY SELECT "Root").
 constexpr std::int8_t rootKeyIndex = -1;

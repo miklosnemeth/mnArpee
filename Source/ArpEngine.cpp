@@ -114,7 +114,7 @@ void ArpEngine::setProgramParams(int programIndex, SyncRate sync, int gatePercen
     p.gatePercent = std::clamp(gatePercent, 1, 125);
     p.swingPercent = std::clamp(swingPercent, -50, 50);
     p.octaveShift = std::clamp(octaveShift, -2, 2);
-    p.numSteps = std::clamp(numSteps, 0, maxPatternSteps);
+    p.numSteps = std::clamp(numSteps, 0, maxSteps);
 }
 
 void ArpEngine::setCurrentProgram(int index)
@@ -278,7 +278,7 @@ void ArpEngine::resync(double ppq, bool hostSynced)
     gridOriginPpq = hostSynced ? 0.0 : ppq;
     gridIndex = (long long) std::ceil((ppq - gridOriginPpq) / stepQ - gridEpsilon);
     lastStepQ = stepQ;
-    const int numSteps = std::clamp(prog.numSteps, 0, maxPatternSteps);
+    const int numSteps = std::clamp(prog.numSteps, 0, maxSteps);
     if (hostSynced && numSteps > 1)
     {
         currentStep = (int) (((gridIndex % numSteps) + numSteps) % numSteps);
@@ -310,7 +310,7 @@ void ArpEngine::advanceProgram()
 
 void ArpEngine::playOneStep(const Program& prog, const InputNotes& input, double t, double stepQ)
 {
-    const int numSteps = std::clamp(prog.numSteps, 2, maxPatternSteps);
+    const int numSteps = std::clamp(prog.numSteps, 2, maxSteps);
     const int stepIndex = currentStep % numSteps;
     const Step& step = prog.steps[(size_t) stepIndex];
     const int at = sampleAt(t);
@@ -455,7 +455,7 @@ void ArpEngine::render(int numSamples, const HostPosition& host, EventBuffer& ou
             break;
         flushOffs(t);
         const int at = sampleAt(t);
-        const int numSteps = std::clamp(prog.numSteps, 0, maxPatternSteps);
+        const int numSteps = std::clamp(prog.numSteps, 0, maxSteps);
 
         if (numSteps > 1 && stepsPlayedInProgram >= numSteps)
         {
