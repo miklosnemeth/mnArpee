@@ -145,8 +145,6 @@ int main()
         setParam(*p, "gate", 50);
         setParam(*p, "steps", 4);
         setParam(*p, "swing", 25);
-        setParam(*p, "chain", 1);
-        setParam(*p, "velmode", 2);
         juce::MemoryBlock state;
         p->getStateInformation(state);
 
@@ -155,17 +153,38 @@ int main()
         q->handlePendingUpdates();
         const auto prog = q->getProgramCopy(0);
         check(prog.steps[1].type == mnArpee::StepType::Tie && prog.steps[1].keyIndex == 3
-                  && prog.gatePercent == 50 && prog.swingPercent == 25 && prog.numSteps == 4
-                  && param(*q, "chain") == 1,
+                  && prog.gatePercent == 50 && prog.swingPercent == 25 && prog.numSteps == 4,
               "state-roundtrip");
-        check(prog.velocityMode == mnArpee::VelocityMode::LaneAndInput && param(*q, "velmode") == 2,
-              "state-velocity-mode");
         check(q->getProgramCopy(1).gatePercent == 90 && q->getProgramName(1) == "Bass 8ths",
               "state-other-programs");
 
         const char garbage[] = "definitely not a plugin state";
         q->setStateInformation(garbage, (int) sizeof(garbage));
         check(q->getProgramCopy(0).steps[1].type == mnArpee::StepType::Tie, "state-garbage-ignored");
+
+        // A state from before the chains were removed (magic "AMN2", chain section at the end).
+        auto xml = juce::AudioProcessor::getXmlFromBinary(state.getData(), (int) state.getSize());
+        juce::MemoryBlock bank;
+        bank.fromBase64Encoding(xml->getStringAttribute("bankData"));
+        juce::MemoryOutputStream legacy;
+        legacy.writeInt(0x324e4d41);
+        legacy.write(static_cast<const char*>(bank.getData()) + 4, bank.getSize() - 4);
+        legacy.writeInt(1);          // one chain
+        legacy.writeString("Verse"); // name
+        legacy.writeInt(2);          // two programs
+        legacy.writeByte(0);
+        legacy.writeByte(1);
+        legacy.writeDouble(0.25);    // chain quantize grid
+        legacy.writeBool(true);      // restart on switch
+        xml->setAttribute("bankData", legacy.getMemoryBlock().toBase64Encoding());
+        juce::MemoryBlock legacyState;
+        juce::AudioProcessor::copyXmlToBinary(*xml, legacyState);
+        auto r = makeProcessor();
+        r->setStateInformation(legacyState.getData(), (int) legacyState.getSize());
+        r->handlePendingUpdates();
+        check(r->getProgramCopy(0).steps[1].type == mnArpee::StepType::Tie && r->getProgramCopy(0).gatePercent == 50
+                  && r->getProgramCopy(1).gatePercent == 90,
+              "state-with-chains-still-loads");
     }
 
     // Steps 0 = MIDI thru: notes pass unchanged and in time.

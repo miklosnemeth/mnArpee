@@ -324,36 +324,6 @@ int main()
         check(n >= 3 && n <= 5, "params-apply-live"); // 1/8 = 4 notes/s at 120 bpm
     }
 
-    // 17. Step edits (updateBank) keep an active chain running.
-    {
-        auto e = std::make_unique<ArpEngine>();
-        auto b = std::make_unique<Bank>(makeFactoryBank());
-        e->setBank(*b);
-        e->setCurrentChain(1); // Chorus: 0, 4, 0, 5
-        e->noteOn(60, 100);
-        runFor(*e, 0.5);
-        e->updateBank(*b);
-        bool sawFive = false;
-        for (int i = 0; i < 400 && ! sawFive; ++i)
-        {
-            runFor(*e, 0.05);
-            sawFive = e->getCurrentProgram() == 5;
-        }
-        check(e->getCurrentChain() == 1 && sawFive, "chain-survives-update-bank");
-    }
-
-    // 18. Chain off returns to the selected program.
-    {
-        auto e = std::make_unique<ArpEngine>();
-        e->setCurrentProgram(2);
-        e->setCurrentChain(1);
-        e->noteOn(60, 100);
-        runFor(*e, 0.5);
-        e->setCurrentChain(-1);
-        runFor(*e, 0.5);
-        check(e->getCurrentChain() == -1 && e->getCurrentProgram() == 2, "chain-off-back-to-selected");
-    }
-
     // 19. Playhead reports the step that sounded last.
     {
         auto e = std::make_unique<ArpEngine>();
@@ -413,7 +383,7 @@ int main()
         check(near(findAbs(runFor(*e, 0.5), true, 60, 1), eighth - eighth / 5), "swing-negative");
     }
 
-    // 23. Long run with random steps, chance and chains: note-ons and note-offs balance.
+    // 23. Long run with random steps and chance: note-ons and note-offs balance.
     {
         auto e = std::make_unique<ArpEngine>();
         auto b = std::make_unique<Bank>(makeFactoryBank());
@@ -421,7 +391,6 @@ int main()
             for (int i = 0; i < maxSteps; ++i)
                 p.steps[(size_t) i].chance = (std::uint8_t) (i % 3 == 0 ? 60 : 100);
         e->setBank(*b);
-        e->setCurrentChain(1);
         for (int n : { 48, 55, 60, 64, 67 })
             e->noteOn(n, 100);
         auto evs = runFor(*e, 8.0, 333);
@@ -461,50 +430,6 @@ int main()
         for (int n : { 64, 67, 72 }) // E G C: C major, first inversion
             e->noteOn(n, 100);
         check(noteOnSequence(runFor(*e, 0.1)).front() == 72, "root-step-plays-root");
-    }
-
-    // 26. Velocity source: lane, input key, or both multiplied.
-    {
-        auto firstVel = [](VelocityMode mode, int stepVel)
-        {
-            auto e = std::make_unique<ArpEngine>();
-            auto b = singleProgramBank(2, SyncRate::R1_8, 50);
-            b->programs[0].velocityMode = mode;
-            b->programs[0].steps[0].velocity = (std::uint8_t) stepVel;
-            b->programs[0].steps[1].keyIndex = 1;
-            b->programs[0].steps[1].velocity = (std::uint8_t) stepVel;
-            e->setBank(*b);
-            e->noteOn(60, 40);
-            e->noteOn(64, 100);
-            std::vector<int> vels;
-            for (const auto& ev : runFor(*e, 0.6))
-                if (ev.ev.isNoteOn)
-                    vels.push_back(ev.ev.velocity);
-            return vels;
-        };
-        const auto lane = firstVel(VelocityMode::Lane, 80);
-        check(lane.size() >= 2 && lane[0] == 80 && lane[1] == 80, "velocity-lane");
-        const auto input = firstVel(VelocityMode::Input, 80);
-        check(input.size() >= 2 && input[0] == 40 && input[1] == 100, "velocity-input-per-key");
-        const auto both = firstVel(VelocityMode::LaneAndInput, 127);
-        check(both.size() >= 2 && both[0] == 40 && both[1] == 100, "velocity-both-full-lane");
-        const auto half = firstVel(VelocityMode::LaneAndInput, 64);
-        check(half.size() >= 2 && half[0] == 20 && half[1] == 50, "velocity-both-scaled");
-    }
-
-    // 27. Root step takes the velocity of the root note in Input mode.
-    {
-        auto e = std::make_unique<ArpEngine>();
-        auto b = singleProgramBank(2, SyncRate::R1_8, 50);
-        b->programs[0].velocityMode = VelocityMode::Input;
-        b->programs[0].steps[0].keyIndex = rootKeyIndex;
-        e->setBank(*b);
-        e->noteOn(64, 50);
-        e->noteOn(67, 60);
-        e->noteOn(72, 110); // E G C: the root is C (72)
-        auto evs = runFor(*e, 0.1);
-        check(! evs.empty() && evs.front().ev.note == 72 && evs.front().ev.velocity == 110,
-              "velocity-input-root");
     }
 
     std::printf("%d checks, %d failures\n", checks, failures);

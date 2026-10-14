@@ -17,7 +17,6 @@
 //  - KEY SELECT: Fixed/Root/k1..k5
 //  - SCALE STEP -12..+12, OCTAVE -3..+3
 //  - VELOCITY 0..127, GATE TIME mult, CHANCE 1..100%
-//  - chains: max 16, chain quantize, restart-on-switch
 // MVP simplifications (by request):
 //  - no input range filter / wrap, no missing-keys substitution,
 //    chord detection only for the Root key (no scale derivation), no input quantize,
@@ -36,8 +35,6 @@ constexpr int maxInputKeys = 5;
 // Step::keyIndex value for the root of the held chord (KEY SELECT "Root").
 constexpr std::int8_t rootKeyIndex = -1;
 constexpr int maxPrograms = 16;
-constexpr int maxChains = 16;
-constexpr int maxChainSteps = 64;
 constexpr int maxNameLength = 32; // including the terminating zero
 
 enum class StepType : std::uint8_t
@@ -48,15 +45,6 @@ enum class StepType : std::uint8_t
     Tie,        // overlaps the previous note (glide on mono/legato synths)
     Random = 5, // random input note (4 was Chord, which has been removed)
 };
-
-// Where generated notes take their velocity from (the manual's "output note velocity").
-enum class VelocityMode : std::uint8_t
-{
-    Lane = 0,      // the step's VELOCITY
-    Input,         // the velocity of the input note the step plays
-    LaneAndInput,  // step velocity scaled by the input velocity (multiplied, normalized to 127)
-};
-constexpr int numVelocityModes = 3;
 
 enum class SyncRate : std::uint8_t
 {
@@ -133,26 +121,13 @@ struct Program
     int swingPercent = 0;            // -50..+50
     int octaveShift = 0;             // -2..+2 global arp octave
     int transposeOct = 0;            // -3..+3 program-level
-    VelocityMode velocityMode = VelocityMode::Lane;
     std::array<Step, maxSteps> steps {};
-};
-
-struct Chain
-{
-    Name name;
-    // Chained program indices in order.
-    std::array<std::int8_t, maxChainSteps> programs {};
-    int length = 0;
 };
 
 struct Bank
 {
     std::array<Program, maxPrograms> programs {};
     int numPrograms = 0;
-    std::array<Chain, maxChains> chains {};
-    int numChains = 0;
-    double chainQuantizeBars = 0.25; // in bars; 0.25 = one beat in 4/4
-    bool restartChainOnSwitch = true;
 };
 
 // Step types read from older states: the removed Chord (4) becomes Normal.
