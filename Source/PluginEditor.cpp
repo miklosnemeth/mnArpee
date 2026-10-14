@@ -77,23 +77,23 @@ void MnArpeeLookAndFeel::drawToggleButton(juce::Graphics& g, juce::ToggleButton&
         g.strokePath(p, juce::PathStrokeType(2.0f));
     }
     g.setColour(Pal::text());
-    g.setFont(mnArpee::fonts::text(15.0f));
+    g.setFont(mnArpee::fonts::text(17.0f));
     g.drawText(btn.getButtonText(), r.reduced(6.0f, 0.0f), juce::Justification::centredLeft);
 }
 
 juce::Font MnArpeeLookAndFeel::getComboBoxFont(juce::ComboBox& box)
 {
-    return mnArpee::fonts::text(juce::jmin(15.0f, (float) box.getHeight() * 0.6f));
+    return mnArpee::fonts::text(juce::jmin(17.0f, (float) box.getHeight() * 0.62f));
 }
 
-juce::Font MnArpeeLookAndFeel::getPopupMenuFont() { return mnArpee::fonts::text(15.0f); }
+juce::Font MnArpeeLookAndFeel::getPopupMenuFont() { return mnArpee::fonts::text(17.0f); }
 
-juce::Font MnArpeeLookAndFeel::getSliderPopupFont(juce::Slider&) { return mnArpee::fonts::text(14.0f); }
+juce::Font MnArpeeLookAndFeel::getSliderPopupFont(juce::Slider&) { return mnArpee::fonts::text(16.0f); }
 
 juce::Label* MnArpeeLookAndFeel::createSliderTextBox(juce::Slider& s)
 {
     auto* l = LookAndFeel_V4::createSliderTextBox(s);
-    l->setFont(mnArpee::fonts::text(13.0f, true));
+    l->setFont(mnArpee::fonts::text(15.0f, true));
     l->setColour(juce::Label::textColourId, Pal::text());
     l->setColour(juce::Label::backgroundColourId, juce::Colours::transparentBlack);
     return l;
@@ -145,7 +145,7 @@ MnArpeeAudioEditor::MnArpeeAudioEditor(MnArpeeAudioProcessor& p)
     auto setupLabel = [this](juce::Label& l, const char* text)
     {
         l.setText(text, juce::dontSendNotification);
-        l.setFont(mnArpee::fonts::text(13.0f, true));
+        l.setFont(mnArpee::fonts::text(15.0f, true));
         l.setColour(juce::Label::textColourId, Pal::dimText());
         l.setJustificationType(juce::Justification::centredLeft);
         addAndMakeVisible(l);
@@ -173,7 +173,7 @@ MnArpeeAudioEditor::~MnArpeeAudioEditor()
 void MnArpeeAudioEditor::setupSlider(juce::Slider& s)
 {
     s.setSliderStyle(juce::Slider::LinearHorizontal);
-    s.setTextBoxStyle(juce::Slider::TextBoxRight, false, 46, 18);
+    s.setTextBoxStyle(juce::Slider::TextBoxRight, false, 44, 24);
     s.setPopupDisplayEnabled(true, true, this);
     addAndMakeVisible(s);
 }
@@ -210,13 +210,13 @@ void MnArpeeAudioEditor::paint(juce::Graphics& g)
         g.drawText("mnArpee", brandArea.toFloat().translated(dx, 0.0f), juce::Justification::centredLeft);
 
     // Section labels.
-    g.setFont(mnArpee::fonts::text(14.0f, true));
+    g.setFont(mnArpee::fonts::text(16.0f, true));
     g.setColour(Pal::dimText());
     g.drawText("PATTERN", gridCard.getX() + 14, gridCard.getY() + 7, 120, 16,
                juce::Justification::centredLeft);
 
     // Info line in the header (between brand and latch): held notes.
-    g.setFont(mnArpee::fonts::text(15.0f));
+    g.setFont(mnArpee::fonts::text(17.0f));
     g.setColour(Pal::text());
     const int sx = 12 + 180;
     const int sw = getWidth() - 12 - 150 - sx - 10;
@@ -234,7 +234,7 @@ void MnArpeeAudioEditor::resized()
     latchButton.setBounds(latchArea.getX(), latchArea.getCentreY() - 12, 100, 24);
 
     // Parameter card.
-    paramsCard = area.removeFromTop(74);
+    paramsCard = area.removeFromTop(80);
     area.removeFromTop(10);
 
     // The rest is the matrix card.
@@ -245,8 +245,8 @@ void MnArpeeAudioEditor::resized()
     auto place = [](juce::Rectangle<int>& r, juce::Label& lab, juce::Component& comp, int w)
     {
         auto col = r.removeFromLeft(w);
-        lab.setBounds(col.getX(), col.getY(), col.getWidth(), 17);
-        comp.setBounds(col.getX(), col.getY() + 18, col.getWidth() - 8, 26);
+        lab.setBounds(col.getX(), col.getY(), col.getWidth(), 19);
+        comp.setBounds(col.getX(), col.getY() + 20, col.getWidth() - 8, 28);
         r.removeFromLeft(8);
     };
     place(inner, programLabel, programBox, 80);
