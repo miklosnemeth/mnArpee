@@ -108,17 +108,6 @@ Bank makeFactoryBank()
         add(p);
     }
 
-    auto addChain = [&bank](std::string_view name, std::initializer_list<int> progs)
-    {
-        auto& c = bank.chains[(size_t) bank.numChains++];
-        c.name.set(name);
-        for (int p : progs)
-            c.programs[(size_t) c.length++] = static_cast<std::int8_t>(p);
-    };
-    addChain("Verse", { 0, 1 });
-    addChain("Chorus", { 0, 4, 0, 5 });
-    bank.chainQuantizeBars = 0.25; // one beat in 4/4
-    bank.restartChainOnSwitch = true;
     return bank;
 }
 

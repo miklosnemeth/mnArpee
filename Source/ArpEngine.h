@@ -97,12 +97,9 @@ public:
     void updateBank(const Bank& bank);
     // Live program parameters, applied without copying the whole bank.
     void setProgramParams(int programIndex, SyncRate sync, int gatePercent, int swingPercent,
-                          int octaveShift, int numSteps,
-                          VelocityMode velocityMode = VelocityMode::Lane);
+                          int octaveShift, int numSteps);
     // Selected program: switches at the end of the running pattern, or at once when idle.
     void setCurrentProgram(int index);
-    // -1 = chain off. Switches on the bank's chain quantize grid.
-    void setCurrentChain(int chainIndex);
     void setLatch(bool on);
     void setOutputChannel(int channel) { outChannel = channel < 1 ? 1 : (channel > 16 ? 16 : channel); }
     void setRandomFn(RandomFn fn) { randomFn = std::move(fn); }
@@ -117,7 +114,6 @@ public:
     void render(int numSamples, const HostPosition& host, EventBuffer& out);
 
     int getCurrentProgram() const { return currentProgram; }
-    int getCurrentChain() const { return currentChain; }
     // Step index that sounded last, or -1 while idle.
     int getLastPlayedStep() const { return lastPlayedStep; }
     // True while the active program has 0 steps (MIDI thru).
@@ -127,8 +123,6 @@ public:
 
 private:
     const Program& activeProgram() const;
-    bool chainActive() const;
-    int chainProgramAt(int pos) const;
     void collectInput(InputNotes& out) const;
     static double stepQuarters(const Program& prog);
     double swingQuarters(const Program& prog, long long index, double stepQ) const;
@@ -138,7 +132,6 @@ private:
     void resync(double ppq, bool hostSynced);
     void switchProgram(int index);
     void advanceProgram();
-    void applyPendingChain(double blockEndPpq);
     void playOneStep(const Program& prog, const InputNotes& input, double t, double stepQ);
     void playQuantizedThru(const InputNotes& input, int at);
 
@@ -152,10 +145,6 @@ private:
     int currentProgram = 0;
     int selectedProgram = 0;
     int pendingProgram = -1;
-    int currentChain = -1;
-    int pendingChain = -2;              // -2 = no switch pending
-    double pendingChainAtPpq = -1.0;
-    int chainPos = 0;
 
     // Input state, indexed by MIDI note (velocity, 0 = not present).
     std::array<std::uint8_t, 128> heldVel {};

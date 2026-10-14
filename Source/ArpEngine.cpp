@@ -17,28 +17,6 @@ constexpr double gridEpsilon = 1.0e-9;
 constexpr double jumpToleranceQuarters = 0.01;
 }
 
-namespace
-{
-int inputVelocityOf(const InputNotes& input, int note) noexcept
-{
-    for (int i = 0; i < input.size; ++i)
-        if (input.notes[(size_t) i].note == note)
-            return input.notes[(size_t) i].velocity;
-    return input.empty() ? 96 : input.notes[0].velocity;
-}
-
-int outputVelocity(VelocityMode mode, int stepVelocity, int inputVelocity) noexcept
-{
-    switch (mode)
-    {
-        case VelocityMode::Input: return std::clamp(inputVelocity, 1, 127);
-        case VelocityMode::LaneAndInput:
-            return std::clamp((stepVelocity * inputVelocity + 63) / 127, 1, 127);
-        default: return stepVelocity;
-    }
-}
-} // namespace
-
 int chordRootNote(const InputNotes& input) noexcept
 {
     if (input.empty())
@@ -109,10 +87,8 @@ void ArpEngine::setBank(const Bank& b)
 {
     updateBank(b);
     pendingProgram = -1;
-    pendingChain = -2;
     currentStep = 0;
     stepsPlayedInProgram = 0;
-    chainPos = 0;
     lastPlayedStep = -1;
     positionInit = false;
 }
@@ -121,19 +97,15 @@ void ArpEngine::updateBank(const Bank& b)
 {
     bank = b;
     bank.numPrograms = std::clamp(bank.numPrograms, 0, maxPrograms);
-    bank.numChains = std::clamp(bank.numChains, 0, maxChains);
     const int last = std::max(0, bank.numPrograms - 1);
     currentProgram = std::clamp(currentProgram, 0, last);
     selectedProgram = std::clamp(selectedProgram, 0, last);
     if (pendingProgram > last)
         pendingProgram = -1;
-    if (currentChain >= bank.numChains)
-        currentChain = -1;
 }
 
 void ArpEngine::setProgramParams(int programIndex, SyncRate sync, int gatePercent,
-                                 int swingPercent, int octaveShift, int numSteps,
-                                 VelocityMode velocityMode)
+                                 int swingPercent, int octaveShift, int numSteps)
 {
     if (programIndex < 0 || programIndex >= bank.numPrograms)
         return;
@@ -143,7 +115,6 @@ void ArpEngine::setProgramParams(int programIndex, SyncRate sync, int gatePercen
     p.swingPercent = std::clamp(swingPercent, -50, 50);
     p.octaveShift = std::clamp(octaveShift, -2, 2);
     p.numSteps = std::clamp(numSteps, 0, maxSteps);
-    p.velocityMode = velocityMode;
 }
 
 void ArpEngine::setCurrentProgram(int index)
@@ -152,12 +123,6 @@ void ArpEngine::setCurrentProgram(int index)
         return;
     selectedProgram = std::clamp(index, 0, bank.numPrograms - 1);
     pendingProgram = selectedProgram != currentProgram ? selectedProgram : -1;
-}
-
-void ArpEngine::setCurrentChain(int chainIndex)
-{
-    pendingChain = std::clamp(chainIndex, -1, maxChains - 1);
-    pendingChainAtPpq = -1.0;
 }
 
 void ArpEngine::setLatch(bool on)
@@ -219,20 +184,6 @@ const Program& ArpEngine::activeProgram() const
     if (bank.numPrograms <= 0)
         return fallback;
     return bank.programs[(size_t) std::clamp(currentProgram, 0, bank.numPrograms - 1)];
-}
-
-bool ArpEngine::chainActive() const
-{
-    return currentChain >= 0 && currentChain < bank.numChains
-           && bank.chains[(size_t) currentChain].length > 0;
-}
-
-int ArpEngine::chainProgramAt(int pos) const
-{
-    const auto& c = bank.chains[(size_t) currentChain];
-    const int len = std::clamp(c.length, 1, maxChainSteps);
-    const int p = c.programs[(size_t) (((pos % len) + len) % len)];
-    return std::clamp(p, 0, std::max(0, bank.numPrograms - 1));
 }
 
 void ArpEngine::collectInput(InputNotes& out) const
@@ -353,42 +304,8 @@ void ArpEngine::advanceProgram()
 {
     currentStep = 0;
     stepsPlayedInProgram = 0;
-    if (chainActive())
-    {
-        chainPos = (chainPos + 1) % std::clamp(bank.chains[(size_t) currentChain].length, 1, maxChainSteps);
-        currentProgram = chainProgramAt(chainPos);
-    }
-    else if (pendingProgram >= 0)
-    {
+    if (pendingProgram >= 0)
         switchProgram(pendingProgram);
-    }
-}
-
-void ArpEngine::applyPendingChain(double blockEndPpq)
-{
-    if (pendingChain == -2)
-        return;
-    const double gridQ = std::max(bank.chainQuantizeBars * 4.0, 1.0 / 256.0);
-    if (pendingChainAtPpq < 0.0)
-        pendingChainAtPpq = std::ceil(blockStartPpq / gridQ - gridEpsilon) * gridQ;
-    if (blockEndPpq < pendingChainAtPpq)
-        return;
-
-    currentChain = pendingChain < bank.numChains ? pendingChain : -1;
-    pendingChain = -2;
-    if (chainActive())
-    {
-        if (bank.restartChainOnSwitch)
-        {
-            chainPos = 0;
-            switchProgram(chainProgramAt(0));
-        }
-    }
-    else
-    {
-        // Chain off: go back to the program that is selected.
-        switchProgram(selectedProgram);
-    }
 }
 
 void ArpEngine::playOneStep(const Program& prog, const InputNotes& input, double t, double stepQ)
@@ -425,8 +342,6 @@ void ArpEngine::playOneStep(const Program& prog, const InputNotes& input, double
         {
             source = input.notes[(size_t) (std::clamp((int) step.keyIndex, 0, maxInputKeys - 1) % input.size)].note;
         }
-        const int velocity = outputVelocity(prog.velocityMode, step.velocity,
-                                            inputVelocityOf(input, source));
         const int note = clampNote(source + step.scaleStep + step.octave * 12 + prog.transposeOct * 12
                                    + prog.octaveShift * 12);
 
@@ -438,7 +353,7 @@ void ArpEngine::playOneStep(const Program& prog, const InputNotes& input, double
                 if (sounding[(size_t) n] && n != note)
                     scheduleOff(n, t + oneSample);
             if (! sounding[(size_t) note])
-                emitOn(note, velocity, at);
+                emitOn(note, step.velocity, at);
         }
         else
         {
@@ -446,7 +361,7 @@ void ArpEngine::playOneStep(const Program& prog, const InputNotes& input, double
             for (int n = 0; n < 128; ++n)
                 if (sounding[(size_t) n] && ! hasPendingOff[(size_t) n] && n != note)
                     emitOff(n, at);
-            emitOn(note, velocity, at);
+            emitOn(note, step.velocity, at);
         }
 
         // Gate, lengthened by directly following Rest steps (up to the pattern end) and
@@ -516,14 +431,12 @@ void ArpEngine::render(int numSamples, const HostPosition& host, EventBuffer& ou
     if (! host.isPlaying && ! hadInput && ! scratchInput.empty())
     {
         // Free-run: the first key of a new phrase starts the pattern right away.
-        if (pendingProgram >= 0 && ! chainActive())
+        if (pendingProgram >= 0)
             switchProgram(pendingProgram);
         resync(blockStartPpq, false);
         currentStep = 0;
         stepsPlayedInProgram = 0;
     }
-
-    applyPendingChain(blockEndPpq);
 
     for (int guard = 0; guard < 4 * EventBuffer::capacity; ++guard)
     {
@@ -561,9 +474,7 @@ void ArpEngine::render(int numSamples, const HostPosition& host, EventBuffer& ou
                 playQuantizedThru(scratchInput, at);
             lastPlayedStep = scratchInput.empty() ? -1 : 0;
             ++gridIndex;
-            if (chainActive())
-                advanceProgram();
-            else if (pendingProgram >= 0)
+            if (pendingProgram >= 0)
                 switchProgram(pendingProgram);
             continue;
         }
@@ -572,7 +483,7 @@ void ArpEngine::render(int numSamples, const HostPosition& host, EventBuffer& ou
         {
             killAll(at);
             lastPlayedStep = -1;
-            if (pendingProgram >= 0 && ! chainActive())
+            if (pendingProgram >= 0)
                 switchProgram(pendingProgram);
         }
         else

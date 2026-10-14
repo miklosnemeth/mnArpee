@@ -78,7 +78,7 @@ public:
 private:
     struct ParamValues
     {
-        int program = -1, chain = -2, rate = -1, gate = -1, swing = -1000, octave = -1000, steps = -1, velMode = -1;
+        int program = -1, rate = -1, gate = -1, swing = -1000, octave = -1000, steps = -1;
         bool latch = false;
     };
 
@@ -100,14 +100,12 @@ private:
 
     juce::AudioProcessorValueTreeState apvts;
     std::atomic<float>* programParam = nullptr;
-    std::atomic<float>* chainParam = nullptr;
     std::atomic<float>* rateParam = nullptr;
     std::atomic<float>* gateParam = nullptr;
     std::atomic<float>* swingParam = nullptr;
     std::atomic<float>* octaveParam = nullptr;
     std::atomic<float>* stepsParam = nullptr;
     std::atomic<float>* latchParam = nullptr;
-    std::atomic<float>* velModeParam = nullptr;
 
     // Message thread.
     mutable juce::CriticalSection modelLock;
