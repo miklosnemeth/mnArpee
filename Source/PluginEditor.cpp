@@ -77,7 +77,7 @@ void MnArpeeLookAndFeel::drawToggleButton(juce::Graphics& g, juce::ToggleButton&
         g.strokePath(p, juce::PathStrokeType(2.0f));
     }
     g.setColour(Pal::text());
-    g.setFont(mnArpee::fonts::text(13.0f));
+    g.setFont(mnArpee::fonts::text(15.0f));
     g.drawText(btn.getButtonText(), r.reduced(6.0f, 0.0f), juce::Justification::centredLeft);
 }
 
@@ -93,7 +93,7 @@ juce::Font MnArpeeLookAndFeel::getSliderPopupFont(juce::Slider&) { return mnArpe
 juce::Label* MnArpeeLookAndFeel::createSliderTextBox(juce::Slider& s)
 {
     auto* l = LookAndFeel_V4::createSliderTextBox(s);
-    l->setFont(mnArpee::fonts::text(12.0f, true));
+    l->setFont(mnArpee::fonts::text(13.0f, true));
     l->setColour(juce::Label::textColourId, Pal::text());
     l->setColour(juce::Label::backgroundColourId, juce::Colours::transparentBlack);
     return l;
@@ -145,7 +145,7 @@ MnArpeeAudioEditor::MnArpeeAudioEditor(MnArpeeAudioProcessor& p)
     auto setupLabel = [this](juce::Label& l, const char* text)
     {
         l.setText(text, juce::dontSendNotification);
-        l.setFont(mnArpee::fonts::text(12.0f, true));
+        l.setFont(mnArpee::fonts::text(13.0f, true));
         l.setColour(juce::Label::textColourId, Pal::dimText());
         l.setJustificationType(juce::Justification::centredLeft);
         addAndMakeVisible(l);
@@ -210,13 +210,13 @@ void MnArpeeAudioEditor::paint(juce::Graphics& g)
         g.drawText("mnArpee", brandArea.toFloat().translated(dx, 0.0f), juce::Justification::centredLeft);
 
     // Section labels.
-    g.setFont(mnArpee::fonts::text(12.0f, true));
+    g.setFont(mnArpee::fonts::text(14.0f, true));
     g.setColour(Pal::dimText());
     g.drawText("PATTERN", gridCard.getX() + 14, gridCard.getY() + 7, 120, 16,
                juce::Justification::centredLeft);
 
     // Info line in the header (between brand and latch): held notes.
-    g.setFont(mnArpee::fonts::text(13.0f));
+    g.setFont(mnArpee::fonts::text(15.0f));
     g.setColour(Pal::text());
     const int sx = 12 + 180;
     const int sw = getWidth() - 12 - 150 - sx - 10;
@@ -245,7 +245,7 @@ void MnArpeeAudioEditor::resized()
     auto place = [](juce::Rectangle<int>& r, juce::Label& lab, juce::Component& comp, int w)
     {
         auto col = r.removeFromLeft(w);
-        lab.setBounds(col.getX(), col.getY(), col.getWidth(), 14);
+        lab.setBounds(col.getX(), col.getY(), col.getWidth(), 17);
         comp.setBounds(col.getX(), col.getY() + 18, col.getWidth() - 8, 26);
         r.removeFromLeft(8);
     };

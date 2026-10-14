@@ -25,17 +25,17 @@ public:
     // Unified dark palette (used by the whole UI).
     struct Palette
     {
-        static juce::Colour bg()      { return juce::Colour(0xff0e1117); }
-        static juce::Colour card()    { return juce::Colour(0xff161b24); }
-        static juce::Colour cardHi()  { return juce::Colour(0xff1d2430); }
-        static juce::Colour border()  { return juce::Colour(0xff262f3d); }
-        static juce::Colour text()    { return juce::Colour(0xffdbe4f0); }
-        static juce::Colour dimText() { return juce::Colour(0xff7f8ea3); }
-        static juce::Colour accent()  { return juce::Colour(0xff4fc3f7); }
-        static juce::Colour accent2() { return juce::Colour(0xff7c5cff); }
-        static juce::Colour danger()  { return juce::Colour(0xffef5f6b); }
-        static juce::Colour cellOff() { return juce::Colour(0xff252e3d); }
-        static juce::Colour playHead(){ return juce::Colour(0x40ffee8c); }
+        static juce::Colour bg()      { return juce::Colour(0xff0b1510); }
+        static juce::Colour card()    { return juce::Colour(0xff13211a); }
+        static juce::Colour cardHi()  { return juce::Colour(0xff1c3026); }
+        static juce::Colour border()  { return juce::Colour(0xff2d4a3a); }
+        static juce::Colour text()    { return juce::Colour(0xfff0faf3); }
+        static juce::Colour dimText() { return juce::Colour(0xffb4cdbc); }
+        static juce::Colour accent()  { return juce::Colour(0xff3ddc84); }
+        static juce::Colour accent2() { return juce::Colour(0xffc6f26b); }
+        static juce::Colour danger()  { return juce::Colour(0xffff7a7a); }
+        static juce::Colour cellOff() { return juce::Colour(0xff22352b); }
+        static juce::Colour playHead(){ return juce::Colour(0x40e8ffa0); }
     };
 
     StepGrid();

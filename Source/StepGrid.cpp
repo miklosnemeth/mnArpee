@@ -4,7 +4,7 @@
 
 namespace
 {
-constexpr int labelW = 64;   // row label strip on the left
+constexpr int labelW = 80;   // row label strip on the left
 constexpr int stepH = 24;    // step row height
 constexpr int gutterTop = 20; // column labels (1,5,9,...)
 constexpr int cellGap = 3;
@@ -203,7 +203,7 @@ void StepGrid::paint(juce::Graphics& g)
     auto board = boardArea();
 
     // Column labels (every 4th step highlighted).
-    g.setFont(mnArpee::fonts::text(12.0f));
+    g.setFont(mnArpee::fonts::text(14.0f));
     g.setColour(Palette::dimText());
     for (int s = 0; s < n; s += 4)
     {
@@ -241,7 +241,7 @@ void StepGrid::paint(juce::Graphics& g)
     }
 
     const auto clip = g.getClipBounds();
-    const auto markFont = mnArpee::fonts::text(11.0f, true);
+    const auto markFont = mnArpee::fonts::text(13.0f, true);
     for (int s = 0; s < n; ++s)
     {
         if (! clip.intersects(columnBounds(s)))
@@ -367,8 +367,8 @@ void StepGrid::paint(juce::Graphics& g)
             }
             g.setColour(laneId == lane ? Palette::cardHi().brighter(0.15f) : Palette::cardHi());
             g.fillRoundedRectangle(box.toFloat(), 3.0f);
-            g.setColour((dim ? Palette::dimText().withAlpha(0.45f) : Palette::text()));
-            g.setFont(mnArpee::fonts::text(visibleSteps() > 32 ? 9.0f : 11.0f));
+            g.setColour(dim ? Palette::dimText().withAlpha(0.5f) : Palette::text());
+            g.setFont(mnArpee::fonts::text(visibleSteps() > 32 ? 10.0f : 13.0f, true));
             g.drawText(text, box, juce::Justification::centred, false);
             if (isEdit)
             {
@@ -379,7 +379,7 @@ void StepGrid::paint(juce::Graphics& g)
     }
 
     // Lane captions: the selected one is highlighted, a click selects the lane.
-    g.setFont(mnArpee::fonts::text(11.0f, true));
+    g.setFont(mnArpee::fonts::text(14.0f, true));
     for (int lr = 0; lr < numLaneRows; ++lr)
     {
         const auto cap = laneCaption(lr);
@@ -388,7 +388,7 @@ void StepGrid::paint(juce::Graphics& g)
             g.setColour(Palette::accent2());
             g.fillRoundedRectangle(cap.toFloat(), 3.0f);
         }
-        g.setColour(laneOfRow[lr] == lane ? Palette::text() : Palette::dimText());
+        g.setColour(laneOfRow[lr] == lane ? Palette::bg() : Palette::text());
         g.drawText(laneCaptions[lr], cap.reduced(4, 0), juce::Justification::centredRight);
     }
 
