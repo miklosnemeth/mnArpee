@@ -6,6 +6,7 @@
 #include "StepGrid.h"
 
 class MnArpeeAudioProcessor;
+using Pal = StepGrid::Palette;
 
 //==============================================================================
 // MnArpeeLookAndFeel: unified dark style for the whole UI.
@@ -21,6 +22,9 @@ public:
     void drawToggleButton(juce::Graphics&, juce::ToggleButton&,
                           bool shouldDrawButtonAsHighlighted,
                           bool shouldDrawButtonAsDown) override;
+    void drawLinearSlider(juce::Graphics&, int x, int y, int width, int height, float sliderPos,
+                          float minSliderPos, float maxSliderPos, juce::Slider::SliderStyle,
+                          juce::Slider&) override;
     juce::Label* createSliderTextBox(juce::Slider&) override;
     juce::Font getComboBoxFont(juce::ComboBox&) override;
     juce::Font getPopupMenuFont() override;
@@ -44,7 +48,6 @@ public:
     void resized() override;
 
 private:
-    using ComboAttachment = juce::AudioProcessorValueTreeState::ComboBoxAttachment;
     using SliderAttachment = juce::AudioProcessorValueTreeState::SliderAttachment;
     using ButtonAttachment = juce::AudioProcessorValueTreeState::ButtonAttachment;
 
@@ -53,28 +56,30 @@ private:
     void onGridClicked(int step, int row);
     void onLaneAdjusted(int step, StepGrid::Lane lane, int delta);
     void commitStep(const mnArpee::Step& step);
-    void setupSlider(juce::Slider& s);
+    // A header value shown as one line ("OCT +3") that is dragged to change.
+    void setupValueBar(juce::Slider& s, std::function<juce::String(double)> text, double defaultValue);
     int selectedProgram() const;
+    void setProgramIndex(int index);
+    void stepProgram(int delta);
+    void showProgramMenu();
 
     MnArpeeAudioProcessor& proc;
     MnArpeeLookAndFeel lnf;
 
     // Header
-    juce::ComboBox programBox, rateBox;
-    juce::Slider octaveSlider, gateSlider, swingSlider, stepsSlider;
+    // Program picker in the header: previous / name (opens the list) / next, as in mnKord.
+    juce::ArrowButton prevProgramButton { "previous program", 0.5f, Pal::text() };
+    juce::ArrowButton nextProgramButton { "next program", 0.0f, Pal::text() };
+    juce::TextButton programButton;
+    juce::Slider rateSlider, octaveSlider, gateSlider, swingSlider, stepsSlider;
     juce::ToggleButton latchButton;
-    juce::Rectangle<int> brandArea;
+    juce::Rectangle<int> brandArea, statusArea;
 
     // Matrix, with the value lanes below it (a lane caption chooses what the rows edit).
     StepGrid grid;
 
-    // Labels
-    juce::Label programLabel, rateLabel;
-    juce::Label octaveLabel, gateLabel, swingLabel, stepsLabel;
-
     // Attachments (declared after the controls, so they are destroyed first)
-    std::unique_ptr<ComboAttachment> programAtt, rateAtt;
-    std::unique_ptr<SliderAttachment> octaveAtt, gateAtt, swingAtt, stepsAtt;
+    std::unique_ptr<SliderAttachment> rateAtt, octaveAtt, gateAtt, swingAtt, stepsAtt;
     std::unique_ptr<ButtonAttachment> latchAtt;
 
     // Info bar
