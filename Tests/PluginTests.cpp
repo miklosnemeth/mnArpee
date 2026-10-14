@@ -254,6 +254,32 @@ int main()
         editor->repaint();
         const auto after = editor->createComponentSnapshot(editor->getLocalBounds());
         check(before.isValid() && after.isValid(), "editor-survives-state-load");
+        // The header value bars change from vertical mouse movement only (STEPS is the last slider).
+        {
+            juce::Slider* steps = nullptr;
+            for (auto* c : editor->getChildren())
+                if (auto* sl = dynamic_cast<juce::Slider*>(c))
+                    steps = sl;
+            auto src = juce::Desktop::getInstance().getMainMouseSource();
+            auto ev = [&](juce::Point<float> pos, juce::Point<float> down)
+            {
+                return juce::MouseEvent(src, pos, juce::ModifierKeys::leftButtonModifier, 0.5f, 0.0f, 0.0f, 0.0f, 0.0f,
+                                        steps, steps, juce::Time::getCurrentTime(), down, juce::Time::getCurrentTime(), 1, true);
+            };
+            const auto start = steps->getValue();
+            const juce::Point<float> a(60.0f, 15.0f);
+            steps->mouseDown(ev(a, a));
+            const auto afterClick = steps->getValue();
+            steps->mouseDrag(ev({ 200.0f, 15.0f }, a));
+            const auto sideways = steps->getValue();
+            steps->mouseDrag(ev({ -40.0f, 1.0f }, a));
+            const auto up = steps->getValue();
+            steps->mouseDrag(ev({ 250.0f, 1.0f }, a));
+            const auto upMovedSideways = steps->getValue();
+            steps->mouseUp(ev({ 250.0f, 1.0f }, a));
+            check(afterClick == start && sideways == start && up > start && upMovedSideways == up,
+                  "value-bar-vertical-drag-only");
+        }
     }
     else
     {

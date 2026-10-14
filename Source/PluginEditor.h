@@ -32,6 +32,25 @@ public:
 };
 
 //==============================================================================
+// ValueBar: a header value drawn as one line ("OCT +3"). Only the vertical mouse movement
+// changes it (dragging up raises it, the horizontal movement is ignored) and the wheel steps it
+// by one interval, so the value never jumps to where the mouse was clicked.
+//==============================================================================
+class ValueBar : public juce::Slider
+{
+public:
+    void setPixelsPerUnit(double pixels) { pixelsPerUnit = pixels; }
+
+    void mouseDown(const juce::MouseEvent& e) override;
+    void mouseDrag(const juce::MouseEvent& e) override;
+    void mouseWheelMove(const juce::MouseEvent& e, const juce::MouseWheelDetails& wheel) override;
+
+private:
+    double pixelsPerUnit = 6.0;
+    double valueOnMouseDown = 0.0;
+};
+
+//==============================================================================
 // MnArpeeAudioEditor: dark card header + StepGrid (matrix and value lanes).
 // Header controls are bound to the parameters with attachments (host automation and
 // state loads show up, gestures are reported); the grid (matrix and value lanes) edits the
@@ -57,7 +76,8 @@ private:
     void onLaneAdjusted(int step, StepGrid::Lane lane, int delta);
     void commitStep(const mnArpee::Step& step);
     // A header value shown as one line ("OCT +3") that is dragged to change.
-    void setupValueBar(juce::Slider& s, std::function<juce::String(double)> text, double defaultValue);
+    void setupValueBar(ValueBar& s, std::function<juce::String(double)> text, double defaultValue,
+                       double pixelsPerUnit);
     int selectedProgram() const;
     void setProgramIndex(int index);
     void stepProgram(int delta);
@@ -71,7 +91,7 @@ private:
     juce::ArrowButton prevProgramButton { "previous program", 0.5f, Pal::text() };
     juce::ArrowButton nextProgramButton { "next program", 0.0f, Pal::text() };
     juce::TextButton programButton;
-    juce::Slider rateSlider, octaveSlider, gateSlider, swingSlider, stepsSlider;
+    ValueBar rateSlider, octaveSlider, gateSlider, swingSlider, stepsSlider;
     juce::ToggleButton latchButton;
     juce::Rectangle<int> brandArea, statusArea;
 

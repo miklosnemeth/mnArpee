@@ -114,6 +114,33 @@ juce::Label* MnArpeeLookAndFeel::createSliderTextBox(juce::Slider& s)
 }
 
 //==============================================================================
+// ValueBar
+//==============================================================================
+void ValueBar::mouseDown(const juce::MouseEvent& e)
+{
+    valueOnMouseDown = getValue();
+    juce::Slider::mouseDown(e); // starts the change gesture; it does not move the value
+}
+
+void ValueBar::mouseDrag(const juce::MouseEvent& e)
+{
+    if (! e.mouseWasDraggedSinceMouseDown())
+        return;
+    // Relative to where the drag started, from the vertical distance only.
+    const double dy = e.getMouseDownPosition().y - e.position.y;
+    setValue(valueOnMouseDown + dy / pixelsPerUnit, juce::sendNotificationSync);
+}
+
+void ValueBar::mouseWheelMove(const juce::MouseEvent&, const juce::MouseWheelDetails& wheel)
+{
+    // Only the vertical wheel; one interval per notch, whatever the speed.
+    if (! isEnabled() || wheel.deltaY == 0.0f || std::abs(wheel.deltaX) > std::abs(wheel.deltaY))
+        return;
+    const double step = std::max(getInterval(), 1.0e-6);
+    setValue(getValue() + (wheel.deltaY > 0.0f ? step : -step), juce::sendNotificationSync);
+}
+
+//==============================================================================
 MnArpeeAudioEditor::MnArpeeAudioEditor(MnArpeeAudioProcessor& p)
     : AudioProcessorEditor(p), proc(p)
 {
@@ -148,11 +175,11 @@ MnArpeeAudioEditor::MnArpeeAudioEditor(MnArpeeAudioProcessor& p)
     setupValueBar(rateSlider, [](double v)
                   { return "RATE " + juce::String(mnArpee::syncRateName((mnArpee::SyncRate) juce::jlimit(
                                          0, mnArpee::numSyncRates - 1, (int) std::lround(v)))); },
-                  4.0);
-    setupValueBar(octaveSlider, [signedValue](double v) { return "OCT " + signedValue(v); }, 0.0);
-    setupValueBar(gateSlider, [](double v) { return "GATE " + juce::String((int) std::lround(v)) + "%"; }, 80.0);
-    setupValueBar(swingSlider, [signedValue](double v) { return "SWING " + signedValue(v) + "%"; }, 0.0);
-    setupValueBar(stepsSlider, [](double v) { return "STEPS " + juce::String((int) std::lround(v)); }, 16.0);
+                  4.0, 8.0);
+    setupValueBar(octaveSlider, [signedValue](double v) { return "OCT " + signedValue(v); }, 0.0, 14.0);
+    setupValueBar(gateSlider, [](double v) { return "GATE " + juce::String((int) std::lround(v)) + "%"; }, 80.0, 2.0);
+    setupValueBar(swingSlider, [signedValue](double v) { return "SWING " + signedValue(v) + "%"; }, 0.0, 2.5);
+    setupValueBar(stepsSlider, [](double v) { return "STEPS " + juce::String((int) std::lround(v)); }, 16.0, 7.0);
 
     addAndMakeVisible(latchButton);
     latchButton.setButtonText("Latch");
@@ -169,8 +196,8 @@ MnArpeeAudioEditor::~MnArpeeAudioEditor()
     setLookAndFeel(nullptr);
 }
 
-void MnArpeeAudioEditor::setupValueBar(juce::Slider& s, std::function<juce::String(double)> text,
-                                       double defaultValue)
+void MnArpeeAudioEditor::setupValueBar(ValueBar& s, std::function<juce::String(double)> text,
+                                       double defaultValue, double pixelsPerUnit)
 {
     // Added first: the value label takes its colours from the look and feel it is created under,
     // otherwise it keeps the default grey outline.
@@ -179,7 +206,7 @@ void MnArpeeAudioEditor::setupValueBar(juce::Slider& s, std::function<juce::Stri
     // Dragging up and down changes the value (a click does not jump to a position).
     s.setSliderStyle(juce::Slider::LinearBarVertical);
     s.setSliderSnapsToMousePosition(false);
-    s.setMouseDragSensitivity((int) juce::jlimit(60.0, 250.0, (s.getMaximum() - s.getMinimum()) * 6.0));
+    s.setPixelsPerUnit(pixelsPerUnit);
     s.setTextBoxStyle(juce::Slider::TextBoxLeft, true, 80, 20);
     s.setTextBoxIsEditable(false);
     s.setDoubleClickReturnValue(true, defaultValue);
