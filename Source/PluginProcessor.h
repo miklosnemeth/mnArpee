@@ -48,7 +48,7 @@ public:
     // The active preset as the editor shows it.
     struct ActivePreset
     {
-        juce::String name, group, author;
+        juce::String name, group, author, tags;
         juce::File file;      // empty: not saved yet
         bool factory = false;
         bool dirty = false;   // changed since it was loaded or saved
@@ -108,6 +108,8 @@ public:
     // Saves the active pattern as a user preset with this name (it becomes the active one).
     bool saveActivePresetAs(const juce::String& name);
     void revertActivePreset();
+    // The styles of the active preset ("House, Trance"); an unsaved change like any other.
+    void setActivePresetStyles(const juce::String& styles);
     // Renames the user preset at this library index (also the active one when it is).
     bool renamePreset(int libraryIndex, const juce::String& newName);
     bool deletePreset(int libraryIndex);

@@ -4,6 +4,7 @@
 #include <array>
 #include <cstdint>
 #include <string_view>
+#include <vector>
 #include <type_traits>
 
 //==============================================================================
@@ -147,5 +148,15 @@ static_assert(std::is_trivially_copyable_v<Bank>, "Bank must be copyable without
 
 Program makeInitProgram(std::string_view name = "Init");
 Bank makeFactoryBank();
+
+// The factory presets: "Melodic" patterns on the held keys and "Bassline" patterns that play
+// only the root of the held chord (every step is the Root key, a rest, a tie or off).
+struct FactoryPattern
+{
+    const char* group;
+    const char* styles; // comma separated: "House,Trance"
+    Program program;
+};
+std::vector<FactoryPattern> makeFactoryPatterns();
 
 } // namespace mnArpee

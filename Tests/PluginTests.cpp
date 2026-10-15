@@ -96,6 +96,16 @@ std::unique_ptr<MnArpeeAudioProcessor> makeProcessor()
     return p;
 }
 
+// Library index of the preset with this name (-1 when there is none).
+int presetIndex(MnArpeeAudioProcessor& p, const char* name)
+{
+    const auto list = p.getPresetList();
+    for (int i = 0; i < (int) list.size(); ++i)
+        if (list[(size_t) i].name == name)
+            return i;
+    return -1;
+}
+
 bool haveDisplay()
 {
    #if JUCE_LINUX || JUCE_BSD
@@ -138,24 +148,27 @@ int main()
         auto p = makeProcessor();
         const auto list = p->getPresetList();
         check(list.size() >= 8 && list[0].factory && list[0].name == "Trance Up 16", "factory-presets-listed");
-        check(p->getNumPrograms() == 128 && p->getProgramName(1) == "Bass 8ths" && p->getProgramName(100) == "-",
+        const int bass = presetIndex(*p, "Bass 8ths");
+        const int upDown = presetIndex(*p, "Up-Down Pad");
+        check(bass > 0 && upDown > 0 && p->getNumPrograms() == 128 && p->getProgramName(bass) == "Bass 8ths"
+                  && p->getProgramName(100) == "-",
               "host-program-list-mirrors-presets");
         check(! p->getActivePreset().dirty && p->getActivePresetIndex() == 0, "first-preset-active-and-clean");
 
-        check(p->loadPreset(1), "load-preset");
-        check(param(*p, "rate") == 6 && param(*p, "gate") == 90 && p->getActivePreset().name == "Bass 8ths"
+        check(p->loadPreset(bass), "load-preset");
+        check(param(*p, "rate") == 6 && param(*p, "gate") == 85 && p->getActivePreset().name == "Bass 8ths"
                   && ! p->getActivePreset().dirty,
               "load-preset-loads-params");
         setParam(*p, "gate", 50);
         check(p->getActivePreset().dirty, "param-edit-marks-preset-dirty");
         check(! p->saveActivePreset(), "factory-preset-cannot-be-overwritten");
         p->revertActivePreset();
-        check(param(*p, "gate") == 90 && ! p->getActivePreset().dirty, "revert-restores-preset");
+        check(param(*p, "gate") == 85 && ! p->getActivePreset().dirty, "revert-restores-preset");
 
         // The host's program change loads a preset too.
-        p->setCurrentProgram(2);
+        p->setCurrentProgram(upDown);
         p->handlePendingUpdates();
-        check(p->getActivePreset().name == "Up-Down Pad" && p->getCurrentProgram() == 2, "host-program-change-loads-preset");
+        check(p->getActivePreset().name == "Up-Down Pad" && p->getCurrentProgram() == upDown, "host-program-change-loads-preset");
     }
 
     // Presets: save as, save, rename, duplicate, export/import, delete.
@@ -215,10 +228,43 @@ int main()
               "delete-preset");
     }
 
+    // Styles: factory presets have them, they can be edited, and they stay with saved and exported presets.
+    {
+        auto p = makeProcessor();
+        const auto list = p->getPresetList();
+        bool factoryStyled = ! list.empty();
+        bool groupsKnown = true;
+        for (const auto& preset : list)
+            if (preset.factory)
+            {
+                factoryStyled = factoryStyled && mnArpee::presetStyles(preset).size() >= 1;
+                groupsKnown = groupsKnown && (preset.group == "Bassline" || preset.group == "Melodic");
+            }
+        check(factoryStyled && groupsKnown, "factory-presets-have-group-and-styles");
+
+        p->loadPreset(presetIndex(*p, "Trance Up 16"));
+        check(p->getActivePreset().tags == "Trance" && ! p->getActivePreset().dirty, "style-of-loaded-preset");
+        p->setActivePresetStyles("Techno, Acid");
+        check(p->getActivePreset().dirty, "style-edit-is-an-unsaved-change");
+        check(p->saveActivePresetAs("Styled Arp"), "save-as-with-styles");
+        const int saved = presetIndex(*p, "Styled Arp");
+        check(saved >= 0 && p->getPresetList()[(size_t) saved].tags == "Techno, Acid"
+                  && mnArpee::presetStyles(p->getPresetList()[(size_t) saved]).size() == 2
+                  && p->getPresetList()[(size_t) saved].group == "User",
+              "styles-are-saved-with-the-preset");
+
+        const auto file = p->getUserPresetFolder().getSiblingFile("styled.xml");
+        p->exportActivePreset(file);
+        p->deletePreset(saved);
+        check(p->importPresets(file) == 1 && p->getActivePreset().tags == "Techno, Acid", "styles-survive-export-and-import");
+        file.deleteFile();
+    }
+
     // State: the project stores the active preset's content.
     {
         auto p = makeProcessor();
-        p->loadPreset(1);
+        const int bassIndex = presetIndex(*p, "Bass 8ths");
+        p->loadPreset(bassIndex);
         setParam(*p, "gate", 50);
         setParam(*p, "steps", 4);
         auto st = p->getProgramCopy().steps[1];
@@ -236,7 +282,7 @@ int main()
         check(prog.steps[1].type == mnArpee::StepType::Tie && prog.steps[1].keyIndex == 3
                   && prog.gatePercent == 50 && prog.swingPercent == 25 && prog.numSteps == 4,
               "state-roundtrip");
-        check(a.name == "Bass 8ths" && a.factory && a.dirty && q->getActivePresetIndex() == 1,
+        check(a.name == "Bass 8ths" && a.factory && a.dirty && q->getActivePresetIndex() == bassIndex,
               "state-rebinds-preset-and-keeps-unsaved-changes");
 
         // A preset the library does not have comes back as an unsaved one.

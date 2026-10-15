@@ -83,6 +83,7 @@ private:
     // Presets (the preset library is managed by the processor; the dialogs are here).
     void stepPreset(int delta);
     void showPresetBrowser();
+    void closePresetBrowser();
     void showPresetMenu();
     void newClicked();
     void saveClicked();
@@ -128,7 +129,7 @@ private:
     MnArpeeAudioProcessor::ActivePreset shownPreset;
     bool shownPresetValid = false;
     std::unique_ptr<juce::FileChooser> fileChooser;
-    juce::Component::SafePointer<juce::CallOutBox> browserBox;
+    std::unique_ptr<juce::Component> presetBrowser; // overlay inside the editor, null while closed
 
     // The program shown in the grid (a copy, so a state load can never leave it dangling).
     mnArpee::Program shownProgram;

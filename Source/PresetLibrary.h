@@ -11,7 +11,7 @@
 // Presets: one arp pattern (a Program) with a name, group and author, stored as an XML file.
 //
 //   <mnArpeePreset version="1">
-//     <Preset name="..." group="..." author="..." rate="1/16" gate="80" swing="0" octave="0"
+//     <Preset name="..." group="..." author="..." tags="..." rate="1/16" gate="80" swing="0" octave="0"
 //             transpose="0" steps="16">
 //       <Step type="normal" key="1" scale="0" octave="0" velocity="96" gate="100" chance="100"/>
 //       ... one Step per stored step
@@ -31,6 +31,7 @@ struct Preset
     juce::String name;
     juce::String group = "User";
     juce::String author;
+    juce::String tags;     // musical styles, comma separated ("House,Trance")
     Program program;       // program.name mirrors name
     bool factory = false;
     juce::File file;       // empty while the preset has not been saved
@@ -41,6 +42,8 @@ std::unique_ptr<juce::XmlElement> presetToXml(const Preset& preset);
 bool presetFromXml(const juce::XmlElement& xml, Preset& out);
 // The preset's content as text (no file), used to tell whether it has unsaved changes.
 juce::String presetSnapshot(const Preset& preset);
+// The styles of a preset as a list ("House, Trance" -> House, Trance).
+juce::StringArray presetStyles(const Preset& preset);
 // The factory presets, in order.
 std::vector<Preset> makeFactoryPresets();
 

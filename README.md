@@ -16,7 +16,7 @@ Held notes are sorted by pitch before they reach the engine.
   - The header values (rate, octave, gate, swing, steps) always belong to the active preset
   - Steps 0 = MIDI thru, 1 = quantized thru
 - Host sync: steps lock to the song position (bar grid) and the pattern position follows it; free-run when the transport is stopped (a new phrase starts the pattern right away)
-- Preset library like mnKord: factory presets plus your own, with a preset browser (search), previous/next arrows, New, Save (a dot marks unsaved changes), and a Menu with Save as, Revert, Rename, Import, Export, Show in folder and Delete; a preset switches at the end of the running pattern
+- Preset library like mnKord: about 40 factory presets in two groups, **Bassline** (only the root of the held chord) and **Melodic** (the held keys), each tagged with musical styles (Trance, House, Techno, Disco, Funk, Pop, Synthwave, Ambient, Chill, Dubstep), plus your own; a preset browser inside the plugin window (search, group and style filters), previous/next arrows, New, Save (a dot marks unsaved changes), and a Menu with Save as, Revert, Rename, Style, Import, Export, Show in folder and Delete; a preset switches at the end of the running pattern
 - The host's program list mirrors the preset list (128 slots, unused ones show "-")
 - Latch (a new chord replaces the latched one), sustain pedal, panic / all-notes-off, CC/bend/aftertouch pass-through, output on the input channel
 - Sample-accurate MIDI handling; the engine is allocation-free on the audio thread and edits reach it without locks
@@ -77,7 +77,7 @@ Preset file (a bank file with several `<Preset>` elements is accepted by **Impor
 
 ```xml
 <mnArpeePreset version="1">
-  <Preset name="My Arp" group="User" author="you" rate="1/16" gate="80" swing="0" octave="0" transpose="0" steps="16">
+  <Preset name="My Arp" group="User" author="you" tags="House, Trance" rate="1/16" gate="80" swing="0" octave="0" transpose="0" steps="16">
     <Step type="normal" key="1" scale="0" octave="0" velocity="96" gate="100" chance="100"/>
     <!-- one Step per stored step -->
   </Preset>
