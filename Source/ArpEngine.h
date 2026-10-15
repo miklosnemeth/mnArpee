@@ -74,6 +74,14 @@ struct InputNotes
     }
 };
 
+// The keys the matrix can reach (Key 1..5, Random): every pitch class once, as its lowest held
+// note, at most maxInputKeys of them. What does not make it is
+//  - Merged:   the same note in another octave as a key (C3 + C4: C4 is merged into C3),
+//  - LeftOut:  a note of a further pitch class when five keys are taken already.
+enum class KeyUse : int { Used = 0, Merged = 1, LeftOut = 2 };
+void reduceToKeys(const InputNotes& all, InputNotes& keys) noexcept;
+KeyUse keyUseOf(const InputNotes& keys, int note) noexcept;
+
 // Root of the chord formed by the input notes (triads, sus, 7th chords, power chord;
 // inversions included), returned as the lowest held note of that pitch class. Without a
 // recognisable chord it is the lowest note. Returns -1 for empty input.
@@ -179,6 +187,7 @@ private:
     double blockStartPpq = 0.0;
     double samplesPerQuarter = 22050.0;
     InputNotes scratchInput;
+    InputNotes scratchKeys;
 
     RandomFn randomFn;
     std::mt19937 rng { 12345u };

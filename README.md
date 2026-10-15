@@ -1,12 +1,13 @@
 # mnArpee
 
 Pattern arpeggiator based on the BlueArp manual (VST3 + Standalone), JUCE 9 + C++23.
-No input pre-filtering: held notes are sorted by pitch before they reach the engine.
+Held notes are sorted by pitch before they reach the engine.
 
 ## Features (MVP)
 
 - No arp modes: the step matrix draws the whole pattern. Rows, bottom to top: Random, Root, Key 1 .. Key 5
-  - Key 1..5 pick from the pitch-sorted input (fewer held notes wrap around)
+  - Key 1..5 pick from the held notes, sorted by pitch, one key per pitch class: the same note in another octave counts as one (the lowest stays); more than five different notes: the lowest five are the keys and the rest is left out. Fewer keys wrap around. Random picks among the keys.
+  - The held notes are shown next to "PATTERN": white = a key, dim = merged into a key of another octave, red = left out (with a "+N left out" note)
   - Root plays the root of the held chord (triads, sus, 7th chords, power chords, inversions too), else the lowest note
 - up to 32 steps per pattern, step types: Off / Normal / Rest / Tie / Random (every step plays one note)
   - Rest lengthens the previous note by a step, Tie plays legato (new note starts before the old one ends; a note tied to itself keeps sounding)
