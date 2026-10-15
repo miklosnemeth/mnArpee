@@ -119,8 +119,8 @@ private:
     std::unique_ptr<SliderAttachment> rateAtt, octaveAtt, gateAtt, swingAtt, stepsAtt;
     std::unique_ptr<ButtonAttachment> latchAtt;
 
-    // Info bar
-    juce::String statusText;
+    // The held notes in the pattern card: each as note * 4 + KeyUse (see ArpEngine.h).
+    std::vector<int> heldShown;
 
     // Card rectangles (drawn by paint, computed by resized)
     juce::Rectangle<int> paramsCard, gridCard;

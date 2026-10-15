@@ -17,6 +17,31 @@ constexpr double gridEpsilon = 1.0e-9;
 constexpr double jumpToleranceQuarters = 0.01;
 }
 
+void reduceToKeys(const InputNotes& all, InputNotes& keys) noexcept
+{
+    keys.size = 0;
+    unsigned taken = 0;
+    for (int i = 0; i < all.size && keys.size < maxInputKeys; ++i)
+    {
+        const unsigned bit = 1u << (all.notes[(size_t) i].note % 12);
+        if ((taken & bit) == 0) // ascending pitch: the first of a pitch class is its lowest
+        {
+            taken |= bit;
+            keys.notes[(size_t) keys.size++] = all.notes[(size_t) i];
+        }
+    }
+}
+
+KeyUse keyUseOf(const InputNotes& keys, int note) noexcept
+{
+    if (keys.contains(note))
+        return KeyUse::Used;
+    for (int i = 0; i < keys.size; ++i)
+        if (keys.notes[(size_t) i].note % 12 == note % 12)
+            return KeyUse::Merged;
+    return KeyUse::LeftOut;
+}
+
 int chordRootNote(const InputNotes& input) noexcept
 {
     if (input.empty())
@@ -326,13 +351,15 @@ void ArpEngine::playOneStep(const Program& prog, const InputNotes& input, double
     if (play && step.type != StepType::Off && step.type != StepType::Rest)
     {
         // Rest is silent here: the preceding note was lengthened when it was scheduled.
-        // KEY SELECT: k1..k5 index into the sorted input (wrapping around if fewer notes are
-        // held), Root is the root of the held chord.
+        // KEY SELECT: k1..k5 index into the keys (the held notes, one per pitch class, sorted;
+        // wrapping around if there are fewer), Root is the root of the held chord.
+        reduceToKeys(input, scratchKeys);
+        const auto& keys = scratchKeys;
         int source = 0;
         if (step.type == StepType::Random)
         {
-            const int pick = randomFn ? randomFn(0, input.size - 1) : (int) (rng() % (unsigned) input.size);
-            source = input.notes[(size_t) std::clamp(pick, 0, input.size - 1)].note;
+            const int pick = randomFn ? randomFn(0, keys.size - 1) : (int) (rng() % (unsigned) keys.size);
+            source = keys.notes[(size_t) std::clamp(pick, 0, keys.size - 1)].note;
         }
         else if (step.keyIndex == rootKeyIndex)
         {
@@ -340,7 +367,7 @@ void ArpEngine::playOneStep(const Program& prog, const InputNotes& input, double
         }
         else
         {
-            source = input.notes[(size_t) (std::clamp((int) step.keyIndex, 0, maxInputKeys - 1) % input.size)].note;
+            source = keys.notes[(size_t) (std::clamp((int) step.keyIndex, 0, maxInputKeys - 1) % keys.size)].note;
         }
         const int note = clampNote(source + step.scaleStep + step.octave * 12 + prog.transposeOct * 12
                                    + prog.octaveShift * 12);

@@ -520,9 +520,14 @@ void MnArpeeAudioProcessor::updateUiStatus()
     ui.playStep.store(engine.getLastPlayedStep(), std::memory_order_relaxed);
     ui.playingProgram.store(engine.getCurrentProgram(), std::memory_order_relaxed);
     const auto input = engine.getActiveInput();
-    const int n = std::min(input.size, mnArpee::maxInputKeys);
+    mnArpee::InputNotes keys;
+    mnArpee::reduceToKeys(input, keys);
+    const int n = std::min(input.size, (int) UiStatus::maxShownInput);
     for (int i = 0; i < n; ++i)
-        ui.input[(size_t) i].store(input.notes[(size_t) i].note, std::memory_order_relaxed);
+    {
+        const int note = input.notes[(size_t) i].note;
+        ui.input[(size_t) i].store(note * 4 + (int) mnArpee::keyUseOf(keys, note), std::memory_order_relaxed);
+    }
     ui.numInput.store(n, std::memory_order_release);
 }
 

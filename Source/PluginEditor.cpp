@@ -204,7 +204,6 @@ MnArpeeAudioEditor::MnArpeeAudioEditor(MnArpeeAudioProcessor& p)
     latchButton.setButtonText("Latch");
     latchAtt = std::make_unique<ButtonAttachment>(apvts, "latch", latchButton);
 
-    statusText = "keys  -";
     reloadProgram();
     refreshPresetUi();
     startTimerHz(30);
@@ -716,10 +715,33 @@ void MnArpeeAudioEditor::paint(juce::Graphics& g)
     g.drawText("PATTERN", gridCard.getX() + 14, gridCard.getY() + 7, 120, 16,
                juce::Justification::centredLeft);
 
-    // Info line in the header (between brand and latch): held notes.
-    g.setFont(mnArpee::fonts::text(17.0f));
-    g.setColour(Pal::text());
-    g.drawText(statusText, statusArea, juce::Justification::centredLeft);
+    // The held notes, right of the "PATTERN" label. White: a key of the matrix. Dim: the same note
+    // in another octave as a key, merged into it. Red: left out, more than five different notes.
+    const auto font = mnArpee::fonts::text(17.0f);
+    g.setFont(font);
+    int x = statusArea.getX();
+    auto draw = [&](const juce::String& text, juce::Colour colour)
+    {
+        const int w = juce::GlyphArrangement::getStringWidthInt(font, text);
+        g.setColour(colour);
+        g.drawText(text, x, statusArea.getY(), w + 2, statusArea.getHeight(), juce::Justification::centredLeft, false);
+        x += w;
+    };
+    draw("keys  ", Pal::dimText());
+    if (heldShown.empty())
+        draw("-", Pal::dimText());
+    int leftOut = 0;
+    for (const int v : heldShown)
+    {
+        const auto use = (mnArpee::KeyUse) (v & 3);
+        leftOut += use == mnArpee::KeyUse::LeftOut ? 1 : 0;
+        draw(juce::MidiMessage::getMidiNoteName(v >> 2, true, true, 4) + " ",
+             use == mnArpee::KeyUse::Used ? Pal::text()
+             : use == mnArpee::KeyUse::Merged ? Pal::dimText().withAlpha(0.6f)
+                                              : Pal::accent2());
+    }
+    if (leftOut > 0)
+        draw(" +" + juce::String(leftOut) + " left out", Pal::accent2());
 }
 
 void MnArpeeAudioEditor::resized()
@@ -732,9 +754,7 @@ void MnArpeeAudioEditor::resized()
     brandArea = header.removeFromLeft(170);
     latchButton.setBounds(latchArea.getX(), latchArea.getCentreY() - 12, 100, 24);
 
-    header.removeFromLeft(10);
-    auto picker = header.removeFromLeft(26 + 4 + 190 + 4 + 26 + 8 + 52 + 6 + 52 + 6 + 62).withSizeKeepingCentre(
-        26 + 4 + 190 + 4 + 26 + 8 + 52 + 6 + 52 + 6 + 62, 34);
+    auto picker = header.withSizeKeepingCentre(26 + 4 + 190 + 4 + 26 + 8 + 52 + 6 + 52 + 6 + 62, 34);
     prevPresetButton.setBounds(picker.removeFromLeft(26).reduced(6, 8));
     picker.removeFromLeft(4);
     presetButton.setBounds(picker.removeFromLeft(190));
@@ -746,8 +766,6 @@ void MnArpeeAudioEditor::resized()
     saveButton.setBounds(picker.removeFromLeft(52));
     picker.removeFromLeft(6);
     menuButton.setBounds(picker.removeFromLeft(62));
-    header.removeFromLeft(14);
-    statusArea = header.withSizeKeepingCentre(header.getWidth(), 24);
 
     // Values card: one row of "LABEL value" bars.
     paramsCard = area.removeFromTop(54);
@@ -755,6 +773,7 @@ void MnArpeeAudioEditor::resized()
 
     // The rest is the matrix card.
     gridCard = area;
+    statusArea = juce::Rectangle<int>(gridCard.getX() + 120, gridCard.getY() + 4, gridCard.getWidth() - 132, 22);
 
     auto inner = paramsCard.reduced(12, 11);
     const int gap = 10;
@@ -791,15 +810,13 @@ void MnArpeeAudioEditor::timerCallback()
                          ? ui.playStep.load(std::memory_order_relaxed)
                          : -1);
 
-    juce::String txt;
+    std::vector<int> held;
     const int n = ui.numInput.load(std::memory_order_acquire);
     for (int i = 0; i < n; ++i)
-        txt << (i > 0 ? " " : "") << juce::MidiMessage::getMidiNoteName(
-                   ui.input[(size_t) i].load(std::memory_order_relaxed), true, true, 4);
-    txt = "keys  " + (txt.isNotEmpty() ? txt : juce::String("-"));
-    if (txt != statusText)
+        held.push_back(ui.input[(size_t) i].load(std::memory_order_relaxed));
+    if (held != heldShown)
     {
-        statusText = txt;
+        heldShown = std::move(held);
         repaint(statusArea);
     }
 }

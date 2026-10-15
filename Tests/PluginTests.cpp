@@ -353,6 +353,22 @@ int main()
         check(cc && off && run(*p, 20).empty(), "cc-thru-and-all-notes-off");
     }
 
+    // The editor's note display: which held notes are keys, merged octave doubles, or left out.
+    {
+        auto p = makeProcessor();
+        juce::MidiBuffer chord;
+        for (int n : { 48, 60, 64, 67, 71, 74, 77 }) // C3 C4 E4 G4 B4 D5 F5
+            chord.addEvent(juce::MidiMessage::noteOn(1, n, (juce::uint8) 100), 0);
+        run(*p, 2, chord);
+        const auto& ui = p->getUiStatus();
+        std::vector<int> uses;
+        for (int i = 0; i < ui.numInput.load(); ++i)
+            uses.push_back(ui.input[(size_t) i].load() & 3);
+        check(ui.numInput.load() == 7 && (ui.input[0].load() >> 2) == 48
+                  && uses == std::vector<int> { 0, 1, 0, 0, 0, 0, 2 },
+              "ui-shows-merged-and-left-out-notes");
+    }
+
     // Matrix lanes: row <-> value mapping.
     {
         using mnArpee::StepType;

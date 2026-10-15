@@ -39,8 +39,10 @@ public:
     {
         std::atomic<int> playStep { -1 };
         std::atomic<int> playingProgram { 0 };
+        // The held notes (up to maxShownInput), each as note * 4 + KeyUse, and how many there are.
+        static constexpr int maxShownInput = 16;
         std::atomic<int> numInput { 0 };
-        std::array<std::atomic<int>, mnArpee::maxInputKeys> input {};
+        std::array<std::atomic<int>, maxShownInput> input {};
     };
 
     // The active preset as the editor shows it.

@@ -432,6 +432,51 @@ int main()
         check(noteOnSequence(runFor(*e, 0.1)).front() == 72, "root-step-plays-root");
     }
 
+    // 28. The same note in another octave counts as one key (the lowest one stays).
+    {
+        auto e = std::make_unique<ArpEngine>();
+        auto b = singleProgramBank(4, SyncRate::R1_8, 50);
+        for (int i = 0; i < 4; ++i)
+            b->programs[0].steps[(size_t) i].keyIndex = (std::int8_t) i;
+        e->setBank(*b);
+        for (int n : { 48, 60, 64, 67 }) // C3 C4 E4 G4: three keys
+            e->noteOn(n, 100);
+        const auto seq = noteOnSequence(runFor(*e, 1.1));
+        check(seq.size() >= 4 && seq[0] == 48 && seq[1] == 64 && seq[2] == 67 && seq[3] == 48,
+              "octave-doubles-are-one-key");
+    }
+
+    // 29. More than five different notes: the keys are the lowest five, the rest is left out.
+    {
+        auto e = std::make_unique<ArpEngine>();
+        auto b = singleProgramBank(6, SyncRate::R1_16, 50);
+        for (int i = 0; i < 6; ++i)
+            b->programs[0].steps[(size_t) i].keyIndex = (std::int8_t) std::min(i, 4);
+        b->programs[0].steps[5].type = StepType::Random;
+        e->setBank(*b);
+        e->setRandomFn([](int, int hi) { return hi; }); // the last key
+        for (int n : { 60, 62, 64, 65, 67, 69, 71 }) // C D E F G A B
+            e->noteOn(n, 100);
+        const auto seq = noteOnSequence(runFor(*e, 0.9));
+        check(seq.size() >= 6 && seq[0] == 60 && seq[1] == 62 && seq[2] == 64 && seq[3] == 65 && seq[4] == 67
+                  && seq[5] == 67,
+              "only-five-keys-reach-the-matrix");
+        bool leftOutPlayed = false;
+        for (int n : seq)
+            leftOutPlayed = leftOutPlayed || n == 69 || n == 71;
+        check(! leftOutPlayed, "left-out-notes-do-not-play");
+
+        InputNotes all, keys;
+        all.size = 0;
+        for (int n : { 48, 60, 64, 67, 71, 74, 77 }) // C3 C4 E4 G4 B4 D5 F5
+            all.notes[(size_t) all.size++] = HeldNote{ n, 100 };
+        reduceToKeys(all, keys);
+        check(keys.size == 5 && keys.notes[0].note == 48 && keys.notes[4].note == 74
+                  && keyUseOf(keys, 60) == KeyUse::Merged && keyUseOf(keys, 64) == KeyUse::Used
+                  && keyUseOf(keys, 77) == KeyUse::LeftOut,
+              "key-use-classification");
+    }
+
     std::printf("%d checks, %d failures\n", checks, failures);
     return failures == 0 ? 0 : 1;
 }
