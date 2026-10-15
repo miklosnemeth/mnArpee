@@ -351,8 +351,8 @@ void ArpEngine::playOneStep(const Program& prog, const InputNotes& input, double
     if (play && step.type != StepType::Off && step.type != StepType::Rest)
     {
         // Rest is silent here: the preceding note was lengthened when it was scheduled.
-        // KEY SELECT: k1..k5 index into the keys (the held notes, one per pitch class, sorted;
-        // wrapping around if there are fewer), Root is the root of the held chord.
+        // KEY SELECT: k1..k5 index into the keys (the held notes, one per pitch class, sorted);
+        // Root is the root of the held chord, and it also stands in for a key that is not held.
         reduceToKeys(input, scratchKeys);
         const auto& keys = scratchKeys;
         int source = 0;
@@ -365,9 +365,13 @@ void ArpEngine::playOneStep(const Program& prog, const InputNotes& input, double
         {
             source = chordRootNote(input);
         }
+        else if (step.keyIndex >= keys.size)
+        {
+            source = chordRootNote(input); // the key is not held: the root takes its place
+        }
         else
         {
-            source = keys.notes[(size_t) (std::clamp((int) step.keyIndex, 0, maxInputKeys - 1) % keys.size)].note;
+            source = keys.notes[(size_t) std::clamp((int) step.keyIndex, 0, maxInputKeys - 1)].note;
         }
         const int note = clampNote(source + step.scaleStep + step.octave * 12 + prog.transposeOct * 12
                                    + prog.octaveShift * 12);

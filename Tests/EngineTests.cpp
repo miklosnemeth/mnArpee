@@ -477,6 +477,29 @@ int main()
               "key-use-classification");
     }
 
+    // 30. A key that is not held (more keys in the pattern than notes held): the chord root plays.
+    {
+        auto e = std::make_unique<ArpEngine>();
+        auto b = singleProgramBank(5, SyncRate::R1_16, 50);
+        for (int i = 0; i < 5; ++i)
+            b->programs[0].steps[(size_t) i].keyIndex = (std::int8_t) i;
+        e->setBank(*b);
+        for (int n : { 64, 67, 72 }) // E G C: C major, first inversion; Key 4 and Key 5 are missing
+            e->noteOn(n, 100);
+        const auto seq = noteOnSequence(runFor(*e, 0.9));
+        check(seq.size() >= 5 && seq[0] == 64 && seq[1] == 67 && seq[2] == 72 && seq[3] == 72 && seq[4] == 72,
+              "missing-keys-play-the-root");
+
+        // Two notes that form no chord: the root falls back to the lowest note.
+        auto e2 = std::make_unique<ArpEngine>();
+        e2->setBank(*b);
+        for (int n : { 60, 61 })
+            e2->noteOn(n, 100);
+        const auto seq2 = noteOnSequence(runFor(*e2, 0.9));
+        check(seq2.size() >= 5 && seq2[0] == 60 && seq2[1] == 61 && seq2[2] == 60 && seq2[3] == 60 && seq2[4] == 60,
+              "missing-keys-without-chord-play-the-lowest-note");
+    }
+
     std::printf("%d checks, %d failures\n", checks, failures);
     return failures == 0 ? 0 : 1;
 }
