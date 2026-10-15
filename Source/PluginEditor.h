@@ -76,6 +76,11 @@ private:
     void onGridClicked(int step, int row);
     void onLaneAdjusted(int step, StepGrid::Lane lane, int delta);
     void commitStep(const mnArpee::Step& step);
+    // Pattern tools (right click in the matrix): set all, shift, reverse, randomize, clear, copy, paste.
+    void showPatternMenu(int step, StepGrid::Lane lane, int row);
+    void applySteps(const mnArpee::Program& edited);
+    void promptSave(const juce::String& initialName, const juce::String& initialStyles,
+                    std::function<void(juce::String, juce::String)> done);
     // A header value shown as one line ("OCT +3") that is dragged to change.
     void setupValueBar(ValueBar& s, std::function<juce::String(double)> text, double defaultValue,
                        double pixelsPerUnit);
@@ -110,6 +115,7 @@ private:
     juce::ArrowButton nextPresetButton { "next preset", 0.0f, Pal::text() };
     juce::TextButton presetButton, newButton, saveButton, menuButton;
     ValueBar rateSlider, octaveSlider, gateSlider, swingSlider, stepsSlider;
+    ValueBar restartSlider, humVelSlider, humTimeSlider;
     juce::ToggleButton latchButton;
     juce::Rectangle<int> brandArea, statusArea;
 
@@ -118,10 +124,12 @@ private:
 
     // Attachments (declared after the controls, so they are destroyed first)
     std::unique_ptr<SliderAttachment> rateAtt, octaveAtt, gateAtt, swingAtt, stepsAtt;
+    std::unique_ptr<SliderAttachment> restartAtt, humVelAtt, humTimeAtt;
     std::unique_ptr<ButtonAttachment> latchAtt;
 
     // The held notes in the pattern card: each as note * 4 + KeyUse (see ArpEngine.h).
     std::vector<int> heldShown;
+    int shownChord = 0; // ChordInfo::code() of the held notes
 
     // Card rectangles (drawn by paint, computed by resized)
     juce::Rectangle<int> paramsCard, gridCard;

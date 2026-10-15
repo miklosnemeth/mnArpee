@@ -4,6 +4,7 @@
 #include <array>
 #include <cstdint>
 #include <string_view>
+#include <random>
 #include <vector>
 #include <type_traits>
 
@@ -145,6 +146,17 @@ constexpr StepType stepTypeFromInt(int v) noexcept
 }
 
 static_assert(std::is_trivially_copyable_v<Bank>, "Bank must be copyable without allocation");
+
+// Pattern editing (the numeric lane values are Key: -1 root / 0..4 key 1..5 / -2 random step,
+// Type: StepType, Octave: -3..3, Velocity: 1..127).
+enum class PatternLane { Key, Type, Octave, Velocity };
+// Sets one lane of every stored step (not just the playing ones) to a value.
+void setLaneValue(Program& p, PatternLane lane, int value);
+// Rotates the playing steps by one: direction < 0 moves them left, > 0 right.
+void shiftPattern(Program& p, int direction);
+void reversePattern(Program& p);
+// Fills the playing steps of one lane with random values (the first step is never a rest or a tie).
+void randomizeLane(Program& p, PatternLane lane, std::mt19937& rng);
 
 Program makeInitProgram(std::string_view name = "Init");
 Bank makeFactoryBank();

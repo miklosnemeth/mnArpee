@@ -222,6 +222,25 @@ void PresetLibrary::refresh()
     list.clear();
     scan(factoryDir(), true, list);
     scan(userDir(), false, list);
+
+    favoriteNames.clear();
+    favoriteNames.addLines(favoritesFile().loadFileAsString());
+    favoriteNames.trim();
+    favoriteNames.removeEmptyStrings();
+    for (auto& preset : list)
+        preset.favorite = favoriteNames.contains(preset.name);
+}
+
+void PresetLibrary::setFavorite(const juce::String& name, bool favorite)
+{
+    if (favorite)
+        favoriteNames.addIfNotAlreadyThere(name);
+    else
+        favoriteNames.removeString(name);
+    favoritesFile().replaceWithText(favoriteNames.joinIntoString("\n"));
+    for (auto& preset : list)
+        if (preset.name == name)
+            preset.favorite = favorite;
 }
 
 int PresetLibrary::indexOfFile(const juce::File& file) const
@@ -307,6 +326,12 @@ bool PresetLibrary::rename(const Preset& preset, const juce::String& newName, Pr
         return false;
     if (newFile != oldFile)
         oldFile.deleteFile();
+    if (favoriteNames.contains(preset.name)) // the star goes with the name
+    {
+        favoriteNames.removeString(preset.name);
+        favoriteNames.addIfNotAlreadyThere(name);
+        favoritesFile().replaceWithText(favoriteNames.joinIntoString("\n"));
+    }
     refresh();
     return true;
 }

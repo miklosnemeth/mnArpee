@@ -16,8 +16,12 @@ Held notes are sorted by pitch before they reach the engine.
   - The header values (rate, octave, gate, swing, steps) always belong to the active preset
   - Steps 0 = MIDI thru, 1 = quantized thru
 - Host sync: steps lock to the song position (bar grid) and the pattern position follows it; free-run when the transport is stopped (a new phrase starts the pattern right away)
-- Preset library like mnKord: about 40 factory presets in two groups, **Bassline** (only the root of the held chord) and **Melodic** (the held keys), each tagged with musical styles (Trance, House, Techno, Disco, Funk, Pop, Synthwave, Ambient, Chill, Dubstep), plus your own; a preset browser inside the plugin window (search, group and style filters), previous/next arrows, New, Save (a dot marks unsaved changes), and a Menu with Save as, Revert, Rename, Style, Import, Export, Show in folder and Delete; a preset switches at the end of the running pattern
+- Preset library like mnKord: about 40 factory presets in two groups, **Bassline** (only the root of the held chord) and **Melodic** (the held keys), each tagged with musical styles (Trance, House, Techno, Disco, Funk, Pop, Synthwave, Ambient, Chill, Dubstep), plus your own; a preset browser inside the plugin window (search, group and style filters), stars (favourites, shared by all projects), previous/next arrows, New, Save (a dot marks unsaved changes; Save as asks for the name and the styles), and a Menu with Save as, Revert, Rename, Style, Import, Export, Show in folder and Delete; a preset switches at the end of the running pattern
 - The host's program list mirrors the preset list (128 slots, unused ones show "-")
+- Pattern tools: right click in the matrix or on a value box for Set all steps to the clicked value, Randomize the lane, Shift left/right, Reverse, Clear, Copy / Paste pattern (the pattern goes to the system clipboard as the preset XML)
+- RESTART (off / first step / random step): with the host playing, a chord pressed after silence starts the pattern from its first step or a random one; off continues where it stopped
+- HUM VEL (velocity +-0..40) and HUM TIME (timing up to +-25% of a step): random variation, off at 0
+- The chord the held notes form (Cmaj7, Am, C/E, G5, ...) is shown at the right end of the "PATTERN" strip
 - Latch (a new chord replaces the latched one), sustain pedal, panic / all-notes-off, CC/bend/aftertouch pass-through, output on the input channel
 - Sample-accurate MIDI handling; the engine is allocation-free on the audio thread and edits reach it without locks
 - Matrix UI: the lane captions (Type, Key, Octave, Velocity) choose what the matrix shows; clicking a cell sets the step, in the value lanes dragging paints across steps
@@ -68,6 +72,8 @@ Presets live in `Documents\MNAudio\mnArpee`:
 |--------|----------|
 | `Factory` | The built-in presets, written by the plugin and rewritten when they change. Read only: edit and **Save as** to keep a variant. |
 | `User` | One `.xml` file per preset you saved, shared by every project and plugin instance. Drop a file in and it shows up the next time the browser opens. |
+
+The stars are kept by preset name in `favorites.txt` in the same folder.
 
 A DAW project stores the **active preset's current content**, not a reference, so it plays back the same on any machine; there, the preset comes back as an unsaved one if the library does not have it, and **Save** writes it into that machine's `User` folder. Leaving a preset with unsaved changes asks whether to save them. **Delete** moves the file to the recycle bin. The environment variable `MNARPEE_PRESET_DIR` replaces the folder (the tests use it).
 

@@ -429,6 +429,20 @@ void StepGrid::mouseDown(const juce::MouseEvent& e)
     lastClickStep = lastClickRow = -1;
     dragStep = dragLaneRow = -1;
 
+    if (e.mods.isPopupMenu())
+    {
+        int step = -1, laneRow = -1, row = -1;
+        if (contextRequested && laneBoxAt(e.getPosition(), step, laneRow))
+            contextRequested(step, laneOfRow[laneRow], -1);
+        else if (contextRequested)
+        {
+            cellAt(e.getPosition(), step, row);
+            if (step >= 0 && row >= 0)
+                contextRequested(step, lane, row);
+        }
+        return;
+    }
+
     for (int lr = 0; lr < numLaneRows; ++lr)
         if (laneCaption(lr).expanded(2).contains(e.getPosition()))
         {
