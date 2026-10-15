@@ -609,6 +609,54 @@ int main()
               "chord-names-power-minor-seventh-and-none");
     }
 
+    // 35. Pattern tools: set all, shift, reverse, randomize.
+    {
+        auto keysOf = [](const Program& p, int n)
+        {
+            std::vector<int> keys;
+            for (int i = 0; i < n; ++i)
+                keys.push_back(p.steps[(size_t) i].keyIndex);
+            return keys;
+        };
+        auto base = makeInitProgram("Tools");
+        base.numSteps = 4;
+        for (int i = 0; i < maxSteps; ++i)
+            base.steps[(size_t) i].keyIndex = (std::int8_t) (i % 4);
+
+        auto left = base;
+        shiftPattern(left, -1);
+        auto right = base;
+        shiftPattern(right, 1);
+        auto reversed = base;
+        reversePattern(reversed);
+        check(keysOf(left, 4) == std::vector<int> { 1, 2, 3, 0 } && keysOf(right, 4) == std::vector<int> { 3, 0, 1, 2 }
+                  && keysOf(reversed, 4) == std::vector<int> { 3, 2, 1, 0 },
+              "pattern-shift-and-reverse-the-playing-steps");
+        check(left.steps[5].keyIndex == base.steps[5].keyIndex && reversed.steps[7].keyIndex == base.steps[7].keyIndex,
+              "pattern-tools-leave-steps-past-the-end-alone");
+
+        auto all = base;
+        setLaneValue(all, PatternLane::Octave, 2);
+        setLaneValue(all, PatternLane::Velocity, 111);
+        setLaneValue(all, PatternLane::Key, rootKeyIndex);
+        bool allSet = true;
+        for (const auto& s : all.steps)
+            allSet = allSet && s.octave == 2 && s.velocity == 111 && s.keyIndex == rootKeyIndex && s.type == StepType::Normal;
+        auto randomSteps = base;
+        setLaneValue(randomSteps, PatternLane::Key, -2);
+        check(allSet && randomSteps.steps[31].type == StepType::Random, "pattern-set-all-steps");
+
+        std::mt19937 rng(7);
+        auto random = base;
+        randomizeLane(random, PatternLane::Velocity, rng);
+        randomizeLane(random, PatternLane::Type, rng);
+        bool inRange = random.steps[0].type == StepType::Normal;
+        for (int i = 0; i < 4; ++i)
+            inRange = inRange && random.steps[(size_t) i].velocity >= 60 && random.steps[(size_t) i].velocity <= 127;
+        check(inRange && random.steps[4].velocity == base.steps[4].velocity && random.steps[4].type == base.steps[4].type,
+              "pattern-randomize-the-playing-steps");
+    }
+
     std::printf("%d checks, %d failures\n", checks, failures);
     return failures == 0 ? 0 : 1;
 }

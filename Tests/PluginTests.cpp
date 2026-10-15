@@ -260,6 +260,35 @@ int main()
         file.deleteFile();
     }
 
+    // Favourites (stars) and replacing all steps.
+    {
+        auto p = makeProcessor();
+        const int up = presetIndex(*p, "Up 8ths");
+        check(! p->getPresetList()[(size_t) up].favorite, "preset-is-not-a-favourite-at-first");
+        p->setPresetFavorite(up, true);
+        check(p->getPresetList()[(size_t) up].favorite, "set-favourite");
+        auto other = makeProcessor(); // another instance reads the same file
+        check(other->getPresetList()[(size_t) presetIndex(*other, "Up 8ths")].favorite, "favourites-are-shared-and-kept");
+
+        // A user preset keeps its star when it is renamed.
+        p->newPreset();
+        check(p->saveActivePresetAs("Starred Arp"), "save-starred");
+        const int starred = presetIndex(*p, "Starred Arp");
+        p->setPresetFavorite(starred, true);
+        check(p->renamePreset(starred, "Starred Arp 2")
+                  && p->getPresetList()[(size_t) presetIndex(*p, "Starred Arp 2")].favorite,
+              "favourite-survives-rename");
+        p->setPresetFavorite(presetIndex(*p, "Starred Arp 2"), false);
+        p->setPresetFavorite(up, false);
+        check(! p->getPresetList()[(size_t) up].favorite, "clear-favourite");
+
+        std::array<mnArpee::Step, mnArpee::maxSteps> steps {};
+        for (auto& s : steps)
+            s.octave = 2;
+        p->setAllSteps(steps);
+        check(p->getProgramCopy().steps[10].octave == 2 && p->getActivePreset().dirty, "set-all-steps-replaces-the-pattern");
+    }
+
     // State: the project stores the active preset's content.
     {
         auto p = makeProcessor();

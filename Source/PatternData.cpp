@@ -113,6 +113,69 @@ Bank makeFactoryBank()
     return bank;
 }
 
+void setLaneValue(Program& p, PatternLane lane, int value)
+{
+    for (auto& s : p.steps)
+        switch (lane)
+        {
+            case PatternLane::Key:
+                if (value == -2)
+                {
+                    s.type = StepType::Random;
+                }
+                else
+                {
+                    if (s.type != StepType::Tie)
+                        s.type = StepType::Normal;
+                    s.keyIndex = static_cast<std::int8_t>(std::clamp(value, (int) rootKeyIndex, maxInputKeys - 1));
+                }
+                break;
+            case PatternLane::Type: s.type = static_cast<StepType>(value); break;
+            case PatternLane::Octave: s.octave = static_cast<std::int8_t>(std::clamp(value, -3, 3)); break;
+            case PatternLane::Velocity: s.velocity = static_cast<std::uint8_t>(std::clamp(value, 1, 127)); break;
+        }
+}
+
+void shiftPattern(Program& p, int direction)
+{
+    const int n = std::clamp(p.numSteps, 0, maxSteps);
+    if (n < 2 || direction == 0)
+        return;
+    auto first = p.steps.begin();
+    if (direction < 0)
+        std::rotate(first, first + 1, first + n);
+    else
+        std::rotate(first, first + n - 1, first + n);
+}
+
+void reversePattern(Program& p)
+{
+    const int n = std::clamp(p.numSteps, 0, maxSteps);
+    if (n >= 2)
+        std::reverse(p.steps.begin(), p.steps.begin() + n);
+}
+
+void randomizeLane(Program& p, PatternLane lane, std::mt19937& rng)
+{
+    int n = std::clamp(p.numSteps, 0, maxSteps);
+    if (n < 2)
+        n = maxSteps; // thru modes: fill the stored pattern
+    for (int i = 0; i < n; ++i)
+    {
+        auto& s = p.steps[(size_t) i];
+        const int r = (int) (rng() % 100u);
+        switch (lane)
+        {
+            case PatternLane::Key: s.keyIndex = static_cast<std::int8_t>(rng() % (unsigned) maxInputKeys); break;
+            case PatternLane::Type:
+                s.type = r < 60 || i == 0 ? StepType::Normal : r < 80 ? StepType::Off : r < 90 ? StepType::Rest : StepType::Tie;
+                break;
+            case PatternLane::Octave: s.octave = static_cast<std::int8_t>(r < 70 ? 0 : (r < 85 ? 1 : -1)); break;
+            case PatternLane::Velocity: s.velocity = static_cast<std::uint8_t>(60 + (int) (rng() % 68u)); break;
+        }
+    }
+}
+
 namespace
 {
 // Patterns are written as notation: one token per step, separated by spaces.

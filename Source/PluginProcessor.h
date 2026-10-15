@@ -88,6 +88,8 @@ public:
     int getActiveSlot() const { return activeSlot.load(); }
     mnArpee::Program getProgramCopy() const;
     void setStep(int stepIndex, const mnArpee::Step& step);
+    // Replaces all the steps of the active pattern (pattern tools, paste).
+    void setAllSteps(const std::array<mnArpee::Step, mnArpee::maxSteps>& steps);
     // Increments whenever the model changes (edits, preset load, state load).
     int getModelVersion() const { return modelVersion.load(); }
     const UiStatus& getUiStatus() const { return ui; }
@@ -102,6 +104,8 @@ public:
     // Library index of the active preset, or -1 when it is not saved (or was deleted).
     int getActivePresetIndex() const;
     bool loadPreset(int libraryIndex);
+    // Sets or clears the star of the preset at this library index.
+    void setPresetFavorite(int libraryIndex, bool favorite);
     // A fresh pattern ("New Arp"), not saved yet.
     void newPreset();
     // Writes the active preset into its file; false when it has none (or is a factory preset).

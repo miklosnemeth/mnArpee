@@ -21,6 +21,8 @@ public:
     // A value box was grabbed (delta 0) or adjusted by `delta` units.
     enum class Lane { Key, Type, Octave, Velocity };
     using LaneAdjusted = std::function<void(int stepIndex, Lane lane, int delta)>;
+    // Right click on a matrix cell (row >= 0) or on a value box (row -1).
+    using ContextRequested = std::function<void(int stepIndex, Lane lane, int row)>;
 
     // Unified dark palette (used by the whole UI).
     struct Palette
@@ -57,6 +59,7 @@ public:
     void setEditStep(int step);
     void onStepClicked(StepClicked fn) { clicked = std::move(fn); }
     void onLaneAdjusted(LaneAdjusted fn) { adjusted = std::move(fn); }
+    void onContextRequested(ContextRequested fn) { contextRequested = std::move(fn); }
 
     void paint(juce::Graphics& g) override;
     void mouseDown(const juce::MouseEvent& e) override;
@@ -98,4 +101,5 @@ private:
     int dragStep = -1, dragLaneRow = -1, dragLastY = 0, dragRemainder = 0;
     StepClicked clicked;
     LaneAdjusted adjusted;
+    ContextRequested contextRequested;
 };

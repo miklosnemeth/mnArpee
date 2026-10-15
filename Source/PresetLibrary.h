@@ -34,6 +34,7 @@ struct Preset
     juce::String tags;     // musical styles, comma separated ("House,Trance")
     Program program;       // program.name mirrors name
     bool factory = false;
+    bool favorite = false; // a star set in the browser; kept in favorites.txt, not in the preset file
     juce::File file;       // empty while the preset has not been saved
 };
 
@@ -79,6 +80,9 @@ public:
     int importFile(const juce::File& file, juce::String* firstName = nullptr);
     bool exportPreset(const Preset& preset, const juce::File& file) const;
 
+    // Stars: shared by all projects, kept by preset name in <root>/favorites.txt.
+    void setFavorite(const juce::String& name, bool favorite);
+
     // A name no user preset has yet ("New Arp", "New Arp 2", ...).
     juce::String freeName(const juce::String& wanted) const;
     bool nameExists(const juce::String& name) const;
@@ -87,7 +91,10 @@ private:
     juce::File uniqueUserFile(const juce::String& name) const;
     void scan(const juce::File& dir, bool factory, std::vector<Preset>& into) const;
 
+    juce::File favoritesFile() const { return rootDir.getChildFile("favorites.txt"); }
+
     juce::File rootDir;
+    juce::StringArray favoriteNames;
     std::vector<Preset> list;
 };
 

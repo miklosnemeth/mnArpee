@@ -161,6 +161,7 @@ MnArpeeAudioEditor::MnArpeeAudioEditor(MnArpeeAudioProcessor& p)
     addAndMakeVisible(grid);
     grid.onStepClicked([this](int step, int row) { onGridClicked(step, row); });
     grid.onLaneAdjusted([this](int step, StepGrid::Lane lane, int delta) { onLaneAdjusted(step, lane, delta); });
+    grid.onContextRequested([this](int step, StepGrid::Lane lane, int row) { showPatternMenu(step, lane, row); });
 
     prevPresetButton.onClick = [this] { stepPreset(-1); };
     nextPresetButton.onClick = [this] { stepPreset(1); };
@@ -189,6 +190,9 @@ MnArpeeAudioEditor::MnArpeeAudioEditor(MnArpeeAudioProcessor& p)
     gateAtt = std::make_unique<SliderAttachment>(apvts, "gate", gateSlider);
     swingAtt = std::make_unique<SliderAttachment>(apvts, "swing", swingSlider);
     stepsAtt = std::make_unique<SliderAttachment>(apvts, "steps", stepsSlider);
+    restartAtt = std::make_unique<SliderAttachment>(apvts, "restart", restartSlider);
+    humVelAtt = std::make_unique<SliderAttachment>(apvts, "humvel", humVelSlider);
+    humTimeAtt = std::make_unique<SliderAttachment>(apvts, "humtime", humTimeSlider);
 
     // The attachments come first: they set their own value text, which is replaced here.
     setupValueBar(rateSlider, [](double v)
@@ -199,6 +203,14 @@ MnArpeeAudioEditor::MnArpeeAudioEditor(MnArpeeAudioProcessor& p)
     setupValueBar(gateSlider, [](double v) { return "GATE " + juce::String((int) std::lround(v)) + "%"; }, 80.0, 2.0);
     setupValueBar(swingSlider, [signedValue](double v) { return "SWING " + signedValue(v) + "%"; }, 0.0, 2.5);
     setupValueBar(stepsSlider, [](double v) { return "STEPS " + juce::String((int) std::lround(v)); }, 16.0, 7.0);
+    setupValueBar(restartSlider, [](double v)
+                  {
+                      static const char* names[] = { "off", "first step", "random step" };
+                      return "RESTART " + juce::String(names[juce::jlimit(0, 2, (int) std::lround(v))]);
+                  },
+                  0.0, 16.0);
+    setupValueBar(humVelSlider, [](double v) { return "HUM VEL " + juce::String((int) std::lround(v)); }, 0.0, 4.0);
+    setupValueBar(humTimeSlider, [](double v) { return "HUM TIME " + juce::String((int) std::lround(v)) + "%"; }, 0.0, 6.0);
 
     addAndMakeVisible(latchButton);
     latchButton.setButtonText("Latch");
@@ -247,9 +259,10 @@ class PresetBrowser : public juce::Component,
 public:
     PresetBrowser(std::vector<mnArpee::Preset> presetsIn, int activeIndexIn, juce::Rectangle<int> anchorIn,
                   std::function<void(int)> chooseIn, std::function<void(int)> contextIn,
-                  std::function<void()> closeIn)
+                  std::function<void()> closeIn, std::function<void(int, bool)> favoriteIn)
         : presets(std::move(presetsIn)), activeIndex(activeIndexIn), anchor(anchorIn),
           choose(std::move(chooseIn)), context(std::move(contextIn)), close(std::move(closeIn)),
+          favorite(std::move(favoriteIn)),
           list("presets", this)
     {
         search.setTextToShowWhenEmpty("Search presets", Pal::dimText());
@@ -269,8 +282,9 @@ public:
         }
         styles.sort(true);
         groupBox.addItem("All groups", 1);
+        groupBox.addItem("Favorites", 2);
         for (int i = 0; i < groups.size(); ++i)
-            groupBox.addItem(groups[i], i + 2);
+            groupBox.addItem(groups[i], i + 3);
         styleBox.addItem("All styles", 1);
         for (int i = 0; i < styles.size(); ++i)
             styleBox.addItem(styles[i], i + 2);
@@ -343,12 +357,15 @@ private:
     void rebuild()
     {
         const auto query = search.getText().trim();
-        const auto group = groupBox.getSelectedId() > 1 ? groupBox.getText() : juce::String();
+        const bool favoritesOnly = groupBox.getSelectedId() == 2;
+        const auto group = groupBox.getSelectedId() > 2 ? groupBox.getText() : juce::String();
         const auto style = styleBox.getSelectedId() > 1 ? styleBox.getText() : juce::String();
         shown.clear();
         for (int i = 0; i < (int) presets.size(); ++i)
         {
             const auto& p = presets[(size_t) i];
+            if (favoritesOnly && ! p.favorite)
+                continue;
             if (group.isNotEmpty() && p.group != group)
                 continue;
             if (style.isNotEmpty() && ! mnArpee::presetStyles(p).contains(style))
@@ -386,9 +403,19 @@ private:
         }
         const int nameW = (int) (width * 0.42f);
         const int groupW = (int) (width * 0.20f);
+
+        // The star: a favourite is filled.
+        juce::Path star;
+        star.addStar({ 18.0f, (float) height * 0.5f }, 5, 4.5f, 9.0f);
+        g.setColour(p.favorite ? Pal::accent() : Pal::dimText().withAlpha(0.45f));
+        if (p.favorite)
+            g.fillPath(star);
+        else
+            g.strokePath(star, juce::PathStrokeType(1.3f));
+
         g.setColour(isActive ? Pal::accent() : Pal::text());
         g.setFont(mnArpee::fonts::text(18.0f, true));
-        g.drawText(p.name, 12, 0, nameW - 12, height, juce::Justification::centredLeft, true);
+        g.drawText(p.name, 36, 0, nameW - 36, height, juce::Justification::centredLeft, true);
         g.setColour(Pal::dimText().brighter(0.15f));
         g.setFont(mnArpee::fonts::text(16.0f, true));
         g.drawText(p.group, nameW, 0, groupW, height, juce::Justification::centredLeft, true);
@@ -400,10 +427,22 @@ private:
     {
         if (row < 0 || row >= (int) shown.size())
             return;
+        const int index = shown[(size_t) row];
         if (e.mods.isPopupMenu())
-            context(shown[(size_t) row]);
+        {
+            context(index);
+        }
+        else if (e.x < 34)
+        {
+            // The star: toggle the favourite and stay in the list.
+            presets[(size_t) index].favorite = ! presets[(size_t) index].favorite;
+            favorite(index, presets[(size_t) index].favorite);
+            rebuild();
+        }
         else
-            choose(shown[(size_t) row]);
+        {
+            choose(index);
+        }
     }
 
     void returnKeyPressed(int row) override
@@ -418,6 +457,7 @@ private:
     juce::Rectangle<int> anchor, panel;
     std::function<void(int)> choose, context;
     std::function<void()> close;
+    std::function<void(int, bool)> favorite;
     juce::TextEditor search;
     juce::ComboBox groupBox, styleBox;
     juce::ListBox list;
@@ -459,6 +499,11 @@ void MnArpeeAudioEditor::showPresetBrowser()
         {
             if (safe != nullptr)
                 safe->closePresetBrowser();
+        },
+        [safe = juce::Component::SafePointer<MnArpeeAudioEditor>(this)](int index, bool on)
+        {
+            if (safe != nullptr)
+                safe->proc.setPresetFavorite(index, on);
         });
     content->setBounds(getLocalBounds());
     addAndMakeVisible(*content);
@@ -577,14 +622,37 @@ void MnArpeeAudioEditor::promptName(const juce::String& title, const juce::Strin
                             true);
 }
 
+void MnArpeeAudioEditor::promptSave(const juce::String& initialName, const juce::String& initialStyles,
+                                    std::function<void(juce::String, juce::String)> done)
+{
+    auto* window = new juce::AlertWindow("Save preset", "Name and musical styles of the preset:",
+                                         juce::MessageBoxIconType::NoIcon, this);
+    window->setLookAndFeel(&lnf);
+    window->addTextEditor("name", initialName, "Name:");
+    window->addTextEditor("styles", initialStyles, "Styles (comma separated, e.g. House, Trance):");
+    window->addButton("OK", 1, juce::KeyPress(juce::KeyPress::returnKey));
+    window->addButton("Cancel", 0, juce::KeyPress(juce::KeyPress::escapeKey));
+    window->enterModalState(true,
+                            juce::ModalCallbackFunction::create(
+                                [window, done = std::move(done)](int result)
+                                {
+                                    if (result == 1)
+                                        done(window->getTextEditorContents("name").trim(),
+                                             window->getTextEditorContents("styles").trim());
+                                }),
+                            true);
+}
+
 void MnArpeeAudioEditor::saveActiveAs(std::function<void()> then)
 {
     const auto active = proc.getActivePreset();
-    promptName("Save preset", "Name of the preset:", proc.freePresetName(active.name),
-               [safe = juce::Component::SafePointer<MnArpeeAudioEditor>(this), then = std::move(then)](juce::String name)
+    promptSave(proc.freePresetName(active.name), active.tags,
+               [safe = juce::Component::SafePointer<MnArpeeAudioEditor>(this), then = std::move(then)](juce::String name,
+                                                                                                       juce::String styles)
                {
                    if (safe == nullptr)
                        return;
+                   safe->proc.setActivePresetStyles(styles);
                    if (name.isEmpty() || ! safe->proc.saveActivePresetAs(name))
                    {
                        juce::AlertWindow::showMessageBoxAsync(juce::MessageBoxIconType::WarningIcon, "Cannot save",
@@ -831,6 +899,15 @@ void MnArpeeAudioEditor::paint(juce::Graphics& g)
     }
     if (leftOut > 0)
         draw(" +" + juce::String(leftOut) + " left out", Pal::accent2());
+
+    // The chord the held notes form, at the right end of the strip.
+    const auto chord = mnArpee::ChordInfo::fromCode(shownChord);
+    if (chord.valid())
+    {
+        g.setColour(Pal::accent());
+        g.setFont(mnArpee::fonts::text(20.0f, true));
+        g.drawText(juce::String(mnArpee::chordName(chord)), statusArea, juce::Justification::centredRight, false);
+    }
 }
 
 void MnArpeeAudioEditor::resized()
@@ -856,8 +933,8 @@ void MnArpeeAudioEditor::resized()
     picker.removeFromLeft(6);
     menuButton.setBounds(picker.removeFromLeft(62));
 
-    // Values card: one row of "LABEL value" bars.
-    paramsCard = area.removeFromTop(54);
+    // Values card: two rows of "LABEL value" bars.
+    paramsCard = area.removeFromTop(100);
     area.removeFromTop(10);
 
     // The rest is the matrix card.
@@ -866,12 +943,18 @@ void MnArpeeAudioEditor::resized()
 
     auto inner = paramsCard.reduced(12, 11);
     const int gap = 10;
-    const int barW = (inner.getWidth() - 4 * gap) / 5;
-    for (auto* bar : { &rateSlider, &octaveSlider, &gateSlider, &swingSlider, &stepsSlider })
+    const int barW = (inner.getWidth() - 3 * gap) / 4;
+    auto placeRow = [&](juce::Rectangle<int> row, std::initializer_list<ValueBar*> bars)
     {
-        bar->setBounds(inner.removeFromLeft(barW));
-        inner.removeFromLeft(gap);
-    }
+        for (auto* bar : bars)
+        {
+            bar->setBounds(row.removeFromLeft(barW));
+            row.removeFromLeft(gap);
+        }
+    };
+    placeRow(inner.removeFromTop(32), { &rateSlider, &octaveSlider, &gateSlider, &swingSlider });
+    inner.removeFromTop(gap);
+    placeRow(inner.removeFromTop(32), { &stepsSlider, &restartSlider, &humVelSlider, &humTimeSlider });
 
     if (presetBrowser != nullptr)
         presetBrowser->setBounds(getLocalBounds());
@@ -906,9 +989,11 @@ void MnArpeeAudioEditor::timerCallback()
     const int n = ui.numInput.load(std::memory_order_acquire);
     for (int i = 0; i < n; ++i)
         held.push_back(ui.input[(size_t) i].load(std::memory_order_relaxed));
-    if (held != heldShown)
+    const int chordCode = ui.chord.load(std::memory_order_relaxed);
+    if (held != heldShown || chordCode != shownChord)
     {
         heldShown = std::move(held);
+        shownChord = chordCode;
         repaint(statusArea);
     }
 }
@@ -928,6 +1013,132 @@ void MnArpeeAudioEditor::commitStep(const mnArpee::Step& step)
     proc.setStep(editStep, step);
     shownModelVersion = proc.getModelVersion(); // our own edit: no reload needed
     grid.setProgram(shownProgram);
+}
+
+void MnArpeeAudioEditor::applySteps(const mnArpee::Program& edited)
+{
+    shownProgram.steps = edited.steps;
+    proc.setAllSteps(edited.steps);
+    shownModelVersion = proc.getModelVersion(); // our own edit: no reload needed
+    grid.setProgram(shownProgram);
+}
+
+namespace
+{
+// The pattern on the clipboard, if there is one (a copied pattern or a preset file's text).
+bool patternOnClipboard(mnArpee::Preset& out)
+{
+    auto xml = juce::parseXML(juce::SystemClipboard::getTextFromClipboard());
+    if (xml == nullptr)
+        return false;
+    const auto* element = xml->hasTagName("Preset") ? xml.get() : xml->getChildByName("Preset");
+    return element != nullptr && mnArpee::presetFromXml(*element, out);
+}
+} // namespace
+
+void MnArpeeAudioEditor::showPatternMenu(int step, StepGrid::Lane lane, int row)
+{
+    using mnArpee::PatternLane;
+    using mnArpee::StepType;
+
+    // What "set all steps" sets: the clicked row of the matrix, or the value of the clicked box.
+    const auto& st = shownProgram.steps[(size_t) std::clamp(step, 0, mnArpee::maxSteps - 1)];
+    PatternLane patternLane = PatternLane::Key;
+    int value = 0;
+    juce::String valueText;
+    const char* laneName = "keys";
+    switch (lane)
+    {
+        case StepGrid::Lane::Key:
+        {
+            patternLane = PatternLane::Key;
+            value = row >= 0 ? (row == StepGrid::randomRow ? -2 : StepGrid::keyForRow(row))
+                             : (st.type == StepType::Random ? -2 : (int) st.keyIndex);
+            valueText = value == -2 ? "Random" : value == mnArpee::rootKeyIndex ? "Root" : "Key " + juce::String(value + 1);
+            laneName = "keys";
+            break;
+        }
+        case StepGrid::Lane::Type:
+        {
+            patternLane = PatternLane::Type;
+            const auto type = row >= 0 ? StepGrid::typeForRow(row) : st.type;
+            value = (int) type;
+            valueText = type == StepType::Off ? "Off" : type == StepType::Rest ? "Rest" : type == StepType::Tie ? "Tie"
+                      : type == StepType::Random ? "Random" : "Normal";
+            laneName = "types";
+            break;
+        }
+        case StepGrid::Lane::Octave:
+            patternLane = PatternLane::Octave;
+            value = row >= 0 ? StepGrid::octaveForRow(row) : (int) st.octave;
+            valueText = value > 0 ? "+" + juce::String(value) : juce::String(value);
+            laneName = "octaves";
+            break;
+        case StepGrid::Lane::Velocity:
+            patternLane = PatternLane::Velocity;
+            value = row >= 0 ? StepGrid::velocityForRow(row) : (int) st.velocity;
+            valueText = juce::String(value);
+            laneName = "velocities";
+            break;
+    }
+
+    mnArpee::Preset clip;
+    const bool canPaste = patternOnClipboard(clip);
+    juce::PopupMenu menu;
+    menu.setLookAndFeel(&lnf);
+    menu.addItem(1, "Set all steps to " + valueText);
+    menu.addItem(5, juce::String("Randomize the ") + laneName);
+    menu.addSeparator();
+    menu.addItem(2, "Shift pattern left");
+    menu.addItem(3, "Shift pattern right");
+    menu.addItem(4, "Reverse pattern");
+    menu.addItem(6, "Clear pattern");
+    menu.addSeparator();
+    menu.addItem(7, "Copy pattern");
+    menu.addItem(8, "Paste pattern", canPaste);
+    menu.showMenuAsync(juce::PopupMenu::Options().withParentComponent(this),
+                       [safe = juce::Component::SafePointer<MnArpeeAudioEditor>(this), patternLane, value, clip](int result)
+                       {
+                           if (safe == nullptr || result == 0)
+                               return;
+                           auto edited = safe->shownProgram;
+                           switch (result)
+                           {
+                               case 1: mnArpee::setLaneValue(edited, patternLane, value); break;
+                               case 2: mnArpee::shiftPattern(edited, -1); break;
+                               case 3: mnArpee::shiftPattern(edited, 1); break;
+                               case 4: mnArpee::reversePattern(edited); break;
+                               case 5:
+                               {
+                                   std::mt19937 rng((unsigned) juce::Time::currentTimeMillis());
+                                   mnArpee::randomizeLane(edited, patternLane, rng);
+                                   break;
+                               }
+                               case 6:
+                               {
+                                   const auto init = mnArpee::makeInitProgram();
+                                   edited.steps = init.steps;
+                                   break;
+                               }
+                               case 7:
+                               {
+                                   mnArpee::Preset copy;
+                                   copy.name = "Pattern";
+                                   copy.program = safe->proc.getProgramCopy();
+                                   juce::SystemClipboard::copyTextToClipboard(mnArpee::presetToXml(copy)->toString());
+                                   return;
+                               }
+                               case 8:
+                               {
+                                   edited.steps = clip.program.steps;
+                                   if (auto* steps = safe->proc.getApvts().getParameter("steps"))
+                                       steps->setValueNotifyingHost(steps->convertTo0to1((float) clip.program.numSteps));
+                                   break;
+                               }
+                               default: return;
+                           }
+                           safe->applySteps(edited);
+                       });
 }
 
 void MnArpeeAudioEditor::onLaneAdjusted(int step, StepGrid::Lane lane, int delta)

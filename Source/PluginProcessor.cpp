@@ -169,6 +169,13 @@ void MnArpeeAudioProcessor::setStep(int stepIndex, const mnArpee::Step& step)
     publishBank();
 }
 
+void MnArpeeAudioProcessor::setAllSteps(const std::array<mnArpee::Step, mnArpee::maxSteps>& steps)
+{
+    const juce::ScopedLock lock(modelLock);
+    model.programs[(size_t) activeSlot.load()].steps = steps;
+    publishBank();
+}
+
 //==============================================================================
 // Presets (message thread)
 
@@ -229,6 +236,13 @@ bool MnArpeeAudioProcessor::loadPreset(int libraryIndex)
         return false;
     activatePresetLocked(library.presets()[(size_t) libraryIndex], true, false);
     return true;
+}
+
+void MnArpeeAudioProcessor::setPresetFavorite(int libraryIndex, bool favorite)
+{
+    const juce::ScopedLock lock(modelLock);
+    if (libraryIndex >= 0 && libraryIndex < library.size())
+        library.setFavorite(library.presets()[(size_t) libraryIndex].name, favorite);
 }
 
 void MnArpeeAudioProcessor::newPreset()
