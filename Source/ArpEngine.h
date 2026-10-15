@@ -3,6 +3,7 @@
 #include "PatternData.h"
 
 #include <array>
+#include <string>
 #include <cstdint>
 #include <functional>
 #include <random>
@@ -82,6 +83,32 @@ enum class KeyUse : int { Used = 0, Merged = 1, LeftOut = 2 };
 void reduceToKeys(const InputNotes& all, InputNotes& keys) noexcept;
 KeyUse keyUseOf(const InputNotes& keys, int note) noexcept;
 
+// The chord the held notes form (triads, sus, 7th chords, power chord; inversions included).
+struct ChordInfo
+{
+    int rootPc = -1;   // pitch class of the root, 0 = C
+    int bassPc = -1;   // pitch class of the lowest held note
+    int shape = -1;    // index of the chord type, -1: no chord recognised
+    int rootNote = -1; // the lowest held note of the root's pitch class
+    bool valid() const noexcept { return shape >= 0; }
+    // Packed for the UI (0 = no chord).
+    int code() const noexcept { return shape < 0 ? 0 : (1 + shape) | (rootPc << 8) | (bassPc << 16); }
+    static ChordInfo fromCode(int code) noexcept
+    {
+        ChordInfo c;
+        if (code != 0)
+        {
+            c.shape = (code & 0xff) - 1;
+            c.rootPc = (code >> 8) & 0xff;
+            c.bassPc = (code >> 16) & 0xff;
+        }
+        return c;
+    }
+};
+ChordInfo detectChord(const InputNotes& input) noexcept;
+// "Cmaj7", "Am", "G5", "C/E" (an inversion); empty when no chord is recognised.
+std::string chordName(const ChordInfo& chord);
+
 // Root of the chord formed by the input notes (triads, sus, 7th chords, power chord;
 // inversions included), returned as the lowest held note of that pitch class. Without a
 // recognisable chord it is the lowest note. Returns -1 for empty input.
@@ -109,6 +136,11 @@ public:
     // Selected program: switches at the end of the running pattern, or at once when idle.
     void setCurrentProgram(int index);
     void setLatch(bool on);
+    // With the host playing, a chord pressed after silence starts the pattern from its first step
+    // (1) or from a random step (2); 0: the pattern position follows the song position.
+    void setRestartMode(int mode) { restartMode = std::clamp(mode, 0, 2); }
+    // Random variation: velocity +-velocityAmount (0..127 units), timing up to +-timePercent of a step.
+    void setHumanize(int velocityAmount, int timePercent);
     void setOutputChannel(int channel) { outChannel = channel < 1 ? 1 : (channel > 16 ? 16 : channel); }
     void setRandomFn(RandomFn fn) { randomFn = std::move(fn); }
 
@@ -134,6 +166,8 @@ private:
     void collectInput(InputNotes& out) const;
     static double stepQuarters(const Program& prog);
     double swingQuarters(const Program& prog, long long index, double stepQ) const;
+    double timingJitter(long long index, double stepQ);
+    int humanizedVelocity(int velocity);
     double stepTime(const Program& prog, long long index, double stepQ) const;
     int sampleAt(double ppq) const;
 
@@ -160,6 +194,11 @@ private:
     std::array<std::uint8_t, 128> latchedVel {};
     int heldCount = 0;
     bool latch = false;
+    int restartMode = 0;
+    int humanizeVelocity = 0;
+    int humanizeTimePercent = 0;
+    long long jitterForIndex = -1;
+    double jitterValue = 0.0;
     bool sustainDown = false;
     bool hadInput = false;
 

@@ -536,6 +536,79 @@ int main()
         check(stylesGiven && namesUnique, "factory-presets-have-styles-and-unique-names");
     }
 
+    // 32. Restart on a new chord (host playing): the pattern goes on where it stopped, or begins again
+    // with its first step or a random one.
+    {
+        auto firstNote = [](int mode) -> int
+        {
+            auto e = std::make_unique<ArpEngine>();
+            auto b = singleProgramBank(4, SyncRate::R1_8, 50);
+            for (int i = 0; i < 4; ++i)
+                b->programs[0].steps[(size_t) i].keyIndex = (std::int8_t) i;
+            e->setBank(*b);
+            e->setRestartMode(mode);
+            Runner r;
+            r.playing = true;
+            for (int n : { 60, 62, 64, 65 })
+                e->noteOn(n, 100);
+            r.run(*e, 0.6); // plays steps 1, 2 and 3
+            for (int n : { 60, 62, 64, 65 })
+                e->noteOff(n);
+            r.run(*e, 0.6); // silence
+            for (int n : { 60, 62, 64, 65 })
+                e->noteOn(n, 100);
+            const auto seq = noteOnSequence(r.run(*e, 0.4));
+            return seq.empty() ? -1 : seq.front();
+        };
+        check(firstNote(0) == 65, "no-restart-continues-the-pattern");
+        check(firstNote(1) == 60, "restart-starts-with-the-first-step");
+        const int random = firstNote(2);
+        check(random == 60 || random == 62 || random == 64 || random == 65, "random-restart-starts-on-a-step");
+    }
+
+    // 33. Humanize: velocity varies within the range, timing within a quarter of a step.
+    {
+        auto e = std::make_unique<ArpEngine>();
+        auto b = singleProgramBank(4, SyncRate::R1_16, 50);
+        e->setBank(*b);
+        e->setHumanize(20, 25);
+        e->noteOn(60, 100);
+        const auto evs = runFor(*e, 4.0);
+        int minVel = 127, maxVel = 0, ons = 0, lateOrEarly = 0;
+        bool timingInRange = true;
+        for (const auto& ev : evs)
+            if (ev.ev.isNoteOn)
+            {
+                minVel = std::min(minVel, ev.ev.velocity);
+                maxVel = std::max(maxVel, ev.ev.velocity);
+                // 1/16 at 120 bpm is 5512.5 samples; the grid starts at 0
+                const double steps = (double) ev.sample / 5512.5;
+                const double off = (steps - std::round(steps)) * 5512.5;
+                timingInRange = timingInRange && std::abs(off) <= 5512.5 * 0.25 + 2.0;
+                lateOrEarly += std::abs(off) > 20.0 ? 1 : 0;
+                ++ons;
+            }
+        check(ons > 20 && minVel >= 96 - 20 && maxVel <= 96 + 20 && maxVel - minVel >= 10, "humanize-velocity-varies-within-range");
+        check(timingInRange && lateOrEarly > ons / 2, "humanize-timing-varies-within-a-quarter-step");
+        check(balanced(evs), "humanize-keeps-notes-balanced");
+    }
+
+    // 34. Chord names.
+    {
+        auto name = [](std::initializer_list<int> notes)
+        {
+            InputNotes in;
+            for (int n : notes)
+                in.notes[(size_t) in.size++] = HeldNote{ n, 100 };
+            return chordName(detectChord(in));
+        };
+        check(name({ 60, 64, 67 }) == "C" && name({ 57, 60, 64 }) == "Am" && name({ 60, 64, 67, 71 }) == "Cmaj7",
+              "chord-names-triads-and-sevenths");
+        check(name({ 64, 67, 72 }) == "C/E" && name({ 55, 60, 64 }) == "C/G", "chord-names-show-inversions");
+        check(name({ 48, 55 }) == "C5" && name({ 62, 65, 69, 72 }) == "Dm7" && name({ 60, 61 }).empty(),
+              "chord-names-power-minor-seventh-and-none");
+    }
+
     std::printf("%d checks, %d failures\n", checks, failures);
     return failures == 0 ? 0 : 1;
 }

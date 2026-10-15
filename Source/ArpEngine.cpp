@@ -42,33 +42,40 @@ KeyUse keyUseOf(const InputNotes& keys, int note) noexcept
     return KeyUse::LeftOut;
 }
 
-int chordRootNote(const InputNotes& input) noexcept
+namespace
 {
-    if (input.empty())
-        return -1;
+// Chord shapes as interval masks from the root, larger (more specific) ones first; the names are
+// the suffixes of the chord symbol.
+constexpr auto mask = [](std::initializer_list<int> intervals)
+{
+    unsigned m = 0;
+    for (int i : intervals)
+        m |= 1u << i;
+    return m;
+};
+constexpr unsigned chordShapes[] = {
+    mask({ 0, 4, 7, 11 }), // maj7
+    mask({ 0, 4, 7, 10 }), // 7
+    mask({ 0, 3, 7, 10 }), // m7
+    mask({ 0, 3, 6, 10 }), // m7b5
+    mask({ 0, 3, 6, 9 }),  // dim7
+    mask({ 0, 4, 7 }),     // major
+    mask({ 0, 3, 7 }),     // minor
+    mask({ 0, 3, 6 }),     // diminished
+    mask({ 0, 4, 8 }),     // augmented
+    mask({ 0, 5, 7 }),     // sus4
+    mask({ 0, 2, 7 }),     // sus2
+    mask({ 0, 7 }),        // power chord
+};
+constexpr const char* chordSuffixes[] = { "maj7", "7", "m7", "m7b5", "dim7", "", "m", "dim", "aug", "sus4", "sus2", "5" };
+constexpr const char* pitchClassNames[] = { "C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B" };
+} // namespace
 
-    // Chord shapes as interval masks from the root, larger (more specific) ones first.
-    constexpr auto mask = [](std::initializer_list<int> intervals)
-    {
-        unsigned m = 0;
-        for (int i : intervals)
-            m |= 1u << i;
-        return m;
-    };
-    constexpr unsigned shapes[] = {
-        mask({ 0, 4, 7, 11 }), // maj7
-        mask({ 0, 4, 7, 10 }), // 7
-        mask({ 0, 3, 7, 10 }), // m7
-        mask({ 0, 3, 6, 10 }), // m7b5
-        mask({ 0, 3, 6, 9 }),  // dim7
-        mask({ 0, 4, 7 }),     // major
-        mask({ 0, 3, 7 }),     // minor
-        mask({ 0, 3, 6 }),     // diminished
-        mask({ 0, 4, 8 }),     // augmented
-        mask({ 0, 5, 7 }),     // sus4
-        mask({ 0, 2, 7 }),     // sus2
-        mask({ 0, 7 }),        // power chord
-    };
+ChordInfo detectChord(const InputNotes& input) noexcept
+{
+    ChordInfo info;
+    if (input.empty())
+        return info;
 
     unsigned present = 0;
     for (int i = 0; i < input.size; ++i)
@@ -78,14 +85,16 @@ int chordRootNote(const InputNotes& input) noexcept
     // Score: notes explained by the shape, minus notes it leaves out. Ties go to the bass
     // note (inversions of symmetric chords), then to the earlier, more specific shape.
     int bestPc = bassPc;
+    int bestShape = -1;
     int bestScore = -1000;
     for (int pc = 0; pc < 12; ++pc)
     {
         if ((present & (1u << pc)) == 0)
             continue;
         const unsigned rotated = ((present >> pc) | (present << (12 - pc))) & 0xfffu;
-        for (unsigned shape : shapes)
+        for (int sh = 0; sh < (int) std::size(chordShapes); ++sh)
         {
+            const unsigned shape = chordShapes[sh];
             if ((rotated & shape) != shape)
                 continue;
             const int score = std::popcount(shape) * 10 - std::popcount(rotated & ~shape) * 11
@@ -94,15 +103,42 @@ int chordRootNote(const InputNotes& input) noexcept
             {
                 bestScore = score;
                 bestPc = pc;
+                bestShape = sh;
             }
             break; // shapes are ordered: the first match is the best one for this root
         }
     }
 
+    info.rootPc = bestPc;
+    info.bassPc = bassPc;
+    info.shape = bestShape;
+    info.rootNote = input.notes[0].note;
     for (int i = 0; i < input.size; ++i)
         if (input.notes[(size_t) i].note % 12 == bestPc)
-            return input.notes[(size_t) i].note;
-    return input.notes[0].note;
+        {
+            info.rootNote = input.notes[(size_t) i].note;
+            break;
+        }
+    return info;
+}
+
+std::string chordName(const ChordInfo& chord)
+{
+    if (! chord.valid())
+        return {};
+    std::string name = pitchClassNames[chord.rootPc % 12];
+    name += chordSuffixes[chord.shape];
+    if (chord.bassPc != chord.rootPc)
+    {
+        name += "/";
+        name += pitchClassNames[chord.bassPc % 12];
+    }
+    return name;
+}
+
+int chordRootNote(const InputNotes& input) noexcept
+{
+    return input.empty() ? -1 : detectChord(input).rootNote;
 }
 
 ArpEngine::ArpEngine() { setBank(makeFactoryBank()); }
@@ -148,6 +184,33 @@ void ArpEngine::setCurrentProgram(int index)
         return;
     selectedProgram = std::clamp(index, 0, bank.numPrograms - 1);
     pendingProgram = selectedProgram != currentProgram ? selectedProgram : -1;
+}
+
+void ArpEngine::setHumanize(int velocityAmount, int timePercent)
+{
+    humanizeVelocity = std::clamp(velocityAmount, 0, 127);
+    humanizeTimePercent = std::clamp(timePercent, 0, 25);
+}
+
+double ArpEngine::timingJitter(long long index, double stepQ)
+{
+    // One random offset per step, kept while the step waits for its block.
+    if (humanizeTimePercent <= 0)
+        return 0.0;
+    if (index != jitterForIndex)
+    {
+        jitterForIndex = index;
+        jitterValue = std::uniform_real_distribution<double>(-1.0, 1.0)(rng) * (humanizeTimePercent / 100.0) * stepQ;
+    }
+    return jitterValue;
+}
+
+int ArpEngine::humanizedVelocity(int velocity)
+{
+    if (humanizeVelocity <= 0)
+        return velocity;
+    const int offset = (int) (rng() % (unsigned) (2 * humanizeVelocity + 1)) - humanizeVelocity;
+    return std::clamp(velocity + offset, 1, 127);
 }
 
 void ArpEngine::setLatch(bool on)
@@ -384,7 +447,7 @@ void ArpEngine::playOneStep(const Program& prog, const InputNotes& input, double
                 if (sounding[(size_t) n] && n != note)
                     scheduleOff(n, t + oneSample);
             if (! sounding[(size_t) note])
-                emitOn(note, step.velocity, at);
+                emitOn(note, humanizedVelocity(step.velocity), at);
         }
         else
         {
@@ -392,7 +455,7 @@ void ArpEngine::playOneStep(const Program& prog, const InputNotes& input, double
             for (int n = 0; n < 128; ++n)
                 if (sounding[(size_t) n] && ! hasPendingOff[(size_t) n] && n != note)
                     emitOff(n, at);
-            emitOn(note, step.velocity, at);
+            emitOn(note, humanizedVelocity(step.velocity), at);
         }
 
         // Gate, lengthened by directly following Rest steps (up to the pattern end) and
@@ -405,7 +468,8 @@ void ArpEngine::playOneStep(const Program& prog, const InputNotes& input, double
             ++restSteps;
         double offAt = t + std::max(gateQ, oneSample) + restSteps * stepQ;
         if (k < numSteps && prog.steps[(size_t) k].type == StepType::Tie)
-            offAt = std::max(offAt, stepTime(prog, gridIndex + 1 + restSteps, stepQ) + oneSample);
+            offAt = std::max(offAt, stepTime(prog, gridIndex + 1 + restSteps, stepQ) + oneSample
+                                        + humanizeTimePercent / 100.0 * stepQ); // the tied step may come late
         scheduleOff(note, offAt);
     }
 
@@ -459,14 +523,24 @@ void ArpEngine::render(int numSamples, const HostPosition& host, EventBuffer& ou
         resync(blockStartPpq, host.isPlaying);
 
     collectInput(scratchInput);
-    if (! host.isPlaying && ! hadInput && ! scratchInput.empty())
+    if (! hadInput && ! scratchInput.empty())
     {
-        // Free-run: the first key of a new phrase starts the pattern right away.
-        if (pendingProgram >= 0)
-            switchProgram(pendingProgram);
-        resync(blockStartPpq, false);
-        currentStep = 0;
-        stepsPlayedInProgram = 0;
+        if (! host.isPlaying)
+        {
+            // Free-run: the first key of a new phrase starts the pattern right away.
+            if (pendingProgram >= 0)
+                switchProgram(pendingProgram);
+            resync(blockStartPpq, false);
+            currentStep = 0;
+            stepsPlayedInProgram = 0;
+        }
+        else if (restartMode > 0)
+        {
+            // The steps stay on the song's grid, but the pattern begins with its first step or a random one.
+            const int numSteps = std::clamp(activeProgram().numSteps, 0, maxSteps);
+            currentStep = restartMode == 2 && numSteps > 1 ? (int) (rng() % (unsigned) numSteps) : 0;
+            stepsPlayedInProgram = currentStep;
+        }
     }
 
     for (int guard = 0; guard < 4 * EventBuffer::capacity; ++guard)
@@ -481,7 +555,8 @@ void ArpEngine::render(int numSamples, const HostPosition& host, EventBuffer& ou
             lastStepQ = stepQ;
         }
 
-        const double t = stepTime(prog, gridIndex, stepQ);
+        const double t = stepTime(prog, gridIndex, stepQ)
+                         + (std::clamp(prog.numSteps, 0, maxSteps) > 1 ? timingJitter(gridIndex, stepQ) : 0.0);
         if (t >= blockLimitPpq)
             break;
         flushOffs(t);
