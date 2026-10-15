@@ -212,11 +212,7 @@ MnArpeeAudioEditor::MnArpeeAudioEditor(MnArpeeAudioProcessor& p)
 MnArpeeAudioEditor::~MnArpeeAudioEditor()
 {
     stopTimer();
-    if (browserBox != nullptr)
-    {
-        browserBox->setLookAndFeel(nullptr);
-        browserBox->dismiss();
-    }
+    presetBrowser.reset();
     setLookAndFeel(nullptr);
 }
 
@@ -239,27 +235,51 @@ void MnArpeeAudioEditor::setupValueBar(ValueBar& s, std::function<juce::String(d
 }
 
 //==============================================================================
-// Preset browser: a searchable list in a call-out box under the preset name.
+// Preset browser: a panel inside the editor (it never leaves the plugin window) with a search
+// box, group and style filters and the list. A click outside the panel closes it.
 namespace
 {
 class PresetBrowser : public juce::Component,
                       private juce::ListBoxModel,
-                      private juce::TextEditor::Listener
+                      private juce::TextEditor::Listener,
+                      private juce::ComboBox::Listener
 {
 public:
-    PresetBrowser(std::vector<mnArpee::Preset> presetsIn, int activeIndexIn,
-                  std::function<void(int)> chooseIn, std::function<void(int)> contextIn)
-        : presets(std::move(presetsIn)), activeIndex(activeIndexIn),
-          choose(std::move(chooseIn)), context(std::move(contextIn)), list("presets", this)
+    PresetBrowser(std::vector<mnArpee::Preset> presetsIn, int activeIndexIn, juce::Rectangle<int> anchorIn,
+                  std::function<void(int)> chooseIn, std::function<void(int)> contextIn,
+                  std::function<void()> closeIn)
+        : presets(std::move(presetsIn)), activeIndex(activeIndexIn), anchor(anchorIn),
+          choose(std::move(chooseIn)), context(std::move(contextIn)), close(std::move(closeIn)),
+          list("presets", this)
     {
         search.setTextToShowWhenEmpty("Search presets", Pal::dimText());
         search.setFont(mnArpee::fonts::text(16.0f));
-        search.setColour(juce::TextEditor::backgroundColourId, Pal::bg());
-        search.setColour(juce::TextEditor::textColourId, Pal::text());
-        search.setColour(juce::TextEditor::outlineColourId, Pal::border());
-        search.setColour(juce::TextEditor::focusedOutlineColourId, Pal::accent());
         search.addListener(this);
+        search.onEscapeKey = [this] { close(); };
         addAndMakeVisible(search);
+
+        juce::StringArray groups, styles;
+        for (const auto& p : presets)
+        {
+            if (! groups.contains(p.group))
+                groups.add(p.group);
+            for (const auto& style : mnArpee::presetStyles(p))
+                if (! styles.contains(style))
+                    styles.add(style);
+        }
+        styles.sort(true);
+        groupBox.addItem("All groups", 1);
+        for (int i = 0; i < groups.size(); ++i)
+            groupBox.addItem(groups[i], i + 2);
+        styleBox.addItem("All styles", 1);
+        for (int i = 0; i < styles.size(); ++i)
+            styleBox.addItem(styles[i], i + 2);
+        groupBox.setSelectedId(1, juce::dontSendNotification);
+        styleBox.setSelectedId(1, juce::dontSendNotification);
+        groupBox.addListener(this);
+        styleBox.addListener(this);
+        addAndMakeVisible(groupBox);
+        addAndMakeVisible(styleBox);
 
         list.setRowHeight(30);
         list.setColour(juce::ListBox::backgroundColourId, juce::Colours::transparentBlack);
@@ -268,21 +288,51 @@ public:
         addAndMakeVisible(list);
 
         rebuild();
-        setSize(420, 460);
     }
+
+    void parentSizeChanged() override {}
 
     void resized() override
     {
-        auto r = getLocalBounds().reduced(8);
+        // The panel sits under the preset name and stays inside the editor.
+        const int w = std::min(520, getWidth() - 24);
+        const int x = juce::jlimit(12, std::max(12, getWidth() - 12 - w), anchor.getCentreX() - w / 2);
+        const int y = anchor.getBottom() + 6;
+        const int h = std::max(160, std::min(540, getHeight() - y - 12));
+        panel = { x, y, w, h };
+
+        auto r = panel.reduced(10);
         search.setBounds(r.removeFromTop(30));
         r.removeFromTop(8);
+        auto filters = r.removeFromTop(28);
+        groupBox.setBounds(filters.removeFromLeft(filters.getWidth() / 2 - 4));
+        filters.removeFromLeft(8);
+        styleBox.setBounds(filters);
+        r.removeFromTop(8);
         list.setBounds(r);
+    }
+
+    void paint(juce::Graphics& g) override
+    {
+        g.setColour(juce::Colours::black.withAlpha(0.35f));
+        g.fillRect(getLocalBounds());
+        g.setColour(Pal::card());
+        g.fillRoundedRectangle(panel.toFloat(), 8.0f);
+        g.setColour(Pal::border());
+        g.drawRoundedRectangle(panel.toFloat().reduced(0.5f), 8.0f, 1.0f);
+    }
+
+    void mouseDown(const juce::MouseEvent& e) override
+    {
+        if (! panel.contains(e.getPosition()))
+            close();
     }
 
     void visibilityChanged() override
     {
         if (isVisible())
         {
+            search.grabKeyboardFocus();
             for (int row = 0; row < (int) shown.size(); ++row)
                 if (shown[(size_t) row] == activeIndex)
                     list.scrollToEnsureRowIsOnscreen(row);
@@ -293,13 +343,20 @@ private:
     void rebuild()
     {
         const auto query = search.getText().trim();
+        const auto group = groupBox.getSelectedId() > 1 ? groupBox.getText() : juce::String();
+        const auto style = styleBox.getSelectedId() > 1 ? styleBox.getText() : juce::String();
         shown.clear();
         for (int i = 0; i < (int) presets.size(); ++i)
         {
             const auto& p = presets[(size_t) i];
-            if (query.isEmpty() || p.name.containsIgnoreCase(query) || p.group.containsIgnoreCase(query)
-                || p.author.containsIgnoreCase(query))
-                shown.push_back(i);
+            if (group.isNotEmpty() && p.group != group)
+                continue;
+            if (style.isNotEmpty() && ! mnArpee::presetStyles(p).contains(style))
+                continue;
+            if (query.isNotEmpty() && ! (p.name.containsIgnoreCase(query) || p.group.containsIgnoreCase(query)
+                                         || p.tags.containsIgnoreCase(query) || p.author.containsIgnoreCase(query)))
+                continue;
+            shown.push_back(i);
         }
         list.updateContent();
         list.repaint();
@@ -311,6 +368,7 @@ private:
         if (! shown.empty())
             choose(shown.front());
     }
+    void comboBoxChanged(juce::ComboBox*) override { rebuild(); }
 
     int getNumRows() override { return (int) shown.size(); }
 
@@ -326,12 +384,16 @@ private:
             g.setColour(Pal::accent().withAlpha(selected ? 0.28f : 0.16f));
             g.fillRoundedRectangle(2.0f, 1.0f, (float) width - 4.0f, (float) height - 2.0f, 4.0f);
         }
+        const int nameW = (int) (width * 0.42f);
+        const int groupW = (int) (width * 0.20f);
         g.setColour(isActive ? Pal::accent() : Pal::text());
         g.setFont(mnArpee::fonts::text(17.0f, isActive));
-        g.drawText(p.name, 12, 0, width - 130, height, juce::Justification::centredLeft, true);
+        g.drawText(p.name, 12, 0, nameW - 12, height, juce::Justification::centredLeft, true);
         g.setColour(Pal::dimText());
         g.setFont(mnArpee::fonts::text(15.0f));
-        g.drawText(p.group, width - 120, 0, 108, height, juce::Justification::centredRight, true);
+        g.drawText(p.group, nameW, 0, groupW, height, juce::Justification::centredLeft, true);
+        g.drawText(p.tags.replace(",", ", "), nameW + groupW, 0, width - nameW - groupW - 8, height,
+                   juce::Justification::centredLeft, true);
     }
 
     void listBoxItemClicked(int row, const juce::MouseEvent& e) override
@@ -351,39 +413,57 @@ private:
     }
 
     std::vector<mnArpee::Preset> presets;
-    std::vector<int> shown;  // library indices that match the search
+    std::vector<int> shown;  // library indices that match the filters
     int activeIndex;
+    juce::Rectangle<int> anchor, panel;
     std::function<void(int)> choose, context;
+    std::function<void()> close;
     juce::TextEditor search;
+    juce::ComboBox groupBox, styleBox;
     juce::ListBox list;
 };
 } // namespace
 
+void MnArpeeAudioEditor::closePresetBrowser()
+{
+    if (presetBrowser == nullptr)
+        return;
+    // It may be closing from inside its own callback: take it off the screen now, delete it later.
+    presetBrowser->setVisible(false);
+    juce::Component::SafePointer<juce::Component> doomed(presetBrowser.release());
+    juce::MessageManager::callAsync([doomed] { delete doomed.getComponent(); });
+}
+
 void MnArpeeAudioEditor::showPresetBrowser()
 {
-    if (browserBox != nullptr)
+    if (presetBrowser != nullptr)
     {
-        browserBox->dismiss();
+        closePresetBrowser();
         return;
     }
     auto content = std::make_unique<PresetBrowser>(
-        proc.getPresetList(), proc.getActivePresetIndex(),
+        proc.getPresetList(), proc.getActivePresetIndex(), presetButton.getBounds(),
         [safe = juce::Component::SafePointer<MnArpeeAudioEditor>(this)](int index)
         {
             if (safe == nullptr)
                 return;
-            if (safe->browserBox != nullptr)
-                safe->browserBox->dismiss();
+            safe->closePresetBrowser();
             safe->loadPresetChecked(index);
         },
         [safe = juce::Component::SafePointer<MnArpeeAudioEditor>(this)](int index)
         {
             if (safe != nullptr)
                 safe->showPresetContextMenu(index);
+        },
+        [safe = juce::Component::SafePointer<MnArpeeAudioEditor>(this)]
+        {
+            if (safe != nullptr)
+                safe->closePresetBrowser();
         });
-    auto& box = juce::CallOutBox::launchAsynchronously(std::move(content), presetButton.getScreenBounds(), nullptr);
-    box.setLookAndFeel(&lnf);
-    browserBox = &box;
+    content->setBounds(getLocalBounds());
+    addAndMakeVisible(*content);
+    content->toFront(true);
+    presetBrowser = std::move(content);
 }
 
 void MnArpeeAudioEditor::showPresetContextMenu(int libraryIndex)
@@ -399,13 +479,12 @@ void MnArpeeAudioEditor::showPresetContextMenu(int libraryIndex)
     menu.addItem(3, "Rename...", ! entry.factory);
     menu.addItem(4, "Show in folder", entry.file.existsAsFile());
     menu.addItem(5, "Delete", ! entry.factory);
-    menu.showMenuAsync(juce::PopupMenu::Options(),
+    menu.showMenuAsync(juce::PopupMenu::Options().withParentComponent(this),
                        [safe = juce::Component::SafePointer<MnArpeeAudioEditor>(this), libraryIndex, file = entry.file](int result)
                        {
                            if (safe == nullptr || result == 0)
                                return;
-                           if (safe->browserBox != nullptr)
-                               safe->browserBox->dismiss();
+                           safe->closePresetBrowser();
                            switch (result)
                            {
                                case 1: safe->loadPresetChecked(libraryIndex); break;
@@ -583,13 +662,14 @@ void MnArpeeAudioEditor::showPresetMenu()
     menu.addItem(1, "Save as...");
     menu.addItem(2, "Revert", active.dirty && active.file != juce::File());
     menu.addItem(3, "Rename...", saved);
+    menu.addItem(8, "Style...");
     menu.addSeparator();
     menu.addItem(4, "Import...");
     menu.addItem(5, "Export...");
     menu.addItem(6, "Show in folder");
     menu.addSeparator();
     menu.addItem(7, "Delete", saved);
-    menu.showMenuAsync(juce::PopupMenu::Options().withTargetComponent(&menuButton),
+    menu.showMenuAsync(juce::PopupMenu::Options().withTargetComponent(&menuButton).withParentComponent(this),
                        [safe = juce::Component::SafePointer<MnArpeeAudioEditor>(this)](int result)
                        {
                            if (safe == nullptr || result == 0)
@@ -615,6 +695,15 @@ void MnArpeeAudioEditor::showPresetMenu()
                                    break;
                                }
                                case 7: safe->deleteDialog(p.getActivePresetIndex()); break;
+                               case 8:
+                                   safe->promptName("Style", "Musical styles, comma separated (e.g. House, Trance):",
+                                                    p.getActivePreset().tags,
+                                                    [safe](juce::String styles)
+                                                    {
+                                                        if (safe != nullptr)
+                                                            safe->proc.setActivePresetStyles(styles);
+                                                    });
+                                   break;
                                default: break;
                            }
                        });
@@ -783,6 +872,9 @@ void MnArpeeAudioEditor::resized()
         bar->setBounds(inner.removeFromLeft(barW));
         inner.removeFromLeft(gap);
     }
+
+    if (presetBrowser != nullptr)
+        presetBrowser->setBounds(getLocalBounds());
 
     // Grid inside the card (label strip on top).
     grid.setBounds(gridCard.getX() + 6, gridCard.getY() + 24,

@@ -500,6 +500,42 @@ int main()
               "missing-keys-without-chord-play-the-lowest-note");
     }
 
+    // 31. Factory presets: basslines play only the root, melodic ones use the held keys; every
+    // preset has a name of its own and a musical style.
+    {
+        const auto patterns = makeFactoryPatterns();
+        int basslines = 0, melodics = 0;
+        bool bassOnlyRoot = true, melodicUsesKeys = true, stylesGiven = true, namesUnique = true;
+        std::vector<std::string> names;
+        for (const auto& pattern : patterns)
+        {
+            const std::string name = pattern.program.name.chars.data();
+            namesUnique = namesUnique && std::find(names.begin(), names.end(), name) == names.end();
+            names.push_back(name);
+            stylesGiven = stylesGiven && pattern.styles != nullptr && pattern.styles[0] != 0;
+            bool usesKeys = false;
+            for (const auto& step : pattern.program.steps)
+            {
+                const bool playsNote = step.type == StepType::Normal || step.type == StepType::Tie;
+                if (std::string(pattern.group) == "Bassline")
+                    bassOnlyRoot = bassOnlyRoot && step.type != StepType::Random && (! playsNote || step.keyIndex == rootKeyIndex);
+                else
+                    usesKeys = usesKeys || step.type == StepType::Random || (playsNote && step.keyIndex != rootKeyIndex);
+            }
+            if (std::string(pattern.group) == "Bassline")
+                ++basslines;
+            else
+            {
+                ++melodics;
+                melodicUsesKeys = melodicUsesKeys && usesKeys;
+            }
+        }
+        check(basslines >= 12 && melodics >= 18, "factory-has-basslines-and-melodic-presets");
+        check(bassOnlyRoot, "factory-basslines-play-only-the-root");
+        check(melodicUsesKeys, "factory-melodic-presets-use-the-keys");
+        check(stylesGiven && namesUnique, "factory-presets-have-styles-and-unique-names");
+    }
+
     std::printf("%d checks, %d failures\n", checks, failures);
     return failures == 0 ? 0 : 1;
 }

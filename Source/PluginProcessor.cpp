@@ -193,6 +193,7 @@ MnArpeeAudioProcessor::ActivePreset MnArpeeAudioProcessor::getActivePreset() con
     a.name = active.name;
     a.group = active.group;
     a.author = active.author;
+    a.tags = active.tags;
     a.file = active.file;
     a.factory = active.factory;
     a.dirty = savedSnapshot.isEmpty() || mnArpee::presetSnapshot(currentPresetLocked()) != savedSnapshot;
@@ -269,6 +270,12 @@ void MnArpeeAudioProcessor::revertActivePreset()
     const int index = library.indexOfFile(active.file);
     if (index >= 0)
         activatePresetLocked(library.presets()[(size_t) index], true, false);
+}
+
+void MnArpeeAudioProcessor::setActivePresetStyles(const juce::String& styles)
+{
+    const juce::ScopedLock lock(modelLock);
+    active.tags = styles.trim();
 }
 
 bool MnArpeeAudioProcessor::renamePreset(int libraryIndex, const juce::String& newName)
@@ -685,7 +692,7 @@ void MnArpeeAudioProcessor::setStateInformation(const void* data, int sizeInByte
         return; // nothing usable in the state: the parameters are what was loaded
 
     const juce::ScopedLock lock(modelLock);
-    preset.factory = preset.group == "Factory";
+    preset.factory = false;
     juce::String snapshot;
     if (const int index = library.indexOf(preset); index >= 0)
     {

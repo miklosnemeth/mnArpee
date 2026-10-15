@@ -63,6 +63,7 @@ std::unique_ptr<juce::XmlElement> presetToXml(const Preset& preset)
     xml->setAttribute("name", preset.name);
     xml->setAttribute("group", preset.group);
     xml->setAttribute("author", preset.author);
+    xml->setAttribute("tags", preset.tags);
     xml->setAttribute("rate", syncRateName(p.sync));
     xml->setAttribute("gate", p.gatePercent);
     xml->setAttribute("swing", p.swingPercent);
@@ -94,6 +95,7 @@ bool presetFromXml(const juce::XmlElement& xml, Preset& out)
         return false;
     p.group = xml.getStringAttribute("group", "User");
     p.author = xml.getStringAttribute("author");
+    p.tags = xml.getStringAttribute("tags").trim();
 
     auto& prog = p.program;
     prog = makeInitProgram();
@@ -127,6 +129,15 @@ bool presetFromXml(const juce::XmlElement& xml, Preset& out)
     return true;
 }
 
+juce::StringArray presetStyles(const Preset& preset)
+{
+    juce::StringArray styles;
+    styles.addTokens(preset.tags, ",", "");
+    styles.trim();
+    styles.removeEmptyStrings();
+    return styles;
+}
+
 juce::String presetSnapshot(const Preset& preset)
 {
     return presetToXml(preset)->toString(juce::XmlElement::TextFormat().singleLine());
@@ -135,14 +146,14 @@ juce::String presetSnapshot(const Preset& preset)
 std::vector<Preset> makeFactoryPresets()
 {
     std::vector<Preset> out;
-    const auto bank = makeFactoryBank();
-    for (int i = 0; i < bank.numPrograms; ++i)
+    for (const auto& pattern : makeFactoryPatterns())
     {
         Preset p;
-        p.program = bank.programs[(size_t) i];
+        p.program = pattern.program;
         p.name = juce::String::fromUTF8(p.program.name.chars.data());
-        p.group = "Factory";
+        p.group = pattern.group;
         p.author = "mnArpee";
+        p.tags = pattern.styles;
         p.factory = true;
         out.push_back(std::move(p));
     }
@@ -178,8 +189,6 @@ void PresetLibrary::scan(const juce::File& dir, bool factory, std::vector<Preset
             continue;
         p.factory = factory;
         p.file = f;
-        if (factory)
-            p.group = "Factory";
         found.push_back(std::move(p));
     }
     if (! factory)
@@ -230,8 +239,7 @@ int PresetLibrary::indexOf(const Preset& preset) const
     if (const int byFile = indexOfFile(preset.file); byFile >= 0)
         return byFile;
     for (int i = 0; i < size(); ++i)
-        if (list[(size_t) i].name == preset.name && list[(size_t) i].factory == preset.factory
-            && list[(size_t) i].group == preset.group)
+        if (list[(size_t) i].name == preset.name && list[(size_t) i].group == preset.group)
             return i;
     return -1;
 }
