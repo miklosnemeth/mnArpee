@@ -26,6 +26,15 @@ MnArpeeLookAndFeel::MnArpeeLookAndFeel()
     setColour(juce::ToggleButton::tickDisabledColourId, Pal::border());
     setColour(juce::TextButton::buttonColourId, Pal::cardHi());
     setColour(juce::TextButton::textColourOffId, Pal::text());
+    setColour(juce::AlertWindow::backgroundColourId, Pal::card());
+    setColour(juce::AlertWindow::textColourId, Pal::text());
+    setColour(juce::AlertWindow::outlineColourId, Pal::border());
+    setColour(juce::TextEditor::backgroundColourId, Pal::bg());
+    setColour(juce::TextEditor::textColourId, Pal::text());
+    setColour(juce::TextEditor::outlineColourId, Pal::border());
+    setColour(juce::TextEditor::focusedOutlineColourId, Pal::accent());
+    setColour(juce::TextEditor::highlightColourId, Pal::accent().withAlpha(0.35f));
+    setColour(juce::CaretComponent::caretColourId, Pal::accent());
 }
 
 void MnArpeeLookAndFeel::drawComboBox(juce::Graphics& g, int width, int height,
@@ -153,14 +162,24 @@ MnArpeeAudioEditor::MnArpeeAudioEditor(MnArpeeAudioProcessor& p)
     grid.onStepClicked([this](int step, int row) { onGridClicked(step, row); });
     grid.onLaneAdjusted([this](int step, StepGrid::Lane lane, int delta) { onLaneAdjusted(step, lane, delta); });
 
-    prevProgramButton.onClick = [this] { stepProgram(-1); };
-    nextProgramButton.onClick = [this] { stepProgram(1); };
-    prevProgramButton.setTooltip("Previous program");
-    nextProgramButton.setTooltip("Next program");
-    programButton.onClick = [this] { showProgramMenu(); };
-    programButton.setTooltip("Choose the program");
-    for (auto* b : { static_cast<juce::Component*>(&prevProgramButton), static_cast<juce::Component*>(&programButton),
-                     static_cast<juce::Component*>(&nextProgramButton) })
+    prevPresetButton.onClick = [this] { stepPreset(-1); };
+    nextPresetButton.onClick = [this] { stepPreset(1); };
+    prevPresetButton.setTooltip("Previous preset");
+    nextPresetButton.setTooltip("Next preset");
+    presetButton.onClick = [this] { showPresetBrowser(); };
+    presetButton.setTooltip("Choose a preset");
+    newButton.setButtonText("New");
+    newButton.setTooltip("A new, empty pattern");
+    newButton.onClick = [this] { newClicked(); };
+    saveButton.setButtonText("Save");
+    saveButton.setTooltip("Save the preset");
+    saveButton.onClick = [this] { saveClicked(); };
+    menuButton.setButtonText("Menu");
+    menuButton.setTooltip("Save as, revert, rename, import, export, delete");
+    menuButton.onClick = [this] { showPresetMenu(); };
+    for (auto* b : { static_cast<juce::Component*>(&prevPresetButton), static_cast<juce::Component*>(&presetButton),
+                     static_cast<juce::Component*>(&nextPresetButton), static_cast<juce::Component*>(&newButton),
+                     static_cast<juce::Component*>(&saveButton), static_cast<juce::Component*>(&menuButton) })
         addAndMakeVisible(*b);
 
     auto signedValue = [](double v) { return (v > 0.0 ? "+" : "") + juce::String((int) std::lround(v)); };
@@ -187,12 +206,18 @@ MnArpeeAudioEditor::MnArpeeAudioEditor(MnArpeeAudioProcessor& p)
 
     statusText = "keys  -";
     reloadProgram();
+    refreshPresetUi();
     startTimerHz(30);
 }
 
 MnArpeeAudioEditor::~MnArpeeAudioEditor()
 {
     stopTimer();
+    if (browserBox != nullptr)
+    {
+        browserBox->setLookAndFeel(nullptr);
+        browserBox->dismiss();
+    }
     setLookAndFeel(nullptr);
 }
 
@@ -214,42 +239,451 @@ void MnArpeeAudioEditor::setupValueBar(ValueBar& s, std::function<juce::String(d
     s.updateText();
 }
 
-void MnArpeeAudioEditor::setProgramIndex(int index)
+//==============================================================================
+// Preset browser: a searchable list in a call-out box under the preset name.
+namespace
 {
-    if (auto* p = proc.getApvts().getParameter("program"))
+class PresetBrowser : public juce::Component,
+                      private juce::ListBoxModel,
+                      private juce::TextEditor::Listener
+{
+public:
+    PresetBrowser(std::vector<mnArpee::Preset> presetsIn, int activeIndexIn,
+                  std::function<void(int)> chooseIn, std::function<void(int)> contextIn)
+        : presets(std::move(presetsIn)), activeIndex(activeIndexIn),
+          choose(std::move(chooseIn)), context(std::move(contextIn)), list("presets", this)
     {
-        const int i = juce::jlimit(0, MnArpeeAudioProcessor::numUserPrograms - 1, index);
-        p->beginChangeGesture();
-        p->setValueNotifyingHost(p->convertTo0to1((float) (i + 1)));
-        p->endChangeGesture();
+        search.setTextToShowWhenEmpty("Search presets", Pal::dimText());
+        search.setFont(mnArpee::fonts::text(16.0f));
+        search.setColour(juce::TextEditor::backgroundColourId, Pal::bg());
+        search.setColour(juce::TextEditor::textColourId, Pal::text());
+        search.setColour(juce::TextEditor::outlineColourId, Pal::border());
+        search.setColour(juce::TextEditor::focusedOutlineColourId, Pal::accent());
+        search.addListener(this);
+        addAndMakeVisible(search);
+
+        list.setRowHeight(30);
+        list.setColour(juce::ListBox::backgroundColourId, juce::Colours::transparentBlack);
+        list.setColour(juce::ListBox::outlineColourId, Pal::border());
+        list.setOutlineThickness(1);
+        addAndMakeVisible(list);
+
+        rebuild();
+        setSize(420, 460);
     }
+
+    void resized() override
+    {
+        auto r = getLocalBounds().reduced(8);
+        search.setBounds(r.removeFromTop(30));
+        r.removeFromTop(8);
+        list.setBounds(r);
+    }
+
+    void visibilityChanged() override
+    {
+        if (isVisible())
+        {
+            for (int row = 0; row < (int) shown.size(); ++row)
+                if (shown[(size_t) row] == activeIndex)
+                    list.scrollToEnsureRowIsOnscreen(row);
+        }
+    }
+
+private:
+    void rebuild()
+    {
+        const auto query = search.getText().trim();
+        shown.clear();
+        for (int i = 0; i < (int) presets.size(); ++i)
+        {
+            const auto& p = presets[(size_t) i];
+            if (query.isEmpty() || p.name.containsIgnoreCase(query) || p.group.containsIgnoreCase(query)
+                || p.author.containsIgnoreCase(query))
+                shown.push_back(i);
+        }
+        list.updateContent();
+        list.repaint();
+    }
+
+    void textEditorTextChanged(juce::TextEditor&) override { rebuild(); }
+    void textEditorReturnKeyPressed(juce::TextEditor&) override
+    {
+        if (! shown.empty())
+            choose(shown.front());
+    }
+
+    int getNumRows() override { return (int) shown.size(); }
+
+    void paintListBoxItem(int row, juce::Graphics& g, int width, int height, bool selected) override
+    {
+        if (row < 0 || row >= (int) shown.size())
+            return;
+        const int index = shown[(size_t) row];
+        const auto& p = presets[(size_t) index];
+        const bool isActive = index == activeIndex;
+        if (selected || isActive)
+        {
+            g.setColour(Pal::accent().withAlpha(selected ? 0.28f : 0.16f));
+            g.fillRoundedRectangle(2.0f, 1.0f, (float) width - 4.0f, (float) height - 2.0f, 4.0f);
+        }
+        g.setColour(isActive ? Pal::accent() : Pal::text());
+        g.setFont(mnArpee::fonts::text(17.0f, isActive));
+        g.drawText(p.name, 12, 0, width - 130, height, juce::Justification::centredLeft, true);
+        g.setColour(Pal::dimText());
+        g.setFont(mnArpee::fonts::text(15.0f));
+        g.drawText(p.group, width - 120, 0, 108, height, juce::Justification::centredRight, true);
+    }
+
+    void listBoxItemClicked(int row, const juce::MouseEvent& e) override
+    {
+        if (row < 0 || row >= (int) shown.size())
+            return;
+        if (e.mods.isPopupMenu())
+            context(shown[(size_t) row]);
+        else
+            choose(shown[(size_t) row]);
+    }
+
+    void returnKeyPressed(int row) override
+    {
+        if (row >= 0 && row < (int) shown.size())
+            choose(shown[(size_t) row]);
+    }
+
+    std::vector<mnArpee::Preset> presets;
+    std::vector<int> shown;  // library indices that match the search
+    int activeIndex;
+    std::function<void(int)> choose, context;
+    juce::TextEditor search;
+    juce::ListBox list;
+};
+} // namespace
+
+void MnArpeeAudioEditor::showPresetBrowser()
+{
+    if (browserBox != nullptr)
+    {
+        browserBox->dismiss();
+        return;
+    }
+    auto content = std::make_unique<PresetBrowser>(
+        proc.getPresetList(), proc.getActivePresetIndex(),
+        [safe = juce::Component::SafePointer<MnArpeeAudioEditor>(this)](int index)
+        {
+            if (safe == nullptr)
+                return;
+            if (safe->browserBox != nullptr)
+                safe->browserBox->dismiss();
+            safe->loadPresetChecked(index);
+        },
+        [safe = juce::Component::SafePointer<MnArpeeAudioEditor>(this)](int index)
+        {
+            if (safe != nullptr)
+                safe->showPresetContextMenu(index);
+        });
+    auto& box = juce::CallOutBox::launchAsynchronously(std::move(content), presetButton.getScreenBounds(), nullptr);
+    box.setLookAndFeel(&lnf);
+    browserBox = &box;
 }
 
-void MnArpeeAudioEditor::stepProgram(int delta)
+void MnArpeeAudioEditor::showPresetContextMenu(int libraryIndex)
 {
-    const int n = MnArpeeAudioProcessor::numUserPrograms;
-    setProgramIndex((selectedProgram() + delta + n) % n);
-}
-
-void MnArpeeAudioEditor::showProgramMenu()
-{
+    const auto list = proc.getPresetList();
+    if (libraryIndex < 0 || libraryIndex >= (int) list.size())
+        return;
+    const auto& entry = list[(size_t) libraryIndex];
     juce::PopupMenu menu;
-    const int current = selectedProgram();
-    for (int i = 0; i < MnArpeeAudioProcessor::numUserPrograms; ++i)
-        menu.addItem(i + 1, juce::String(i + 1) + "  " + proc.getProgramName(i), true, i == current);
-    menu.showMenuAsync(juce::PopupMenu::Options().withTargetComponent(&programButton).withMinimumWidth(programButton.getWidth()),
-                       [safe = juce::Component::SafePointer<MnArpeeAudioEditor>(this)](int result)
+    menu.setLookAndFeel(&lnf);
+    menu.addItem(1, "Load");
+    menu.addItem(2, "Duplicate");
+    menu.addItem(3, "Rename...", ! entry.factory);
+    menu.addItem(4, "Show in folder", entry.file.existsAsFile());
+    menu.addItem(5, "Delete", ! entry.factory);
+    menu.showMenuAsync(juce::PopupMenu::Options(),
+                       [safe = juce::Component::SafePointer<MnArpeeAudioEditor>(this), libraryIndex, file = entry.file](int result)
                        {
-                           if (safe != nullptr && result > 0)
-                               safe->setProgramIndex(result - 1);
+                           if (safe == nullptr || result == 0)
+                               return;
+                           if (safe->browserBox != nullptr)
+                               safe->browserBox->dismiss();
+                           switch (result)
+                           {
+                               case 1: safe->loadPresetChecked(libraryIndex); break;
+                               case 2:
+                                   safe->confirmLeavePreset([safe, libraryIndex]
+                                                            {
+                                                                if (safe == nullptr)
+                                                                    return;
+                                                                const int copy = safe->proc.duplicatePreset(libraryIndex);
+                                                                if (copy >= 0)
+                                                                    safe->proc.loadPreset(copy);
+                                                            });
+                                   break;
+                               case 3: safe->renameDialog(libraryIndex); break;
+                               case 4: file.revealToUser(); break;
+                               case 5: safe->deleteDialog(libraryIndex); break;
+                               default: break;
+                           }
                        });
 }
 
-int MnArpeeAudioEditor::selectedProgram() const
+void MnArpeeAudioEditor::loadPresetChecked(int libraryIndex)
 {
-    if (auto* p = proc.getApvts().getRawParameterValue("program"))
-        return juce::jlimit(0, MnArpeeAudioProcessor::numUserPrograms - 1, (int) std::lround(p->load()) - 1);
-    return 0;
+    confirmLeavePreset([safe = juce::Component::SafePointer<MnArpeeAudioEditor>(this), libraryIndex]
+                       {
+                           if (safe != nullptr)
+                               safe->proc.loadPreset(libraryIndex);
+                       });
+}
+
+void MnArpeeAudioEditor::stepPreset(int delta)
+{
+    const int n = (int) proc.getPresetList().size();
+    if (n == 0)
+        return;
+    const int current = proc.getActivePresetIndex();
+    const int next = current < 0 ? (delta > 0 ? 0 : n - 1) : (current + delta + n) % n;
+    loadPresetChecked(next);
+}
+
+void MnArpeeAudioEditor::confirmLeavePreset(std::function<void()> proceed)
+{
+    const auto active = proc.getActivePreset();
+    if (! active.dirty)
+    {
+        proceed();
+        return;
+    }
+    juce::AlertWindow::showAsync(
+        juce::MessageBoxOptions()
+            .withIconType(juce::MessageBoxIconType::QuestionIcon)
+            .withTitle("Unsaved changes")
+            .withMessage("Save the changes to \"" + active.name + "\" first?")
+            .withButton("Save")
+            .withButton("Don't save")
+            .withButton("Cancel")
+            .withAssociatedComponent(this),
+        [safe = juce::Component::SafePointer<MnArpeeAudioEditor>(this), proceed = std::move(proceed)](int result)
+        {
+            if (safe == nullptr || result == 0)
+                return; // Cancel
+            if (result == 2)
+            {
+                proceed(); // Don't save
+                return;
+            }
+            const auto a = safe->proc.getActivePreset();
+            if (a.factory || a.file == juce::File())
+                safe->saveActiveAs(proceed);
+            else if (safe->proc.saveActivePreset())
+                proceed();
+        });
+}
+
+void MnArpeeAudioEditor::promptName(const juce::String& title, const juce::String& message,
+                                    const juce::String& initial, std::function<void(juce::String)> done)
+{
+    auto* window = new juce::AlertWindow(title, message, juce::MessageBoxIconType::NoIcon, this);
+    window->setLookAndFeel(&lnf);
+    window->addTextEditor("name", initial);
+    window->addButton("OK", 1, juce::KeyPress(juce::KeyPress::returnKey));
+    window->addButton("Cancel", 0, juce::KeyPress(juce::KeyPress::escapeKey));
+    window->enterModalState(true,
+                            juce::ModalCallbackFunction::create(
+                                [window, done = std::move(done)](int result)
+                                {
+                                    if (result == 1)
+                                        done(window->getTextEditorContents("name").trim());
+                                }),
+                            true);
+}
+
+void MnArpeeAudioEditor::saveActiveAs(std::function<void()> then)
+{
+    const auto active = proc.getActivePreset();
+    promptName("Save preset", "Name of the preset:", proc.freePresetName(active.name),
+               [safe = juce::Component::SafePointer<MnArpeeAudioEditor>(this), then = std::move(then)](juce::String name)
+               {
+                   if (safe == nullptr)
+                       return;
+                   if (name.isEmpty() || ! safe->proc.saveActivePresetAs(name))
+                   {
+                       juce::AlertWindow::showMessageBoxAsync(juce::MessageBoxIconType::WarningIcon, "Cannot save",
+                                                              name.isEmpty() ? juce::String("The name is empty.")
+                                                                             : "A preset named \"" + name + "\" already exists.",
+                                                              "OK", safe.getComponent());
+                       return;
+                   }
+                   if (then)
+                       then();
+               });
+}
+
+void MnArpeeAudioEditor::renameDialog(int libraryIndex)
+{
+    const auto list = proc.getPresetList();
+    if (libraryIndex < 0 || libraryIndex >= (int) list.size() || list[(size_t) libraryIndex].factory)
+        return;
+    promptName("Rename preset", "New name:", list[(size_t) libraryIndex].name,
+               [safe = juce::Component::SafePointer<MnArpeeAudioEditor>(this), libraryIndex](juce::String name)
+               {
+                   if (safe != nullptr && ! safe->proc.renamePreset(libraryIndex, name))
+                       juce::AlertWindow::showMessageBoxAsync(juce::MessageBoxIconType::WarningIcon, "Cannot rename",
+                                                              "The name is empty or already used by another preset.",
+                                                              "OK", safe.getComponent());
+               });
+}
+
+void MnArpeeAudioEditor::deleteDialog(int libraryIndex)
+{
+    const auto list = proc.getPresetList();
+    if (libraryIndex < 0 || libraryIndex >= (int) list.size() || list[(size_t) libraryIndex].factory)
+        return;
+    juce::AlertWindow::showAsync(
+        juce::MessageBoxOptions()
+            .withIconType(juce::MessageBoxIconType::WarningIcon)
+            .withTitle("Delete preset")
+            .withMessage("Delete \"" + list[(size_t) libraryIndex].name + "\"? The file is moved to the recycle bin.")
+            .withButton("Delete")
+            .withButton("Cancel")
+            .withAssociatedComponent(this),
+        [safe = juce::Component::SafePointer<MnArpeeAudioEditor>(this), libraryIndex](int result)
+        {
+            if (safe != nullptr && result == 1)
+                safe->proc.deletePreset(libraryIndex);
+        });
+}
+
+void MnArpeeAudioEditor::newClicked()
+{
+    confirmLeavePreset([safe = juce::Component::SafePointer<MnArpeeAudioEditor>(this)]
+                       {
+                           if (safe != nullptr)
+                               safe->proc.newPreset();
+                       });
+}
+
+void MnArpeeAudioEditor::saveClicked()
+{
+    const auto active = proc.getActivePreset();
+    if (! active.dirty)
+        return;
+    if (active.factory || active.file == juce::File())
+        saveActiveAs(nullptr);
+    else
+        proc.saveActivePreset();
+}
+
+void MnArpeeAudioEditor::showPresetMenu()
+{
+    const auto active = proc.getActivePreset();
+    const bool saved = ! active.factory && active.file != juce::File();
+    juce::PopupMenu menu;
+    menu.setLookAndFeel(&lnf);
+    menu.addItem(1, "Save as...");
+    menu.addItem(2, "Revert", active.dirty && active.file != juce::File());
+    menu.addItem(3, "Rename...", saved);
+    menu.addSeparator();
+    menu.addItem(4, "Import...");
+    menu.addItem(5, "Export...");
+    menu.addItem(6, "Show in folder");
+    menu.addSeparator();
+    menu.addItem(7, "Delete", saved);
+    menu.showMenuAsync(juce::PopupMenu::Options().withTargetComponent(&menuButton),
+                       [safe = juce::Component::SafePointer<MnArpeeAudioEditor>(this)](int result)
+                       {
+                           if (safe == nullptr || result == 0)
+                               return;
+                           auto& p = safe->proc;
+                           switch (result)
+                           {
+                               case 1: safe->saveActiveAs(nullptr); break;
+                               case 2: p.revertActivePreset(); break;
+                               case 3: safe->renameDialog(p.getActivePresetIndex()); break;
+                               case 4: safe->importPresets(); break;
+                               case 5: safe->exportPreset(); break;
+                               case 6:
+                               {
+                                   const auto file = p.getActivePreset().file;
+                                   if (file.existsAsFile())
+                                       file.revealToUser();
+                                   else
+                                   {
+                                       p.getUserPresetFolder().createDirectory();
+                                       p.getUserPresetFolder().revealToUser();
+                                   }
+                                   break;
+                               }
+                               case 7: safe->deleteDialog(p.getActivePresetIndex()); break;
+                               default: break;
+                           }
+                       });
+}
+
+void MnArpeeAudioEditor::importPresets()
+{
+    confirmLeavePreset(
+        [safe = juce::Component::SafePointer<MnArpeeAudioEditor>(this)]
+        {
+            if (safe == nullptr)
+                return;
+            safe->fileChooser = std::make_unique<juce::FileChooser>(
+                "Import presets", juce::File::getSpecialLocation(juce::File::userDocumentsDirectory), "*.xml");
+            safe->fileChooser->launchAsync(juce::FileBrowserComponent::openMode | juce::FileBrowserComponent::canSelectFiles,
+                                           [safe](const juce::FileChooser& chooser)
+                                           {
+                                               const auto file = chooser.getResult();
+                                               if (safe == nullptr || file == juce::File())
+                                                   return;
+                                               if (safe->proc.importPresets(file) == 0)
+                                                   juce::AlertWindow::showMessageBoxAsync(
+                                                       juce::MessageBoxIconType::WarningIcon, "Import",
+                                                       "No presets were found in that file.", "OK", safe.getComponent());
+                                           });
+        });
+}
+
+void MnArpeeAudioEditor::exportPreset()
+{
+    const auto active = proc.getActivePreset();
+    fileChooser = std::make_unique<juce::FileChooser>(
+        "Export preset",
+        juce::File::getSpecialLocation(juce::File::userDocumentsDirectory)
+            .getChildFile(juce::File::createLegalFileName(active.name) + ".xml"),
+        "*.xml");
+    fileChooser->launchAsync(juce::FileBrowserComponent::saveMode | juce::FileBrowserComponent::canSelectFiles
+                                 | juce::FileBrowserComponent::warnAboutOverwriting,
+                             [safe = juce::Component::SafePointer<MnArpeeAudioEditor>(this)](const juce::FileChooser& chooser)
+                             {
+                                 const auto file = chooser.getResult();
+                                 if (safe != nullptr && file != juce::File())
+                                     safe->proc.exportActivePreset(file.withFileExtension("xml"));
+                             });
+}
+
+void MnArpeeAudioEditor::refreshPresetUi()
+{
+    const auto a = proc.getActivePreset();
+    if (shownPresetValid && a.name == shownPreset.name && a.dirty == shownPreset.dirty && a.file == shownPreset.file
+        && a.factory == shownPreset.factory)
+        return;
+    shownPreset = a;
+    shownPresetValid = true;
+    presetButton.setButtonText(a.name);
+    saveButton.setEnabled(a.dirty);
+    repaint(presetButton.getBounds().expanded(4));
+}
+
+void MnArpeeAudioEditor::paintOverChildren(juce::Graphics& g)
+{
+    // Unsaved changes: a dot at the left of the preset name.
+    if (shownPresetValid && shownPreset.dirty)
+    {
+        const auto b = presetButton.getBounds();
+        g.setColour(Pal::accent());
+        g.fillEllipse((float) b.getX() + 10.0f, (float) b.getCentreY() - 4.0f, 8.0f, 8.0f);
+    }
 }
 
 void MnArpeeAudioEditor::paint(juce::Graphics& g)
@@ -292,20 +726,27 @@ void MnArpeeAudioEditor::resized()
 {
     auto area = getLocalBounds().reduced(12);
 
-    // Header: brand, the program picker, the held notes, and the latch on the right.
+    // Header: brand, the preset picker (arrows, name, New, Save, Menu), the held notes and the latch.
     auto header = area.removeFromTop(56);
-    auto latchArea = header.removeFromRight(150);
+    auto latchArea = header.removeFromRight(112);
     brandArea = header.removeFromLeft(170);
     latchButton.setBounds(latchArea.getX(), latchArea.getCentreY() - 12, 100, 24);
 
+    header.removeFromLeft(10);
+    auto picker = header.removeFromLeft(26 + 4 + 190 + 4 + 26 + 8 + 52 + 6 + 52 + 6 + 62).withSizeKeepingCentre(
+        26 + 4 + 190 + 4 + 26 + 8 + 52 + 6 + 52 + 6 + 62, 34);
+    prevPresetButton.setBounds(picker.removeFromLeft(26).reduced(6, 8));
+    picker.removeFromLeft(4);
+    presetButton.setBounds(picker.removeFromLeft(190));
+    picker.removeFromLeft(4);
+    nextPresetButton.setBounds(picker.removeFromLeft(26).reduced(6, 8));
+    picker.removeFromLeft(8);
+    newButton.setBounds(picker.removeFromLeft(52));
+    picker.removeFromLeft(6);
+    saveButton.setBounds(picker.removeFromLeft(52));
+    picker.removeFromLeft(6);
+    menuButton.setBounds(picker.removeFromLeft(62));
     header.removeFromLeft(14);
-    auto picker = header.removeFromLeft(26 + 4 + 230 + 4 + 26).withSizeKeepingCentre(26 + 4 + 230 + 4 + 26, 34);
-    prevProgramButton.setBounds(picker.removeFromLeft(26).reduced(6, 8));
-    picker.removeFromLeft(4);
-    programButton.setBounds(picker.removeFromLeft(230));
-    picker.removeFromLeft(4);
-    nextProgramButton.setBounds(picker.removeFromLeft(26).reduced(6, 8));
-    header.removeFromLeft(18);
     statusArea = header.withSizeKeepingCentre(header.getWidth(), 24);
 
     // Values card: one row of "LABEL value" bars.
@@ -332,7 +773,8 @@ void MnArpeeAudioEditor::resized()
 void MnArpeeAudioEditor::timerCallback()
 {
     // Follow program switches, model changes (edits, state loads) and the step count.
-    const int prog = selectedProgram();
+    refreshPresetUi();
+    const int prog = proc.getActiveSlot();
     int steps = shownProgram.numSteps;
     if (auto* sp = proc.getApvts().getRawParameterValue("steps"))
         steps = (int) std::lround(sp->load());
@@ -365,9 +807,8 @@ void MnArpeeAudioEditor::timerCallback()
 void MnArpeeAudioEditor::reloadProgram()
 {
     shownModelVersion = proc.getModelVersion();
-    shownProgramIndex = selectedProgram();
-    shownProgram = proc.getProgramCopy(shownProgramIndex);
-    programButton.setButtonText(juce::String(shownProgramIndex + 1) + "  " + proc.getProgramName(shownProgramIndex));
+    shownProgramIndex = proc.getActiveSlot();
+    shownProgram = proc.getProgramCopy();
     grid.setProgram(shownProgram);
     grid.setEditStep(editStep);
 }
@@ -375,7 +816,7 @@ void MnArpeeAudioEditor::reloadProgram()
 void MnArpeeAudioEditor::commitStep(const mnArpee::Step& step)
 {
     shownProgram.steps[(size_t) editStep] = step;
-    proc.setStep(shownProgramIndex, editStep, step);
+    proc.setStep(editStep, step);
     shownModelVersion = proc.getModelVersion(); // our own edit: no reload needed
     grid.setProgram(shownProgram);
 }

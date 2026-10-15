@@ -270,7 +270,6 @@ void StepGrid::paint(juce::Graphics& g)
 
         const auto& step = program.steps[(size_t) s];
         const int stepRow = rowForStep(step);
-        const bool isEdit = (s == editStep);
         const bool isPlay = (s == playStep);
 
         const bool silent = step.type == mnArpee::StepType::Off || step.type == mnArpee::StepType::Rest;
@@ -300,8 +299,6 @@ void StepGrid::paint(juce::Graphics& g)
                 col = Palette::cellOff().brighter(0.15f);
             else
                 col = Palette::cellOff();
-            if (isEdit)
-                col = col.brighter(0.12f);
 
             g.setColour(col);
             g.fillRoundedRectangle(cell.toFloat(), 3.0f);
@@ -345,12 +342,6 @@ void StepGrid::paint(juce::Graphics& g)
                 g.setFont(markFont);
                 g.drawText(mark, cell, juce::Justification::centred);
             }
-
-            if (isEdit)
-            {
-                g.setColour(Palette::accent2().withAlpha(0.9f));
-                g.drawRoundedRectangle(cell.toFloat(), 3.0f, 1.4f);
-            }
         }
 
         // Value lanes: one box per step and lane.
@@ -391,11 +382,6 @@ void StepGrid::paint(juce::Graphics& g)
             g.setColour(dim ? Palette::dimText().withAlpha(0.5f) : Palette::text());
             g.setFont(mnArpee::fonts::text(visibleSteps() > 32 ? 11.0f : 15.0f, true));
             g.drawText(text, box, juce::Justification::centred, false);
-            if (isEdit)
-            {
-                g.setColour(Palette::accent2().withAlpha(0.9f));
-                g.drawRoundedRectangle(box.toFloat(), 3.0f, 1.2f);
-            }
         }
     }
 

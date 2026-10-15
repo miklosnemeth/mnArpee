@@ -110,6 +110,15 @@ int main()
 {
     juce::ScopedJuceInitialiser_GUI juceInit;
 
+    // The presets of these tests go to a folder of their own, not to the user's Documents.
+    const auto presetDir = juce::File::getSpecialLocation(juce::File::tempDirectory)
+                               .getChildFile("mnArpeeTests-" + juce::String(juce::Time::currentTimeMillis()));
+   #if JUCE_WINDOWS
+    _putenv_s("MNARPEE_PRESET_DIR", presetDir.getFullPathName().toRawUTF8());
+   #else
+    setenv("MNARPEE_PRESET_DIR", presetDir.getFullPathName().toRawUTF8(), 1);
+   #endif
+
     // MIDI timing, channel and live parameters.
     {
         auto p = makeProcessor();
@@ -124,46 +133,134 @@ int main()
         check(ev2.size() >= 2 && ev2[1].time - ev2[0].time == 2756, "gate-param-live"); // 1/16 at 50%
     }
 
-    // Programs: switching loads the program's own parameters and keeps edits.
+    // Presets: the library, loading, unsaved changes.
     {
         auto p = makeProcessor();
+        const auto list = p->getPresetList();
+        check(list.size() >= 8 && list[0].factory && list[0].name == "Trance Up 16", "factory-presets-listed");
+        check(p->getNumPrograms() == 128 && p->getProgramName(1) == "Bass 8ths" && p->getProgramName(100) == "-",
+              "host-program-list-mirrors-presets");
+        check(! p->getActivePreset().dirty && p->getActivePresetIndex() == 0, "first-preset-active-and-clean");
+
+        check(p->loadPreset(1), "load-preset");
+        check(param(*p, "rate") == 6 && param(*p, "gate") == 90 && p->getActivePreset().name == "Bass 8ths"
+                  && ! p->getActivePreset().dirty,
+              "load-preset-loads-params");
         setParam(*p, "gate", 50);
-        setParam(*p, "program", 2); // factory "Bass 8ths": 1/8, gate 90
-        check(param(*p, "rate") == 6 && param(*p, "gate") == 90, "program-switch-loads-params");
-        setParam(*p, "program", 1);
-        check(param(*p, "gate") == 50, "program-switch-keeps-edits");
-        check(p->getProgramName(1) == "Bass 8ths" && p->getNumPrograms() == 8, "host-program-list");
+        check(p->getActivePreset().dirty, "param-edit-marks-preset-dirty");
+        check(! p->saveActivePreset(), "factory-preset-cannot-be-overwritten");
+        p->revertActivePreset();
+        check(param(*p, "gate") == 90 && ! p->getActivePreset().dirty, "revert-restores-preset");
+
+        // The host's program change loads a preset too.
+        p->setCurrentProgram(2);
+        p->handlePendingUpdates();
+        check(p->getActivePreset().name == "Up-Down Pad" && p->getCurrentProgram() == 2, "host-program-change-loads-preset");
     }
 
-    // State: save and load into a new instance.
+    // Presets: save as, save, rename, duplicate, export/import, delete.
     {
         auto p = makeProcessor();
-        auto st = p->getProgramCopy(0).steps[1];
+        const auto before = p->getPresetList().size();
+        p->newPreset();
+        check(p->getActivePreset().name == "New Arp" && p->getActivePreset().dirty
+                  && p->getActivePreset().file == juce::File(),
+              "new-preset-is-unsaved");
+        check(! p->saveActivePresetAs("Bass 8ths") && ! p->saveActivePresetAs("  "), "save-as-rejects-used-or-empty-name");
+        setParam(*p, "gate", 33);
+        auto st = p->getProgramCopy().steps[2];
         st.type = mnArpee::StepType::Tie;
-        st.keyIndex = 3;
-        p->setStep(0, 1, st);
+        st.octave = 2;
+        p->setStep(2, st);
+        check(p->saveActivePresetAs("My Test Arp"), "save-as");
+        const auto saved = p->getActivePreset();
+        check(saved.file.existsAsFile() && saved.file.getParentDirectory() == p->getUserPresetFolder()
+                  && ! saved.dirty && p->getPresetList().size() == before + 1,
+              "save-as-writes-user-file");
+
+        st.velocity = 77;
+        p->setStep(3, st);
+        check(p->getActivePreset().dirty && p->saveActivePreset() && ! p->getActivePreset().dirty, "save-overwrites-file");
+
+        // Loading it from the list gives the same pattern back.
+        int index = -1;
+        const auto list = p->getPresetList();
+        for (int i = 0; i < (int) list.size(); ++i)
+            if (list[(size_t) i].name == "My Test Arp")
+                index = i;
+        check(index >= 0 && list[(size_t) index].program.gatePercent == 33
+                  && list[(size_t) index].program.steps[2].type == mnArpee::StepType::Tie
+                  && list[(size_t) index].program.steps[2].octave == 2 && list[(size_t) index].program.steps[3].velocity == 77,
+              "saved-preset-keeps-the-pattern");
+
+        // Rename (the file follows).
+        check(p->renamePreset(index, "My Renamed Arp") && p->getActivePreset().name == "My Renamed Arp"
+                  && p->getActivePreset().file.getFileName() == "My Renamed Arp.xml" && ! p->getActivePreset().dirty,
+              "rename-preset");
+        check(! p->renamePreset(0, "Whatever"), "factory-preset-cannot-be-renamed");
+
+        // Export, import (gets a free name), duplicate.
+        const auto exported = p->getUserPresetFolder().getSiblingFile("exported.xml");
+        check(p->exportActivePreset(exported) && exported.existsAsFile(), "export-preset");
+        check(p->importPresets(exported) == 1 && p->getActivePreset().name == "My Renamed Arp 2", "import-preset-gets-free-name");
+        const int copy = p->duplicatePreset(p->getActivePresetIndex());
+        check(copy >= 0 && p->getPresetList()[(size_t) copy].name == "My Renamed Arp 2 copy", "duplicate-preset");
+        exported.deleteFile();
+
+        // Delete: the active preset stays as an unsaved one.
+        const auto filesBefore = p->getUserPresetFolder().getNumberOfChildFiles(juce::File::findFiles, "*.xml");
+        check(p->deletePreset(p->getActivePresetIndex())
+                  && p->getUserPresetFolder().getNumberOfChildFiles(juce::File::findFiles, "*.xml") == filesBefore - 1
+                  && p->getActivePreset().file == juce::File() && p->getActivePreset().dirty,
+              "delete-preset");
+    }
+
+    // State: the project stores the active preset's content.
+    {
+        auto p = makeProcessor();
+        p->loadPreset(1);
         setParam(*p, "gate", 50);
         setParam(*p, "steps", 4);
+        auto st = p->getProgramCopy().steps[1];
+        st.type = mnArpee::StepType::Tie;
+        st.keyIndex = 3;
+        p->setStep(1, st);
         setParam(*p, "swing", 25);
         juce::MemoryBlock state;
         p->getStateInformation(state);
 
         auto q = makeProcessor();
         q->setStateInformation(state.getData(), (int) state.getSize());
-        q->handlePendingUpdates();
-        const auto prog = q->getProgramCopy(0);
+        const auto prog = q->getProgramCopy();
+        const auto a = q->getActivePreset();
         check(prog.steps[1].type == mnArpee::StepType::Tie && prog.steps[1].keyIndex == 3
                   && prog.gatePercent == 50 && prog.swingPercent == 25 && prog.numSteps == 4,
               "state-roundtrip");
-        check(q->getProgramCopy(1).gatePercent == 90 && q->getProgramName(1) == "Bass 8ths",
-              "state-other-programs");
+        check(a.name == "Bass 8ths" && a.factory && a.dirty && q->getActivePresetIndex() == 1,
+              "state-rebinds-preset-and-keeps-unsaved-changes");
+
+        // A preset the library does not have comes back as an unsaved one.
+        auto r = makeProcessor();
+        r->newPreset();
+        r->saveActivePresetAs("Only On This Machine");
+        juce::MemoryBlock otherState;
+        r->getStateInformation(otherState);
+        r->deletePreset(r->getActivePresetIndex());
+        auto s = makeProcessor();
+        s->setStateInformation(otherState.getData(), (int) otherState.getSize());
+        check(s->getActivePreset().name == "Only On This Machine" && s->getActivePreset().file == juce::File()
+                  && s->getActivePreset().dirty,
+              "state-with-unknown-preset-is-unsaved");
 
         const char garbage[] = "definitely not a plugin state";
         q->setStateInformation(garbage, (int) sizeof(garbage));
-        check(q->getProgramCopy(0).steps[1].type == mnArpee::StepType::Tie, "state-garbage-ignored");
+        check(q->getProgramCopy().steps[1].type == mnArpee::StepType::Tie, "state-garbage-ignored");
 
-        // States from before the 32-step limit (64 steps per program; "AMN2" also has a chain section).
+        // States from before the presets (a bank of programs; 64 steps per program before the
+        // 32-step limit, "AMN2" with a chain section): the selected program comes back as an
+        // unsaved preset.
         auto xml = juce::AudioProcessor::getXmlFromBinary(state.getData(), (int) state.getSize());
+        xml->removeAttribute("preset");
         auto legacyBank = [](int magic, bool withChains)
         {
             juce::MemoryOutputStream o;
@@ -171,7 +268,7 @@ int main()
             o.writeInt(2); // programs
             for (int pi = 0; pi < 2; ++pi)
             {
-                o.writeString("Legacy");
+                o.writeString(pi == 0 ? "Legacy 1" : "Legacy 2");
                 o.writeInt(40); // more than 32 steps
                 o.writeInt(4);  // rate
                 o.writeInt(pi == 0 ? 55 : 90);
@@ -180,7 +277,7 @@ int main()
                 o.writeInt(0);
                 for (int si = 0; si < 64; ++si)
                 {
-                    o.writeByte(pi == 0 && si == 1 ? 3 : 1); // Tie / Normal
+                    o.writeByte(pi == 1 && si == 1 ? 3 : 1); // Tie / Normal
                     o.writeByte((char) (si % 3));
                     o.writeByte(0);
                     o.writeByte(0);
@@ -204,24 +301,21 @@ int main()
         for (const bool withChains : { true, false })
         {
             xml->setAttribute("bankData", legacyBank(withChains ? 0x324e4d41 : 0x334e4d41, withChains).toBase64Encoding());
+            auto* selected = xml->createNewChildElement("PARAM");
+            selected->setAttribute("id", "program");
+            selected->setAttribute("value", 2);
             juce::MemoryBlock legacyState;
             juce::AudioProcessor::copyXmlToBinary(*xml, legacyState);
-            auto r = makeProcessor();
-            r->setStateInformation(legacyState.getData(), (int) legacyState.getSize());
-            r->handlePendingUpdates();
-            const auto lp = r->getProgramCopy(0);
-            // (program 0 takes its numeric values from the parameters, so program 1 shows the stored ones)
-            check(lp.steps[1].type == mnArpee::StepType::Tie && r->getProgramCopy(1).numSteps == 32
-                      && lp.steps[31].velocity == 96 && r->getProgramCopy(1).gatePercent == 90,
-                  withChains ? "state-with-chains-still-loads" : "state-with-64-steps-still-loads");
-        }
-    }
+            xml->removeChildElement(selected, true);
 
-    // The pattern is at most 32 steps long.
-    {
-        auto p = makeProcessor();
-        setParam(*p, "steps", 64);
-        check(param(*p, "steps") == 32, "steps-max-32");
+            auto legacy = makeProcessor();
+            legacy->setStateInformation(legacyState.getData(), (int) legacyState.getSize());
+            const auto lp = legacy->getProgramCopy();
+            check(legacy->getActivePreset().name == "Legacy 2" && legacy->getActivePreset().file == juce::File()
+                      && lp.steps[1].type == mnArpee::StepType::Tie && lp.steps[31].velocity == 96 && lp.gatePercent == 90
+                      && lp.numSteps == 32,
+                  withChains ? "legacy-state-with-chains-loads" : "legacy-state-with-64-steps-loads");
+        }
     }
 
     // Steps 0 = MIDI thru: notes pass unchanged and in time.

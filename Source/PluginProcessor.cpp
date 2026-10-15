@@ -17,8 +17,6 @@ juce::AudioProcessorValueTreeState::ParameterLayout makeLayout()
     params.push_back(std::make_unique<juce::AudioParameterInt>("octave", "Octave", -2, 2, 0));
     params.push_back(std::make_unique<juce::AudioParameterInt>("gate", "Gate %", 1, 125, 80));
     params.push_back(std::make_unique<juce::AudioParameterInt>("swing", "Swing %", -50, 50, 0));
-    params.push_back(std::make_unique<juce::AudioParameterInt>(
-        "program", "Program", 1, MnArpeeAudioProcessor::numUserPrograms, 1));
     params.push_back(std::make_unique<juce::AudioParameterBool>("latch", "Latch", false));
     params.push_back(std::make_unique<juce::AudioParameterInt>("steps", "Steps", 0, mnArpee::maxSteps, 16));
     return { params.begin(), params.end() };
@@ -40,9 +38,7 @@ void readName(juce::InputStream& in, mnArpee::Name& n)
 MnArpeeAudioProcessor::MnArpeeAudioProcessor()
     : AudioProcessor(BusesProperties())
     , apvts(*this, nullptr, "mnArpee", makeLayout())
-    , model(mnArpee::makeFactoryBank())
 {
-    programParam = apvts.getRawParameterValue("program");
     rateParam = apvts.getRawParameterValue("rate");
     gateParam = apvts.getRawParameterValue("gate");
     swingParam = apvts.getRawParameterValue("swing");
@@ -50,15 +46,29 @@ MnArpeeAudioProcessor::MnArpeeAudioProcessor()
     stepsParam = apvts.getRawParameterValue("steps");
     latchParam = apvts.getRawParameterValue("latch");
 
-    model.numPrograms = std::min(model.numPrograms, numUserPrograms);
-    loadParamsFrom(model.programs[0]);
+    library.refresh();
+    model.numPrograms = 2;
+
+    // The first preset of the library, or an empty pattern if the files cannot be written.
+    mnArpee::Preset first;
+    if (library.size() > 0)
+    {
+        first = library.presets().front();
+    }
+    else
+    {
+        first.name = "Init";
+        first.program = mnArpee::makeInitProgram("Init");
+    }
+    {
+        const juce::ScopedLock lock(modelLock);
+        activatePresetLocked(first, true, false);
+    }
     engine.setBank(model);
-    apvts.addParameterListener("program", this);
 }
 
 MnArpeeAudioProcessor::~MnArpeeAudioProcessor()
 {
-    apvts.removeParameterListener("program", this);
     cancelPendingUpdate();
 }
 
@@ -79,7 +89,7 @@ juce::AudioProcessorEditor* MnArpeeAudioProcessor::createEditor()
 MnArpeeAudioProcessor::ParamValues MnArpeeAudioProcessor::readParams() const
 {
     ParamValues v;
-    v.program = juce::jlimit(0, numUserPrograms - 1, toInt(programParam) - 1);
+    v.program = activeSlot.load();
     v.rate = juce::jlimit(0, mnArpee::numSyncRates - 1, toInt(rateParam));
     v.gate = juce::jlimit(1, 125, toInt(gateParam));
     v.swing = juce::jlimit(-50, 50, toInt(swingParam));
@@ -120,8 +130,8 @@ void MnArpeeAudioProcessor::loadParamsFrom(const mnArpee::Program& prog)
 
 void MnArpeeAudioProcessor::publishBank(bool restartPlayback)
 {
-    // Called with modelLock held. The parameters hold the newest values of the edited program.
-    storeParamsInto(model.programs[(size_t) editedProgram]);
+    // Called with modelLock held. The parameters hold the newest values of the active pattern.
+    storeParamsInto(model.programs[(size_t) activeSlot.load()]);
     {
         const juce::SpinLock::ScopedLockType lock(pendingLock);
         pendingBank = model;
@@ -132,69 +142,245 @@ void MnArpeeAudioProcessor::publishBank(bool restartPlayback)
     ++modelVersion;
 }
 
-void MnArpeeAudioProcessor::parameterChanged(const juce::String& parameterID, float)
+mnArpee::Program MnArpeeAudioProcessor::getProgramCopy() const
 {
-    // May arrive on any thread (host automation): handle on the message thread.
-    if (parameterID == "program")
-        triggerAsyncUpdate();
+    const juce::ScopedLock lock(modelLock);
+    auto prog = model.programs[(size_t) activeSlot.load()];
+    storeParamsInto(prog);
+    return prog;
+}
+
+void MnArpeeAudioProcessor::setStep(int stepIndex, const mnArpee::Step& step)
+{
+    if (stepIndex < 0 || stepIndex >= mnArpee::maxSteps)
+        return;
+    const juce::ScopedLock lock(modelLock);
+    model.programs[(size_t) activeSlot.load()].steps[(size_t) stepIndex] = step;
+    publishBank();
+}
+
+//==============================================================================
+// Presets (message thread)
+
+mnArpee::Preset MnArpeeAudioProcessor::currentPresetLocked() const
+{
+    auto preset = active;
+    preset.program = model.programs[(size_t) activeSlot.load()];
+    storeParamsInto(preset.program);
+    preset.program.name.set(preset.name.toStdString());
+    return preset;
+}
+
+void MnArpeeAudioProcessor::activatePresetLocked(const mnArpee::Preset& preset, bool saved, bool restartPlayback)
+{
+    // The pattern goes into the slot that is not playing, so the engine changes over at the
+    // end of the running pattern (at once when it is idle).
+    const int slot = 1 - activeSlot.load();
+    model.programs[(size_t) slot] = preset.program;
+    model.programs[(size_t) slot].name.set(preset.name.toStdString());
+    active = preset;
+    active.program = {};
+    activeSlot.store(slot);
+    loadParamsFrom(model.programs[(size_t) slot]);
+    savedSnapshot = saved ? mnArpee::presetSnapshot(preset) : juce::String();
+    publishBank(restartPlayback);
+}
+
+MnArpeeAudioProcessor::ActivePreset MnArpeeAudioProcessor::getActivePreset() const
+{
+    const juce::ScopedLock lock(modelLock);
+    ActivePreset a;
+    a.name = active.name;
+    a.group = active.group;
+    a.author = active.author;
+    a.file = active.file;
+    a.factory = active.factory;
+    a.dirty = savedSnapshot.isEmpty() || mnArpee::presetSnapshot(currentPresetLocked()) != savedSnapshot;
+    return a;
+}
+
+std::vector<mnArpee::Preset> MnArpeeAudioProcessor::getPresetList() const
+{
+    const juce::ScopedLock lock(modelLock);
+    return library.presets();
+}
+
+int MnArpeeAudioProcessor::getActivePresetIndex() const
+{
+    const juce::ScopedLock lock(modelLock);
+    return library.indexOfFile(active.file);
+}
+
+bool MnArpeeAudioProcessor::loadPreset(int libraryIndex)
+{
+    const juce::ScopedLock lock(modelLock);
+    if (libraryIndex < 0 || libraryIndex >= library.size())
+        return false;
+    activatePresetLocked(library.presets()[(size_t) libraryIndex], true, false);
+    return true;
+}
+
+void MnArpeeAudioProcessor::newPreset()
+{
+    const juce::ScopedLock lock(modelLock);
+    mnArpee::Preset p;
+    p.name = library.freeName("New Arp");
+    p.program = mnArpee::makeInitProgram();
+    activatePresetLocked(p, false, false);
+}
+
+bool MnArpeeAudioProcessor::saveActivePreset()
+{
+    const juce::ScopedLock lock(modelLock);
+    if (active.factory || active.file == juce::File())
+        return false;
+    auto preset = currentPresetLocked();
+    if (! library.save(preset))
+        return false;
+    active.file = preset.file;
+    savedSnapshot = mnArpee::presetSnapshot(preset);
+    return true;
+}
+
+bool MnArpeeAudioProcessor::saveActivePresetAs(const juce::String& name)
+{
+    const juce::ScopedLock lock(modelLock);
+    const auto trimmed = name.trim();
+    if (trimmed.isEmpty() || library.nameExists(trimmed))
+        return false;
+    auto preset = currentPresetLocked();
+    preset.name = trimmed;
+    preset.factory = false;
+    preset.file = {};
+    preset.group = "User";
+    if (! library.save(preset))
+        return false;
+    active = preset;
+    active.program = {};
+    model.programs[(size_t) activeSlot.load()].name.set(preset.name.toStdString());
+    savedSnapshot = mnArpee::presetSnapshot(preset);
+    publishBank();
+    return true;
+}
+
+void MnArpeeAudioProcessor::revertActivePreset()
+{
+    const juce::ScopedLock lock(modelLock);
+    const int index = library.indexOfFile(active.file);
+    if (index >= 0)
+        activatePresetLocked(library.presets()[(size_t) index], true, false);
+}
+
+bool MnArpeeAudioProcessor::renamePreset(int libraryIndex, const juce::String& newName)
+{
+    const juce::ScopedLock lock(modelLock);
+    if (libraryIndex < 0 || libraryIndex >= library.size())
+        return false;
+    const auto entry = library.presets()[(size_t) libraryIndex];
+    const auto name = newName.trim();
+    if (entry.factory || name.isEmpty() || (library.nameExists(name) && ! entry.name.equalsIgnoreCase(name)))
+        return false;
+    mnArpee::Preset renamed;
+    if (! library.rename(entry, name, renamed))
+        return false;
+    if (active.file == entry.file)
+    {
+        active.name = renamed.name;
+        active.file = renamed.file;
+        model.programs[(size_t) activeSlot.load()].name.set(renamed.name.toStdString());
+        savedSnapshot = mnArpee::presetSnapshot(renamed);
+        publishBank();
+    }
+    return true;
+}
+
+bool MnArpeeAudioProcessor::deletePreset(int libraryIndex)
+{
+    const juce::ScopedLock lock(modelLock);
+    if (libraryIndex < 0 || libraryIndex >= library.size())
+        return false;
+    const auto entry = library.presets()[(size_t) libraryIndex];
+    if (! library.remove(entry))
+        return false;
+    if (active.file == entry.file)
+    {
+        active.file = {}; // the pattern stays, as an unsaved preset
+        savedSnapshot = {};
+    }
+    return true;
+}
+
+int MnArpeeAudioProcessor::duplicatePreset(int libraryIndex)
+{
+    const juce::ScopedLock lock(modelLock);
+    if (libraryIndex < 0 || libraryIndex >= library.size())
+        return -1;
+    mnArpee::Preset copy;
+    if (! library.duplicate(library.presets()[(size_t) libraryIndex], copy))
+        return -1;
+    return library.indexOfFile(copy.file);
+}
+
+int MnArpeeAudioProcessor::importPresets(const juce::File& file)
+{
+    const juce::ScopedLock lock(modelLock);
+    juce::String first;
+    const int count = library.importFile(file, &first);
+    if (count > 0)
+        for (int i = 0; i < library.size(); ++i)
+            if (! library.presets()[(size_t) i].factory && library.presets()[(size_t) i].name == first)
+            {
+                activatePresetLocked(library.presets()[(size_t) i], true, false);
+                break;
+            }
+    return count;
+}
+
+bool MnArpeeAudioProcessor::exportActivePreset(const juce::File& file) const
+{
+    const juce::ScopedLock lock(modelLock);
+    return library.exportPreset(currentPresetLocked(), file);
+}
+
+juce::String MnArpeeAudioProcessor::freePresetName(const juce::String& wanted) const
+{
+    const juce::ScopedLock lock(modelLock);
+    return library.freeName(wanted);
+}
+
+//==============================================================================
+// Host programs: the preset list (message thread for loads).
+
+int MnArpeeAudioProcessor::getNumPrograms() { return numHostPrograms; }
+
+int MnArpeeAudioProcessor::getCurrentProgram()
+{
+    return juce::jlimit(0, numHostPrograms - 1, getActivePresetIndex());
+}
+
+void MnArpeeAudioProcessor::setCurrentProgram(int index)
+{
+    // May be called on any thread: the load happens on the message thread.
+    pendingHostProgram.store(index);
+    triggerAsyncUpdate();
 }
 
 void MnArpeeAudioProcessor::handleAsyncUpdate()
 {
-    const juce::ScopedLock lock(modelLock);
-    const int newProgram = readParams().program;
-    if (newProgram == editedProgram)
-        return;
-    storeParamsInto(model.programs[(size_t) editedProgram]);
-    editedProgram = newProgram;
-    loadParamsFrom(model.programs[(size_t) editedProgram]);
-    publishBank();
-}
-
-mnArpee::Program MnArpeeAudioProcessor::getProgramCopy(int index) const
-{
-    const juce::ScopedLock lock(modelLock);
-    auto prog = model.programs[(size_t) juce::jlimit(0, numUserPrograms - 1, index)];
-    if (index == editedProgram)
-        storeParamsInto(prog);
-    return prog;
-}
-
-void MnArpeeAudioProcessor::setStep(int programIndex, int stepIndex, const mnArpee::Step& step)
-{
-    if (programIndex < 0 || programIndex >= numUserPrograms || stepIndex < 0
-        || stepIndex >= mnArpee::maxSteps)
-        return;
-    const juce::ScopedLock lock(modelLock);
-    model.programs[(size_t) programIndex].steps[(size_t) stepIndex] = step;
-    publishBank();
-}
-
-int MnArpeeAudioProcessor::getNumPrograms() { return numUserPrograms; }
-
-int MnArpeeAudioProcessor::getCurrentProgram() { return readParams().program; }
-
-void MnArpeeAudioProcessor::setCurrentProgram(int index)
-{
-    setParamValue("program", (float) (juce::jlimit(0, numUserPrograms - 1, index) + 1));
+    const int index = pendingHostProgram.exchange(-1);
+    if (index >= 0 && index != getActivePresetIndex())
+        loadPreset(index);
 }
 
 const juce::String MnArpeeAudioProcessor::getProgramName(int index)
 {
-    if (index < 0 || index >= numUserPrograms)
-        return {};
     const juce::ScopedLock lock(modelLock);
-    return juce::String::fromUTF8(model.programs[(size_t) index].name.chars.data());
+    if (index < 0 || index >= library.size())
+        return "-";
+    return library.presets()[(size_t) index].name;
 }
 
-void MnArpeeAudioProcessor::changeProgramName(int index, const juce::String& newName)
-{
-    if (index < 0 || index >= numUserPrograms)
-        return;
-    const juce::ScopedLock lock(modelLock);
-    model.programs[(size_t) index].name.set(newName.toStdString());
-    publishBank();
-}
+void MnArpeeAudioProcessor::changeProgramName(int, const juce::String&) {}
 
 //==============================================================================
 // Audio thread
@@ -203,7 +389,7 @@ void MnArpeeAudioProcessor::prepareToPlay(double, int)
 {
     {
         const juce::ScopedLock lock(modelLock);
-        storeParamsInto(model.programs[(size_t) editedProgram]);
+        storeParamsInto(model.programs[(size_t) activeSlot.load()]);
         engine.setBank(model);
     }
     bankDirty.store(false);
@@ -390,47 +576,68 @@ juce::AudioProcessor* JUCE_CALLTYPE createPluginFilter()
 
 //==============================================================================
 // State
+//
+// The project stores the active preset's current content (not a reference to a file), so it
+// plays back the same wherever it is opened. When the library has a preset of that name the
+// active preset is bound to it again, otherwise it comes back as an unsaved one.
 
 void MnArpeeAudioProcessor::getStateInformation(juce::MemoryBlock& destData)
 {
-    // The bank is stored as a base64 attribute inside the APVTS XML, so there is
-    // a single, self-describing state blob (copyXmlToBinary overwrites destData).
-    juce::MemoryBlock bankBlock;
+    juce::String presetText;
     {
         const juce::ScopedLock lock(modelLock);
-        storeParamsInto(model.programs[(size_t) editedProgram]);
-        juce::MemoryOutputStream out(bankBlock, false);
-        out.writeInt(stateMagic);
-        out.writeInt(model.numPrograms);
-        for (int pi = 0; pi < model.numPrograms; ++pi)
-        {
-            const auto& prog = model.programs[(size_t) pi];
-            writeName(out, prog.name);
-            out.writeInt(prog.numSteps);
-            out.writeInt((int) prog.sync);
-            out.writeInt(prog.gatePercent);
-            out.writeInt(prog.swingPercent);
-            out.writeInt(prog.octaveShift);
-            out.writeInt(prog.transposeOct);
-            for (const auto& s : prog.steps)
-            {
-                out.writeByte((char) s.type);
-                out.writeByte(s.keyIndex);
-                out.writeByte(s.scaleStep);
-                out.writeByte(s.octave);
-                out.writeByte((char) s.velocity);
-                out.writeShort((short) s.gateScalePercent);
-                out.writeByte((char) s.chance);
-            }
-        }
+        presetText = mnArpee::presetToXml(currentPresetLocked())->toString(juce::XmlElement::TextFormat().singleLine());
     }
     auto state = apvts.copyState();
     if (auto xml = state.createXml())
     {
-        xml->setAttribute("bankData", bankBlock.toBase64Encoding());
+        xml->setAttribute("preset", presetText);
         copyXmlToBinary(*xml, destData);
     }
 }
+
+namespace
+{
+// Reads the bank of states saved before the presets ("AMN2".."AMN4"); the programs go into `out`.
+bool readLegacyBank(const juce::MemoryBlock& bankBlock, mnArpee::Bank& out)
+{
+    juce::MemoryInputStream in(bankBlock, false);
+    const int magic = in.readInt();
+    if (magic != stateMagic && magic != stateMagic64Steps && magic != stateMagicWithChains)
+        return false;
+
+    const int numProgs = in.readInt();
+    if (numProgs <= 0 || numProgs > mnArpee::maxPrograms)
+        return false;
+    out.numPrograms = numProgs;
+    for (int pi = 0; pi < numProgs; ++pi)
+    {
+        auto& prog = out.programs[(size_t) pi];
+        readName(in, prog.name);
+        prog.numSteps = juce::jlimit(0, mnArpee::maxSteps, in.readInt());
+        prog.sync = (mnArpee::SyncRate) juce::jlimit(0, mnArpee::numSyncRates - 1, in.readInt());
+        prog.gatePercent = juce::jlimit(1, 125, in.readInt());
+        prog.swingPercent = juce::jlimit(-50, 50, in.readInt());
+        prog.octaveShift = juce::jlimit(-2, 2, in.readInt());
+        prog.transposeOct = juce::jlimit(-3, 3, in.readInt());
+        // States from before the 32-step limit store 64 steps per program.
+        const int stepsInState = magic == stateMagic ? mnArpee::maxSteps : 64;
+        for (int si = 0; si < stepsInState; ++si)
+        {
+            mnArpee::Step dropped;
+            auto& s = si < mnArpee::maxSteps ? prog.steps[(size_t) si] : dropped;
+            s.type = mnArpee::stepTypeFromInt((int) in.readByte());
+            s.keyIndex = (std::int8_t) juce::jlimit((int) mnArpee::rootKeyIndex, 4, (int) in.readByte());
+            s.scaleStep = (std::int8_t) juce::jlimit(-12, 12, (int) in.readByte());
+            s.octave = (std::int8_t) juce::jlimit(-3, 3, (int) in.readByte());
+            s.velocity = (std::uint8_t) juce::jlimit(0, 127, (int) (unsigned char) in.readByte());
+            s.gateScalePercent = (std::uint16_t) juce::jlimit(10, 800, (int) in.readShort());
+            s.chance = (std::uint8_t) juce::jlimit(1, 100, (int) (unsigned char) in.readByte());
+        }
+    }
+    return true; // the chain section after the programs is not needed
+}
+} // namespace
 
 void MnArpeeAudioProcessor::setStateInformation(const void* data, int sizeInBytes)
 {
@@ -440,70 +647,51 @@ void MnArpeeAudioProcessor::setStateInformation(const void* data, int sizeInByte
     if (xml == nullptr || ! xml->hasTagName(apvts.state.getType()))
         return;
 
-    // Parse into a heap copy first; the model is only replaced when everything is valid.
-    auto loaded = std::make_unique<mnArpee::Bank>(mnArpee::makeFactoryBank());
-    bool bankOk = false;
-    juce::MemoryBlock bankBlock;
-    if (bankBlock.fromBase64Encoding(xml->getStringAttribute("bankData")))
-    {
-        juce::MemoryInputStream in(bankBlock, false);
-        const int magic = in.readInt();
-        if (magic == stateMagic || magic == stateMagic64Steps || magic == stateMagicWithChains)
-        {
-            const int numProgs = in.readInt();
-            bankOk = numProgs > 0 && numProgs <= mnArpee::maxPrograms;
-            for (int pi = 0; bankOk && pi < numProgs; ++pi)
-            {
-                auto& prog = loaded->programs[(size_t) pi];
-                readName(in, prog.name);
-                prog.numSteps = juce::jlimit(0, mnArpee::maxSteps, in.readInt());
-                prog.sync = (mnArpee::SyncRate) juce::jlimit(0, mnArpee::numSyncRates - 1, in.readInt());
-                prog.gatePercent = juce::jlimit(1, 125, in.readInt());
-                prog.swingPercent = juce::jlimit(-50, 50, in.readInt());
-                prog.octaveShift = juce::jlimit(-2, 2, in.readInt());
-                prog.transposeOct = juce::jlimit(-3, 3, in.readInt());
-                // States from before the 32-step limit store 64 steps per program.
-                const int stepsInState = magic == stateMagic ? mnArpee::maxSteps : 64;
-                for (int si = 0; si < stepsInState; ++si)
-                {
-                    mnArpee::Step dropped;
-                    auto& s = si < mnArpee::maxSteps ? prog.steps[(size_t) si] : dropped;
-                    s.type = mnArpee::stepTypeFromInt((int) in.readByte());
-                    s.keyIndex = (std::int8_t) juce::jlimit((int) mnArpee::rootKeyIndex, 4, (int) in.readByte());
-                    s.scaleStep = (std::int8_t) juce::jlimit(-12, 12, (int) in.readByte());
-                    s.octave = (std::int8_t) juce::jlimit(-3, 3, (int) in.readByte());
-                    s.velocity = (std::uint8_t) juce::jlimit(0, 127, (int) (unsigned char) in.readByte());
-                    s.gateScalePercent = (std::uint16_t) juce::jlimit(10, 800, (int) in.readShort());
-                    s.chance = (std::uint8_t) juce::jlimit(1, 100, (int) (unsigned char) in.readByte());
-                }
-            }
-            // Slots that are not in the state keep their factory content.
-            loaded->numPrograms = numUserPrograms;
+    // The active preset: from the "preset" attribute, or (older states) the selected program
+    // of the stored bank, which comes back as an unsaved preset.
+    mnArpee::Preset preset;
+    bool havePreset = false;
+    if (auto parsed = juce::parseXML(xml->getStringAttribute("preset")))
+        havePreset = mnArpee::presetFromXml(*parsed, preset);
 
-            if (magic == stateMagicWithChains)
+    if (! havePreset)
+    {
+        juce::MemoryBlock bankBlock;
+        if (bankBlock.fromBase64Encoding(xml->getStringAttribute("bankData")))
+        {
+            auto bank = std::make_unique<mnArpee::Bank>();
+            if (readLegacyBank(bankBlock, *bank))
             {
-                // Chains were removed: skip the section (chains, quantize grid, restart flag).
-                const int numChains = in.readInt();
-                bankOk = bankOk && numChains >= 0 && numChains <= 16;
-                for (int ci = 0; bankOk && ci < numChains; ++ci)
-                {
-                    in.readString();
-                    const int length = in.readInt();
-                    bankOk = length >= 0 && length <= 64;
-                    in.skipNextBytes(length);
-                }
-                in.readDouble(); // chain quantize grid
-                in.readBool();   // restart chain on switch
+                int selected = 1;
+                for (const auto* e : xml->getChildIterator())
+                    if (e->getStringAttribute("id") == "program")
+                        selected = e->getIntAttribute("value", 1);
+                const auto& prog = bank->programs[(size_t) juce::jlimit(0, bank->numPrograms - 1, selected - 1)];
+                preset.name = juce::String::fromUTF8(prog.name.chars.data());
+                preset.program = prog;
+                preset.group = "User";
+                havePreset = preset.name.isNotEmpty();
             }
         }
     }
 
     apvts.replaceState(juce::ValueTree::fromXml(*xml));
+    if (! havePreset)
+        return; // nothing usable in the state: the parameters are what was loaded
+
+    const juce::ScopedLock lock(modelLock);
+    preset.factory = preset.group == "Factory";
+    juce::String snapshot;
+    if (const int index = library.indexOf(preset); index >= 0)
     {
-        const juce::ScopedLock lock(modelLock);
-        if (bankOk)
-            model = *loaded;
-        editedProgram = readParams().program;
-        publishBank(true);
+        preset.file = library.presets()[(size_t) index].file;
+        preset.factory = library.presets()[(size_t) index].factory;
+        snapshot = mnArpee::presetSnapshot(library.presets()[(size_t) index]);
     }
+    else
+    {
+        preset.file = {};
+    }
+    activatePresetLocked(preset, false, true);
+    savedSnapshot = snapshot;
 }
