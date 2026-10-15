@@ -19,8 +19,6 @@ Held notes are sorted by pitch before they reach the engine.
 - Preset library like mnKord: about 40 factory presets in two groups, **Bassline** (only the root of the held chord) and **Melodic** (the held keys), each tagged with musical styles (Trance, House, Techno, Disco, Funk, Pop, Synthwave, Ambient, Chill, Dubstep), plus your own; a preset browser inside the plugin window (search, group and style filters), stars (favourites, shared by all projects), previous/next arrows, New, Save (a dot marks unsaved changes; Save as asks for the name and the styles), and a Menu with Save as, Revert, Rename, Style, Import, Export, Show in folder and Delete; a preset switches at the end of the running pattern
 - The host's program list mirrors the preset list (128 slots, unused ones show "-")
 - Pattern tools: right click in the matrix or on a value box for Set all steps to the clicked value, Randomize the lane, Shift left/right, Reverse, Clear, Copy / Paste pattern (the pattern goes to the system clipboard as the preset XML)
-- RESTART (off / first step / random step): with the host playing, a chord pressed after silence starts the pattern from its first step or a random one; off continues where it stopped
-- HUM VEL (velocity +-0..40) and HUM TIME (timing up to +-25% of a step): random variation, off at 0
 - The chord the held notes form (Cmaj7, Am, C/E, G5, ...) is shown at the right end of the "PATTERN" strip
 - Latch (a new chord replaces the latched one), sustain pedal, panic / all-notes-off, CC/bend/aftertouch pass-through, output on the input channel
 - Sample-accurate MIDI handling; the engine is allocation-free on the audio thread and edits reach it without locks

@@ -136,11 +136,6 @@ public:
     // Selected program: switches at the end of the running pattern, or at once when idle.
     void setCurrentProgram(int index);
     void setLatch(bool on);
-    // With the host playing, a chord pressed after silence starts the pattern from its first step
-    // (1) or from a random step (2); 0: the pattern position follows the song position.
-    void setRestartMode(int mode) { restartMode = std::clamp(mode, 0, 2); }
-    // Random variation: velocity +-velocityAmount (0..127 units), timing up to +-timePercent of a step.
-    void setHumanize(int velocityAmount, int timePercent);
     void setOutputChannel(int channel) { outChannel = channel < 1 ? 1 : (channel > 16 ? 16 : channel); }
     void setRandomFn(RandomFn fn) { randomFn = std::move(fn); }
 
@@ -166,8 +161,6 @@ private:
     void collectInput(InputNotes& out) const;
     static double stepQuarters(const Program& prog);
     double swingQuarters(const Program& prog, long long index, double stepQ) const;
-    double timingJitter(long long index, double stepQ);
-    int humanizedVelocity(int velocity);
     double stepTime(const Program& prog, long long index, double stepQ) const;
     int sampleAt(double ppq) const;
 
@@ -194,11 +187,6 @@ private:
     std::array<std::uint8_t, 128> latchedVel {};
     int heldCount = 0;
     bool latch = false;
-    int restartMode = 0;
-    int humanizeVelocity = 0;
-    int humanizeTimePercent = 0;
-    long long jitterForIndex = -1;
-    double jitterValue = 0.0;
     bool sustainDown = false;
     bool hadInput = false;
 

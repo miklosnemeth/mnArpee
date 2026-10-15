@@ -13,7 +13,7 @@ juce::Typeface::Ptr montserrat();
 juce::Typeface::Ptr robotoCondensed();
 
 // UI text.
-juce::Font text(float height, bool bold = false);
+juce::Font text(float height, bool bold = true);
 // Header title.
 juce::Font title(float height);
 } // namespace mnArpee::fonts

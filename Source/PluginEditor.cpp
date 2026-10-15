@@ -84,7 +84,7 @@ void MnArpeeLookAndFeel::drawToggleButton(juce::Graphics& g, juce::ToggleButton&
         g.strokePath(p, juce::PathStrokeType(2.0f));
     }
     g.setColour(Pal::text());
-    g.setFont(mnArpee::fonts::text(17.0f));
+    g.setFont(mnArpee::fonts::text(17.0f, true));
     g.drawText(btn.getButtonText(), r.reduced(6.0f, 0.0f), juce::Justification::centredLeft);
 }
 
@@ -93,9 +93,18 @@ juce::Font MnArpeeLookAndFeel::getComboBoxFont(juce::ComboBox& box)
     return mnArpee::fonts::text(juce::jmin(17.0f, (float) box.getHeight() * 0.62f), true);
 }
 
-juce::Font MnArpeeLookAndFeel::getPopupMenuFont() { return mnArpee::fonts::text(17.0f); }
+juce::Font MnArpeeLookAndFeel::getPopupMenuFont() { return mnArpee::fonts::text(17.0f, true); }
 
-juce::Font MnArpeeLookAndFeel::getSliderPopupFont(juce::Slider&) { return mnArpee::fonts::text(16.0f); }
+juce::Font MnArpeeLookAndFeel::getTextButtonFont(juce::TextButton&, int buttonHeight)
+{
+    return mnArpee::fonts::text(juce::jmin(17.0f, (float) buttonHeight * 0.62f), true);
+}
+
+juce::Font MnArpeeLookAndFeel::getAlertWindowTitleFont() { return mnArpee::fonts::text(20.0f, true); }
+juce::Font MnArpeeLookAndFeel::getAlertWindowMessageFont() { return mnArpee::fonts::text(16.0f, true); }
+juce::Font MnArpeeLookAndFeel::getAlertWindowFont() { return mnArpee::fonts::text(15.0f, true); }
+
+juce::Font MnArpeeLookAndFeel::getSliderPopupFont(juce::Slider&) { return mnArpee::fonts::text(16.0f, true); }
 
 void MnArpeeLookAndFeel::drawLinearSlider(juce::Graphics& g, int x, int y, int width, int height,
                                           float sliderPos, float minSliderPos, float maxSliderPos,
@@ -190,9 +199,6 @@ MnArpeeAudioEditor::MnArpeeAudioEditor(MnArpeeAudioProcessor& p)
     gateAtt = std::make_unique<SliderAttachment>(apvts, "gate", gateSlider);
     swingAtt = std::make_unique<SliderAttachment>(apvts, "swing", swingSlider);
     stepsAtt = std::make_unique<SliderAttachment>(apvts, "steps", stepsSlider);
-    restartAtt = std::make_unique<SliderAttachment>(apvts, "restart", restartSlider);
-    humVelAtt = std::make_unique<SliderAttachment>(apvts, "humvel", humVelSlider);
-    humTimeAtt = std::make_unique<SliderAttachment>(apvts, "humtime", humTimeSlider);
 
     // The attachments come first: they set their own value text, which is replaced here.
     setupValueBar(rateSlider, [](double v)
@@ -203,14 +209,6 @@ MnArpeeAudioEditor::MnArpeeAudioEditor(MnArpeeAudioProcessor& p)
     setupValueBar(gateSlider, [](double v) { return "GATE " + juce::String((int) std::lround(v)) + "%"; }, 80.0, 2.0);
     setupValueBar(swingSlider, [signedValue](double v) { return "SWING " + signedValue(v) + "%"; }, 0.0, 2.5);
     setupValueBar(stepsSlider, [](double v) { return "STEPS " + juce::String((int) std::lround(v)); }, 16.0, 7.0);
-    setupValueBar(restartSlider, [](double v)
-                  {
-                      static const char* names[] = { "off", "first step", "random step" };
-                      return "RESTART " + juce::String(names[juce::jlimit(0, 2, (int) std::lround(v))]);
-                  },
-                  0.0, 16.0);
-    setupValueBar(humVelSlider, [](double v) { return "HUM VEL " + juce::String((int) std::lround(v)); }, 0.0, 4.0);
-    setupValueBar(humTimeSlider, [](double v) { return "HUM TIME " + juce::String((int) std::lround(v)) + "%"; }, 0.0, 6.0);
 
     addAndMakeVisible(latchButton);
     latchButton.setButtonText("Latch");
@@ -874,7 +872,7 @@ void MnArpeeAudioEditor::paint(juce::Graphics& g)
 
     // The held notes, right of the "PATTERN" label. White: a key of the matrix. Dim: the same note
     // in another octave as a key, merged into it. Red: left out, more than five different notes.
-    const auto font = mnArpee::fonts::text(17.0f);
+    const auto font = mnArpee::fonts::text(17.0f, true);
     g.setFont(font);
     int x = statusArea.getX();
     auto draw = [&](const juce::String& text, juce::Colour colour)
@@ -933,8 +931,8 @@ void MnArpeeAudioEditor::resized()
     picker.removeFromLeft(6);
     menuButton.setBounds(picker.removeFromLeft(62));
 
-    // Values card: two rows of "LABEL value" bars.
-    paramsCard = area.removeFromTop(100);
+    // Values card: one row of "LABEL value" bars.
+    paramsCard = area.removeFromTop(54);
     area.removeFromTop(10);
 
     // The rest is the matrix card.
@@ -943,18 +941,12 @@ void MnArpeeAudioEditor::resized()
 
     auto inner = paramsCard.reduced(12, 11);
     const int gap = 10;
-    const int barW = (inner.getWidth() - 3 * gap) / 4;
-    auto placeRow = [&](juce::Rectangle<int> row, std::initializer_list<ValueBar*> bars)
+    const int barW = (inner.getWidth() - 4 * gap) / 5;
+    for (auto* bar : { &rateSlider, &octaveSlider, &gateSlider, &swingSlider, &stepsSlider })
     {
-        for (auto* bar : bars)
-        {
-            bar->setBounds(row.removeFromLeft(barW));
-            row.removeFromLeft(gap);
-        }
-    };
-    placeRow(inner.removeFromTop(32), { &rateSlider, &octaveSlider, &gateSlider, &swingSlider });
-    inner.removeFromTop(gap);
-    placeRow(inner.removeFromTop(32), { &stepsSlider, &restartSlider, &humVelSlider, &humTimeSlider });
+        bar->setBounds(inner.removeFromLeft(barW));
+        inner.removeFromLeft(gap);
+    }
 
     if (presetBrowser != nullptr)
         presetBrowser->setBounds(getLocalBounds());

@@ -131,8 +131,6 @@ private:
     struct ParamValues
     {
         int program = -1, rate = -1, gate = -1, swing = -1000, octave = -1000, steps = -1;
-        int humVel = -1, humTime = -1;
-        int restart = -1;
         bool latch = false;
     };
 
@@ -162,9 +160,6 @@ private:
     std::atomic<float>* octaveParam = nullptr;
     std::atomic<float>* stepsParam = nullptr;
     std::atomic<float>* latchParam = nullptr;
-    std::atomic<float>* restartParam = nullptr;
-    std::atomic<float>* humVelParam = nullptr;
-    std::atomic<float>* humTimeParam = nullptr;
 
     // Message thread.
     mutable juce::CriticalSection modelLock;
