@@ -83,6 +83,22 @@ Preset file (a bank file with several `<Preset>` elements is accepted by **Impor
 </mnArpeePreset>
 ```
 
+## Installer (Windows)
+
+The installer puts the VST3 into `%CommonProgramFiles%\VST3` (the Standalone is not included) and the
+license and readme into `Program Files\MNAudio\mnArpee`. It is built with
+[Inno Setup 6](https://jrsoftware.org/isinfo.php) from a Release build:
+
+```powershell
+cmake -S . -B build
+cmake --build build --config Release --target mnArpee_VST3
+& "$env:LOCALAPPDATA\Programs\Inno Setup 6\ISCC.exe" /DMyAppVersion=1.0.0 installer\mnArpee.iss
+```
+
+The result is `build\installer\mnArpee-1.0.0-win-x64-setup.exe`. Use the version in `CMakeLists.txt` for `MyAppVersion`.
+Presets are not part of the installer: the plugin writes its factory presets to
+`Documents\MNAudio\mnArpee` the first time it runs, and the uninstaller leaves your own presets alone.
+
 ## License
 
 AGPLv3 (following the mnKord pattern); JUCE's AGPL option is compatible.
