@@ -90,7 +90,7 @@ void MnArpeeLookAndFeel::drawToggleButton(juce::Graphics& g, juce::ToggleButton&
 
 juce::Font MnArpeeLookAndFeel::getComboBoxFont(juce::ComboBox& box)
 {
-    return mnArpee::fonts::text(juce::jmin(17.0f, (float) box.getHeight() * 0.62f));
+    return mnArpee::fonts::text(juce::jmin(17.0f, (float) box.getHeight() * 0.62f), true);
 }
 
 juce::Font MnArpeeLookAndFeel::getPopupMenuFont() { return mnArpee::fonts::text(17.0f); }
@@ -253,7 +253,7 @@ public:
           list("presets", this)
     {
         search.setTextToShowWhenEmpty("Search presets", Pal::dimText());
-        search.setFont(mnArpee::fonts::text(16.0f));
+        search.setFont(mnArpee::fonts::text(17.0f, true));
         search.addListener(this);
         search.onEscapeKey = [this] { close(); };
         addAndMakeVisible(search);
@@ -281,7 +281,7 @@ public:
         addAndMakeVisible(groupBox);
         addAndMakeVisible(styleBox);
 
-        list.setRowHeight(30);
+        list.setRowHeight(32);
         list.setColour(juce::ListBox::backgroundColourId, juce::Colours::transparentBlack);
         list.setColour(juce::ListBox::outlineColourId, Pal::border());
         list.setOutlineThickness(1);
@@ -387,10 +387,10 @@ private:
         const int nameW = (int) (width * 0.42f);
         const int groupW = (int) (width * 0.20f);
         g.setColour(isActive ? Pal::accent() : Pal::text());
-        g.setFont(mnArpee::fonts::text(17.0f, isActive));
+        g.setFont(mnArpee::fonts::text(18.0f, true));
         g.drawText(p.name, 12, 0, nameW - 12, height, juce::Justification::centredLeft, true);
-        g.setColour(Pal::dimText());
-        g.setFont(mnArpee::fonts::text(15.0f));
+        g.setColour(Pal::dimText().brighter(0.15f));
+        g.setFont(mnArpee::fonts::text(16.0f, true));
         g.drawText(p.group, nameW, 0, groupW, height, juce::Justification::centredLeft, true);
         g.drawText(p.tags.replace(",", ", "), nameW + groupW, 0, width - nameW - groupW - 8, height,
                    juce::Justification::centredLeft, true);
