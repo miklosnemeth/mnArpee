@@ -18,10 +18,6 @@ juce::AudioProcessorValueTreeState::ParameterLayout makeLayout()
     params.push_back(std::make_unique<juce::AudioParameterInt>("gate", "Gate %", 1, 125, 80));
     params.push_back(std::make_unique<juce::AudioParameterInt>("swing", "Swing %", -50, 50, 0));
     params.push_back(std::make_unique<juce::AudioParameterBool>("latch", "Latch", false));
-    params.push_back(std::make_unique<juce::AudioParameterChoice>(
-        "restart", "Restart on new chord", juce::StringArray { "Off", "First step", "Random step" }, 0));
-    params.push_back(std::make_unique<juce::AudioParameterInt>("humvel", "Humanize velocity", 0, 40, 0));
-    params.push_back(std::make_unique<juce::AudioParameterInt>("humtime", "Humanize timing %", 0, 25, 0));
     params.push_back(std::make_unique<juce::AudioParameterInt>("steps", "Steps", 0, mnArpee::maxSteps, 16));
     return { params.begin(), params.end() };
 }
@@ -49,9 +45,6 @@ MnArpeeAudioProcessor::MnArpeeAudioProcessor()
     octaveParam = apvts.getRawParameterValue("octave");
     stepsParam = apvts.getRawParameterValue("steps");
     latchParam = apvts.getRawParameterValue("latch");
-    restartParam = apvts.getRawParameterValue("restart");
-    humVelParam = apvts.getRawParameterValue("humvel");
-    humTimeParam = apvts.getRawParameterValue("humtime");
 
     library.refresh();
     model.numPrograms = 2;
@@ -103,9 +96,6 @@ MnArpeeAudioProcessor::ParamValues MnArpeeAudioProcessor::readParams() const
     v.octave = juce::jlimit(-2, 2, toInt(octaveParam));
     v.steps = juce::jlimit(0, mnArpee::maxSteps, toInt(stepsParam));
     v.latch = latchParam->load() > 0.5f;
-    v.restart = juce::jlimit(0, 2, toInt(restartParam));
-    v.humVel = juce::jlimit(0, 40, toInt(humVelParam));
-    v.humTime = juce::jlimit(0, 25, toInt(humTimeParam));
     return v;
 }
 
@@ -427,9 +417,6 @@ void MnArpeeAudioProcessor::prepareToPlay(double, int)
     bankRestart.store(false);
     applied = readParams(); // the engine bank above already holds these values
     applied.latch = ! applied.latch;
-    applied.restart = -1; // the engine does not know these yet
-    applied.humVel = -1;
-    applied.humTime = -1;
     resendProgram = true;
     events.clear();
     outMidi.ensureSize(4096);
@@ -473,10 +460,6 @@ void MnArpeeAudioProcessor::applyParamsToEngine()
     }
     if (v.latch != applied.latch)
         engine.setLatch(v.latch);
-    if (v.restart != applied.restart)
-        engine.setRestartMode(v.restart);
-    if (v.humVel != applied.humVel || v.humTime != applied.humTime)
-        engine.setHumanize(v.humVel, v.humTime);
     applied = v;
 }
 

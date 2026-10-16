@@ -28,6 +28,10 @@ public:
     juce::Label* createSliderTextBox(juce::Slider&) override;
     juce::Font getComboBoxFont(juce::ComboBox&) override;
     juce::Font getPopupMenuFont() override;
+    juce::Font getTextButtonFont(juce::TextButton&, int buttonHeight) override;
+    juce::Font getAlertWindowTitleFont() override;
+    juce::Font getAlertWindowMessageFont() override;
+    juce::Font getAlertWindowFont() override;
     juce::Font getSliderPopupFont(juce::Slider&) override;
 };
 
@@ -115,7 +119,6 @@ private:
     juce::ArrowButton nextPresetButton { "next preset", 0.0f, Pal::text() };
     juce::TextButton presetButton, newButton, saveButton, menuButton;
     ValueBar rateSlider, octaveSlider, gateSlider, swingSlider, stepsSlider;
-    ValueBar restartSlider, humVelSlider, humTimeSlider;
     juce::ToggleButton latchButton;
     juce::Rectangle<int> brandArea, statusArea;
 
@@ -124,7 +127,6 @@ private:
 
     // Attachments (declared after the controls, so they are destroyed first)
     std::unique_ptr<SliderAttachment> rateAtt, octaveAtt, gateAtt, swingAtt, stepsAtt;
-    std::unique_ptr<SliderAttachment> restartAtt, humVelAtt, humTimeAtt;
     std::unique_ptr<ButtonAttachment> latchAtt;
 
     // The held notes in the pattern card: each as note * 4 + KeyUse (see ArpEngine.h).

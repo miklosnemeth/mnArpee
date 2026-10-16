@@ -212,7 +212,7 @@ void StepGrid::paint(juce::Graphics& g)
     auto board = boardArea();
 
     // Column labels (every 4th step highlighted).
-    g.setFont(mnArpee::fonts::text(16.0f));
+    g.setFont(mnArpee::fonts::text(16.0f, true));
     g.setColour(Palette::dimText());
     for (int s = 0; s < n; s += 4)
     {

@@ -186,33 +186,6 @@ void ArpEngine::setCurrentProgram(int index)
     pendingProgram = selectedProgram != currentProgram ? selectedProgram : -1;
 }
 
-void ArpEngine::setHumanize(int velocityAmount, int timePercent)
-{
-    humanizeVelocity = std::clamp(velocityAmount, 0, 127);
-    humanizeTimePercent = std::clamp(timePercent, 0, 25);
-}
-
-double ArpEngine::timingJitter(long long index, double stepQ)
-{
-    // One random offset per step, kept while the step waits for its block.
-    if (humanizeTimePercent <= 0)
-        return 0.0;
-    if (index != jitterForIndex)
-    {
-        jitterForIndex = index;
-        jitterValue = std::uniform_real_distribution<double>(-1.0, 1.0)(rng) * (humanizeTimePercent / 100.0) * stepQ;
-    }
-    return jitterValue;
-}
-
-int ArpEngine::humanizedVelocity(int velocity)
-{
-    if (humanizeVelocity <= 0)
-        return velocity;
-    const int offset = (int) (rng() % (unsigned) (2 * humanizeVelocity + 1)) - humanizeVelocity;
-    return std::clamp(velocity + offset, 1, 127);
-}
-
 void ArpEngine::setLatch(bool on)
 {
     latch = on;
@@ -447,7 +420,7 @@ void ArpEngine::playOneStep(const Program& prog, const InputNotes& input, double
                 if (sounding[(size_t) n] && n != note)
                     scheduleOff(n, t + oneSample);
             if (! sounding[(size_t) note])
-                emitOn(note, humanizedVelocity(step.velocity), at);
+                emitOn(note, step.velocity, at);
         }
         else
         {
@@ -455,7 +428,7 @@ void ArpEngine::playOneStep(const Program& prog, const InputNotes& input, double
             for (int n = 0; n < 128; ++n)
                 if (sounding[(size_t) n] && ! hasPendingOff[(size_t) n] && n != note)
                     emitOff(n, at);
-            emitOn(note, humanizedVelocity(step.velocity), at);
+            emitOn(note, step.velocity, at);
         }
 
         // Gate, lengthened by directly following Rest steps (up to the pattern end) and
@@ -468,8 +441,7 @@ void ArpEngine::playOneStep(const Program& prog, const InputNotes& input, double
             ++restSteps;
         double offAt = t + std::max(gateQ, oneSample) + restSteps * stepQ;
         if (k < numSteps && prog.steps[(size_t) k].type == StepType::Tie)
-            offAt = std::max(offAt, stepTime(prog, gridIndex + 1 + restSteps, stepQ) + oneSample
-                                        + humanizeTimePercent / 100.0 * stepQ); // the tied step may come late
+            offAt = std::max(offAt, stepTime(prog, gridIndex + 1 + restSteps, stepQ) + oneSample);
         scheduleOff(note, offAt);
     }
 
@@ -523,24 +495,14 @@ void ArpEngine::render(int numSamples, const HostPosition& host, EventBuffer& ou
         resync(blockStartPpq, host.isPlaying);
 
     collectInput(scratchInput);
-    if (! hadInput && ! scratchInput.empty())
+    if (! host.isPlaying && ! hadInput && ! scratchInput.empty())
     {
-        if (! host.isPlaying)
-        {
-            // Free-run: the first key of a new phrase starts the pattern right away.
-            if (pendingProgram >= 0)
-                switchProgram(pendingProgram);
-            resync(blockStartPpq, false);
-            currentStep = 0;
-            stepsPlayedInProgram = 0;
-        }
-        else if (restartMode > 0)
-        {
-            // The steps stay on the song's grid, but the pattern begins with its first step or a random one.
-            const int numSteps = std::clamp(activeProgram().numSteps, 0, maxSteps);
-            currentStep = restartMode == 2 && numSteps > 1 ? (int) (rng() % (unsigned) numSteps) : 0;
-            stepsPlayedInProgram = currentStep;
-        }
+        // Free-run: the first key of a new phrase starts the pattern right away.
+        if (pendingProgram >= 0)
+            switchProgram(pendingProgram);
+        resync(blockStartPpq, false);
+        currentStep = 0;
+        stepsPlayedInProgram = 0;
     }
 
     for (int guard = 0; guard < 4 * EventBuffer::capacity; ++guard)
@@ -555,8 +517,7 @@ void ArpEngine::render(int numSamples, const HostPosition& host, EventBuffer& ou
             lastStepQ = stepQ;
         }
 
-        const double t = stepTime(prog, gridIndex, stepQ)
-                         + (std::clamp(prog.numSteps, 0, maxSteps) > 1 ? timingJitter(gridIndex, stepQ) : 0.0);
+        const double t = stepTime(prog, gridIndex, stepQ);
         if (t >= blockLimitPpq)
             break;
         flushOffs(t);
