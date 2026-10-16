@@ -63,6 +63,7 @@ target_sources(mnArpee PRIVATE
 target_compile_definitions(mnArpee
     PUBLIC
         JucePlugin_Name="mnArpee"
+        MNARPEE_VERSION_STRING="${PROJECT_VERSION}"
         JUCE_VST3_CAN_REPLACE_VST2=0
         JUCE_WEB_BROWSER=0
         JUCE_USE_CURL=0

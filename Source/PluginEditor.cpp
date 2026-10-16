@@ -3,6 +3,10 @@
 
 #include "Fonts.h"
 
+#ifndef MNARPEE_VERSION_STRING
+ #define MNARPEE_VERSION_STRING "dev"
+#endif
+
 //==============================================================================
 // MnArpeeLookAndFeel
 //==============================================================================
@@ -1026,6 +1030,11 @@ void MnArpeeAudioEditor::paint(juce::Graphics& g)
     for (const float dx : { 0.0f, 0.6f })
         g.drawText("mnArpee", brandArea.toFloat().translated(dx, 0.0f), juce::Justification::centredLeft);
 
+    // The version under the logo.
+    g.setColour(Pal::dimText());
+    g.setFont(mnArpee::fonts::text(13.0f, true));
+    g.drawText("v" MNARPEE_VERSION_STRING, versionArea, juce::Justification::centredLeft);
+
     // Section labels.
     g.setFont(mnArpee::fonts::text(16.0f, true));
     g.setColour(Pal::dimText());
@@ -1077,7 +1086,9 @@ void MnArpeeAudioEditor::resized()
     // Header: brand, the preset picker (arrows, name, New, Save, Menu), the held notes and the latch.
     auto header = area.removeFromTop(56);
     auto latchArea = header.removeFromRight(112);
-    brandArea = header.removeFromLeft(170);
+    auto brand = header.removeFromLeft(170);
+    brandArea = brand.removeFromTop(38);
+    versionArea = brand.removeFromTop(16);
     latchButton.setBounds(latchArea.getX(), latchArea.getCentreY() - 12, 100, 24);
 
     auto picker = header.withSizeKeepingCentre(26 + 4 + 190 + 4 + 26 + 8 + 52 + 6 + 52 + 6 + 62, 34);

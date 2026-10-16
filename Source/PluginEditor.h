@@ -126,7 +126,7 @@ private:
     juce::TextButton presetButton, newButton, saveButton, menuButton;
     ValueBar rateSlider, octaveSlider, gateSlider, swingSlider, stepsSlider;
     juce::ToggleButton latchButton;
-    juce::Rectangle<int> brandArea, statusArea;
+    juce::Rectangle<int> brandArea, versionArea, statusArea;
 
     // Matrix, with the value lanes below it (a lane caption chooses what the rows edit).
     StepGrid grid;
