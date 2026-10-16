@@ -100,6 +100,11 @@ cmake --build build --config Release --target mnArpee_VST3
 ```
 
 The result is `build\installer\mnArpee-1.0.0-win-x64-setup.exe`. Use the version in `CMakeLists.txt` for `MyAppVersion`.
+Upgrades: the installer finds an earlier mnArpee through its uninstall entry (same AppId), shows which version it
+replaces on the last page, asks before it installs an older version over a newer one (a silent install does not),
+asks a DAW that has the plugin loaded to close, runs the old uninstaller silently before it installs, and removes
+the old `Program Files\MNAudio\mnArpee` folder of earlier installers.
+
 Presets are not part of the installer: the plugin writes its factory presets to
 `Documents\MNAudio\mnArpee` the first time it runs, and the uninstaller leaves your own presets alone.
 
