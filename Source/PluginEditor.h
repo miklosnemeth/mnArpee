@@ -29,9 +29,6 @@ public:
     juce::Font getComboBoxFont(juce::ComboBox&) override;
     juce::Font getPopupMenuFont() override;
     juce::Font getTextButtonFont(juce::TextButton&, int buttonHeight) override;
-    juce::Font getAlertWindowTitleFont() override;
-    juce::Font getAlertWindowMessageFont() override;
-    juce::Font getAlertWindowFont() override;
     juce::Font getSliderPopupFont(juce::Slider&) override;
 };
 
@@ -85,6 +82,15 @@ private:
     void applySteps(const mnArpee::Program& edited);
     void promptSave(const juce::String& initialName, const juce::String& initialStyles,
                     std::function<void(juce::String, juce::String)> done);
+    // The plugin's own dialog, inside the editor: a title, a message, optional text fields (label,
+    // initial text) and buttons. Enter presses defaultButton, Escape cancelButton; `done` gets the
+    // pressed button and the texts of the fields.
+    void showDialog(const juce::String& title, const juce::String& message,
+                    std::vector<std::pair<juce::String, juce::String>> fields, juce::StringArray buttons,
+                    int defaultButton, int cancelButton,
+                    std::function<void(int button, juce::StringArray values)> done);
+    void showMessage(const juce::String& title, const juce::String& message);
+    void closeDialog();
     // A header value shown as one line ("OCT +3") that is dragged to change.
     void setupValueBar(ValueBar& s, std::function<juce::String(double)> text, double defaultValue,
                        double pixelsPerUnit);
@@ -140,6 +146,7 @@ private:
     bool shownPresetValid = false;
     std::unique_ptr<juce::FileChooser> fileChooser;
     std::unique_ptr<juce::Component> presetBrowser; // overlay inside the editor, null while closed
+    std::unique_ptr<juce::Component> dialog;        // the dialog, null while closed
 
     // The program shown in the grid (a copy, so a state load can never leave it dangling).
     mnArpee::Program shownProgram;

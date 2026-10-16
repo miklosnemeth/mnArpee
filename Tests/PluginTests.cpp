@@ -484,6 +484,53 @@ int main()
             check(afterClick == start && sideways == start && up > start && upMovedSideways == up,
                   "value-bar-vertical-drag-only");
         }
+
+        // The plugin's own "Unsaved changes" dialog (inside the editor, not an OS window).
+        {
+            std::function<juce::TextButton*(juce::Component&, const juce::String&)> findButton;
+            findButton = [&findButton](juce::Component& root, const juce::String& text) -> juce::TextButton*
+            {
+                for (auto* child : root.getChildren())
+                {
+                    if (auto* b = dynamic_cast<juce::TextButton*>(child); b != nullptr && b->getButtonText() == text && b->isVisible())
+                        return b;
+                    if (child->isVisible())
+                        if (auto* found = findButton(*child, text))
+                            return found;
+                }
+                return nullptr;
+            };
+
+            // Cancel keeps the pattern and the changes.
+            {
+                auto q = makeProcessor();
+                std::unique_ptr<juce::AudioProcessorEditor> ed(q->createEditor());
+                ed->setSize(900, 560);
+                setParam(*q, "gate", 33);
+                auto* newButton = findButton(*ed, "New");
+                if (newButton != nullptr)
+                    newButton->onClick();
+                auto* cancel = findButton(*ed, "Cancel");
+                const bool asked = findButton(*ed, "Don't save") != nullptr && cancel != nullptr;
+                if (cancel != nullptr)
+                    cancel->onClick();
+                check(asked && q->getActivePreset().name == "Trance Up 16" && q->getActivePreset().dirty,
+                      "unsaved-changes-dialog-cancel-keeps-the-preset");
+            }
+            // Don't save goes on to the new pattern.
+            {
+                auto q = makeProcessor();
+                std::unique_ptr<juce::AudioProcessorEditor> ed(q->createEditor());
+                ed->setSize(900, 560);
+                setParam(*q, "gate", 33);
+                if (auto* newButton = findButton(*ed, "New"))
+                    newButton->onClick();
+                if (auto* dontSave = findButton(*ed, "Don't save"))
+                    dontSave->onClick();
+                check(q->getActivePreset().name.startsWith("New Arp") && q->getActivePreset().file == juce::File(),
+                      "unsaved-changes-dialog-dont-save-goes-on");
+            }
+        }
     }
     else
     {

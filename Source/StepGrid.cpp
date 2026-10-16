@@ -20,6 +20,22 @@ constexpr StepGrid::Lane laneOfRow[numLaneRows] = { StepGrid::Lane::Type, StepGr
 constexpr const char* laneCaptions[numLaneRows] = { "TYPE", "OCTAVE", "VELOCITY" };
 }
 
+namespace
+{
+// A dice: a rounded square with five dots.
+void drawDice(juce::Graphics& g, juce::Rectangle<float> dice)
+{
+    g.setColour(StepGrid::Palette::cardHi());
+    g.fillRoundedRectangle(dice, 4.0f);
+    g.setColour(StepGrid::Palette::accent());
+    g.drawRoundedRectangle(dice, 4.0f, 1.2f);
+    const float d = std::min(dice.getWidth(), dice.getHeight()) * 0.22f;
+    for (const auto& dot : { juce::Point<float>(-1.0f, -1.0f), juce::Point<float>(1.0f, -1.0f), juce::Point<float>(0.0f, 0.0f),
+                             juce::Point<float>(-1.0f, 1.0f), juce::Point<float>(1.0f, 1.0f) })
+        g.fillEllipse(dice.getCentreX() + dot.x * d - 1.6f, dice.getCentreY() + dot.y * d - 1.6f, 3.2f, 3.2f);
+}
+} // namespace
+
 StepGrid::StepGrid()
 {
     setWantsKeyboardFocus(false);
@@ -107,6 +123,12 @@ juce::Rectangle<int> StepGrid::laneCaption(int laneRow) const
     const auto board = boardArea();
     return { 8, board.getBottom() + laneGap + laneRow * laneRowH + cellGap / 2,
              board.getX() - 8 - 6, laneRowH - cellGap };
+}
+
+juce::Rectangle<int> StepGrid::keysDice() const
+{
+    // In the corner above the row labels.
+    return { 8, 2, laneRowH + 4, gutterTop };
 }
 
 juce::Rectangle<int> StepGrid::laneDice(int laneRow) const
@@ -324,16 +346,10 @@ void StepGrid::paint(juce::Graphics& g)
         g.setColour(Palette::text());
         g.drawText(laneCaptions[lr], cap.reduced(4, 0), juce::Justification::centredRight);
 
-        const auto dice = laneDice(lr).toFloat().reduced(2.0f);
-        g.setColour(Palette::cardHi());
-        g.fillRoundedRectangle(dice, 4.0f);
-        g.setColour(Palette::accent());
-        g.drawRoundedRectangle(dice, 4.0f, 1.2f);
-        const float d = dice.getWidth() * 0.22f;
-        for (const auto& dot : { juce::Point<float>(-1.0f, -1.0f), juce::Point<float>(1.0f, -1.0f), juce::Point<float>(0.0f, 0.0f),
-                                 juce::Point<float>(-1.0f, 1.0f), juce::Point<float>(1.0f, 1.0f) })
-            g.fillEllipse(dice.getCentreX() + dot.x * d - 1.6f, dice.getCentreY() + dot.y * d - 1.6f, 3.2f, 3.2f);
+        drawDice(g, laneDice(lr).toFloat().reduced(2.0f));
     }
+
+    drawDice(g, keysDice().toFloat().reduced(2.0f));
 
     // Playhead arrow in the header.
     if (playStep >= 0 && playStep < n)
@@ -379,6 +395,12 @@ void StepGrid::mouseDown(const juce::MouseEvent& e)
         return;
     }
 
+    if (keysDice().expanded(2).contains(e.getPosition()))
+    {
+        if (randomizeRequested)
+            randomizeRequested(Lane::Key);
+        return;
+    }
     for (int lr = 0; lr < numLaneRows; ++lr)
         if (laneDice(lr).expanded(2).contains(e.getPosition()))
         {
