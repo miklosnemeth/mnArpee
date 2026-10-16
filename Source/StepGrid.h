@@ -8,6 +8,7 @@
 // StepGrid: the step matrix with the value lanes under it. Column = step.
 //  - The matrix is for the keys: bottom to top Random, Root, Key 1 .. Key 5 (clicking toggles the
 //    step on that key; Tie steps are drawn linked to the previous column, Rest and Off as a mark).
+//    A dice above the row labels fills the keys randomly.
 //  - Under it, one row per other value: TYPE, OCTAVE and VELOCITY. A value box is adjusted by
 //    dragging up and down or with the mouse wheel; the dice in front of the lane fills it randomly.
 //==============================================================================
@@ -79,6 +80,7 @@ private:
     juce::Rectangle<int> laneBox(int step, int laneRow) const;
     juce::Rectangle<int> laneCaption(int laneRow) const;
     juce::Rectangle<int> laneDice(int laneRow) const;
+    juce::Rectangle<int> keysDice() const;
     bool laneBoxAt(juce::Point<int> p, int& step, int& laneRow) const;
 
     mnArpee::Program program;

@@ -26,9 +26,6 @@ MnArpeeLookAndFeel::MnArpeeLookAndFeel()
     setColour(juce::ToggleButton::tickDisabledColourId, Pal::border());
     setColour(juce::TextButton::buttonColourId, Pal::cardHi());
     setColour(juce::TextButton::textColourOffId, Pal::text());
-    setColour(juce::AlertWindow::backgroundColourId, Pal::card());
-    setColour(juce::AlertWindow::textColourId, Pal::text());
-    setColour(juce::AlertWindow::outlineColourId, Pal::border());
     setColour(juce::TextEditor::backgroundColourId, Pal::bg());
     setColour(juce::TextEditor::textColourId, Pal::text());
     setColour(juce::TextEditor::outlineColourId, Pal::border());
@@ -100,9 +97,6 @@ juce::Font MnArpeeLookAndFeel::getTextButtonFont(juce::TextButton&, int buttonHe
     return mnArpee::fonts::text(juce::jmin(17.0f, (float) buttonHeight * 0.62f), true);
 }
 
-juce::Font MnArpeeLookAndFeel::getAlertWindowTitleFont() { return mnArpee::fonts::text(20.0f, true); }
-juce::Font MnArpeeLookAndFeel::getAlertWindowMessageFont() { return mnArpee::fonts::text(16.0f, true); }
-juce::Font MnArpeeLookAndFeel::getAlertWindowFont() { return mnArpee::fonts::text(15.0f, true); }
 
 juce::Font MnArpeeLookAndFeel::getSliderPopupFont(juce::Slider&) { return mnArpee::fonts::text(16.0f, true); }
 
@@ -235,6 +229,7 @@ MnArpeeAudioEditor::~MnArpeeAudioEditor()
 {
     stopTimer();
     presetBrowser.reset();
+    dialog.reset();
     setLookAndFeel(nullptr);
 }
 
@@ -580,6 +575,196 @@ void MnArpeeAudioEditor::stepPreset(int delta)
     loadPresetChecked(next);
 }
 
+//==============================================================================
+// The plugin's own dialogs: a card over a dimmed editor, so they match the look and stay inside the
+// plugin window.
+namespace
+{
+class DialogOverlay : public juce::Component
+{
+public:
+    DialogOverlay(const juce::String& titleIn, const juce::String& messageIn,
+                  const std::vector<std::pair<juce::String, juce::String>>& fields, const juce::StringArray& buttonNames,
+                  int defaultButtonIn, int cancelButtonIn, std::function<void(int, juce::StringArray)> finishIn)
+        : title(titleIn), message(messageIn), defaultButton(defaultButtonIn), cancelButton(cancelButtonIn),
+          finish(std::move(finishIn))
+    {
+        setWantsKeyboardFocus(true);
+        for (const auto& [label, initial] : fields)
+        {
+            auto l = std::make_unique<juce::Label>();
+            l->setText(label, juce::dontSendNotification);
+            l->setFont(mnArpee::fonts::text(15.0f, true));
+            l->setColour(juce::Label::textColourId, Pal::dimText());
+            addAndMakeVisible(*l);
+            labels.push_back(std::move(l));
+
+            auto e = std::make_unique<juce::TextEditor>();
+            e->setFont(mnArpee::fonts::text(17.0f, true));
+            e->setText(initial, false);
+            e->setColour(juce::TextEditor::backgroundColourId, Pal::bg());
+            e->setColour(juce::TextEditor::textColourId, Pal::text());
+            e->setColour(juce::TextEditor::outlineColourId, Pal::border());
+            e->setColour(juce::TextEditor::focusedOutlineColourId, Pal::accent());
+            e->setColour(juce::TextEditor::highlightColourId, Pal::accent().withAlpha(0.35f));
+            e->setColour(juce::CaretComponent::caretColourId, Pal::accent());
+            e->onReturnKey = [this] { press(defaultButton); };
+            e->onEscapeKey = [this] { press(cancelButton); };
+            addAndMakeVisible(*e);
+            editors.push_back(std::move(e));
+        }
+        for (int i = 0; i < buttonNames.size(); ++i)
+        {
+            auto b = std::make_unique<juce::TextButton>(buttonNames[i]);
+            b->onClick = [this, i] { press(i); };
+            if (i == defaultButton)
+                b->setColour(juce::TextButton::buttonColourId, Pal::accent().darker(0.55f));
+            addAndMakeVisible(*b);
+            buttons.push_back(std::move(b));
+        }
+    }
+
+    void resized() override
+    {
+        const int panelW = std::min(500, getWidth() - 40);
+        const int contentW = panelW - 40;
+
+        juce::AttributedString text;
+        text.append(message, mnArpee::fonts::text(16.0f, true), Pal::text());
+        text.setWordWrap(juce::AttributedString::byWord);
+        messageLayout.createLayout(text, (float) contentW);
+        const int messageH = message.isEmpty() ? 0 : (int) std::ceil(messageLayout.getHeight());
+
+        const int fieldsH = (int) editors.size() * (18 + 34 + 10);
+        const int panelH = 20 + 28 + 10 + messageH + (messageH > 0 ? 14 : 0) + fieldsH + 6 + 36 + 20;
+        panel = juce::Rectangle<int>(panelW, panelH).withCentre({ getWidth() / 2, getHeight() * 45 / 100 });
+
+        auto r = panel.reduced(20, 20);
+        titleArea = r.removeFromTop(28);
+        r.removeFromTop(10);
+        messageArea = r.removeFromTop(messageH);
+        if (messageH > 0)
+            r.removeFromTop(14);
+        for (size_t i = 0; i < editors.size(); ++i)
+        {
+            labels[i]->setBounds(r.removeFromTop(18));
+            editors[i]->setBounds(r.removeFromTop(34));
+            r.removeFromTop(10);
+        }
+        r.removeFromTop(6);
+        auto row = r.removeFromTop(36);
+        for (int i = (int) buttons.size() - 1; i >= 0; --i)
+        {
+            const int w = std::max(92, juce::GlyphArrangement::getStringWidthInt(mnArpee::fonts::text(17.0f, true),
+                                                                                  buttons[(size_t) i]->getButtonText()) + 40);
+            buttons[(size_t) i]->setBounds(row.removeFromRight(w));
+            row.removeFromRight(10);
+        }
+    }
+
+    void paint(juce::Graphics& g) override
+    {
+        g.setColour(juce::Colours::black.withAlpha(0.5f));
+        g.fillRect(getLocalBounds());
+        g.setColour(Pal::card());
+        g.fillRoundedRectangle(panel.toFloat(), 8.0f);
+        g.setColour(Pal::border());
+        g.drawRoundedRectangle(panel.toFloat().reduced(0.5f), 8.0f, 1.0f);
+        g.setColour(Pal::accent());
+        g.setFont(mnArpee::fonts::text(21.0f, true));
+        g.drawText(title, titleArea, juce::Justification::centredLeft);
+        if (! message.isEmpty())
+            messageLayout.draw(g, messageArea.toFloat());
+    }
+
+    void mouseDown(const juce::MouseEvent&) override {} // modal: the editor behind is not reachable
+
+    bool keyPressed(const juce::KeyPress& key) override
+    {
+        if (key == juce::KeyPress::escapeKey)
+            press(cancelButton);
+        else if (key == juce::KeyPress::returnKey)
+            press(defaultButton);
+        return true;
+    }
+
+    void visibilityChanged() override
+    {
+        if (! isVisible())
+            return;
+        if (! editors.empty())
+        {
+            editors.front()->grabKeyboardFocus();
+            editors.front()->selectAll();
+        }
+        else
+        {
+            grabKeyboardFocus();
+        }
+    }
+
+private:
+    void press(int button)
+    {
+        if (pressed)
+            return;
+        pressed = true;
+        juce::StringArray values;
+        for (const auto& e : editors)
+            values.add(e->getText());
+        finish(button, values);
+    }
+
+    juce::String title, message;
+    int defaultButton, cancelButton;
+    std::function<void(int, juce::StringArray)> finish;
+    std::vector<std::unique_ptr<juce::Label>> labels;
+    std::vector<std::unique_ptr<juce::TextEditor>> editors;
+    std::vector<std::unique_ptr<juce::TextButton>> buttons;
+    juce::TextLayout messageLayout;
+    juce::Rectangle<int> panel, titleArea, messageArea;
+    bool pressed = false;
+};
+} // namespace
+
+void MnArpeeAudioEditor::closeDialog()
+{
+    if (dialog == nullptr)
+        return;
+    // It may be closing from inside its own button: take it off the screen now, delete it later.
+    dialog->setVisible(false);
+    juce::Component::SafePointer<juce::Component> doomed(dialog.release());
+    juce::MessageManager::callAsync([doomed] { delete doomed.getComponent(); });
+}
+
+void MnArpeeAudioEditor::showDialog(const juce::String& title, const juce::String& message,
+                                    std::vector<std::pair<juce::String, juce::String>> fields, juce::StringArray buttons,
+                                    int defaultButton, int cancelButton,
+                                    std::function<void(int, juce::StringArray)> done)
+{
+    closeDialog();
+    closePresetBrowser();
+    auto content = std::make_unique<DialogOverlay>(
+        title, message, fields, buttons, defaultButton, cancelButton,
+        [safe = juce::Component::SafePointer<MnArpeeAudioEditor>(this), done = std::move(done)](int button, juce::StringArray values)
+        {
+            if (safe == nullptr)
+                return;
+            safe->closeDialog();
+            if (done)
+                done(button, values);
+        });
+    content->setBounds(getLocalBounds());
+    addAndMakeVisible(*content);
+    content->toFront(true);
+    dialog = std::move(content);
+}
+
+void MnArpeeAudioEditor::showMessage(const juce::String& title, const juce::String& message)
+{
+    showDialog(title, message, {}, juce::StringArray { "OK" }, 0, 0, nullptr);
+}
+
 void MnArpeeAudioEditor::confirmLeavePreset(std::function<void()> proceed)
 {
     const auto active = proc.getActivePreset();
@@ -588,69 +773,46 @@ void MnArpeeAudioEditor::confirmLeavePreset(std::function<void()> proceed)
         proceed();
         return;
     }
-    juce::AlertWindow::showAsync(
-        juce::MessageBoxOptions()
-            .withIconType(juce::MessageBoxIconType::QuestionIcon)
-            .withTitle("Unsaved changes")
-            .withMessage("Save the changes to \"" + active.name + "\" first?")
-            .withButton("Save")
-            .withButton("Don't save")
-            .withButton("Cancel")
-            .withAssociatedComponent(this),
-        [safe = juce::Component::SafePointer<MnArpeeAudioEditor>(this), proceed = std::move(proceed)](int result)
-        {
-            if (safe == nullptr || result == 0)
-                return; // Cancel
-            if (result == 2)
-            {
-                proceed(); // Don't save
-                return;
-            }
-            const auto a = safe->proc.getActivePreset();
-            if (a.factory || a.file == juce::File())
-                safe->saveActiveAs(proceed);
-            else if (safe->proc.saveActivePreset())
-                proceed();
-        });
+    showDialog("Unsaved changes", "Save the changes to \"" + active.name + "\" first?", {},
+               juce::StringArray { "Save", "Don't save", "Cancel" }, 0, 2,
+               [safe = juce::Component::SafePointer<MnArpeeAudioEditor>(this), proceed = std::move(proceed)](int button, juce::StringArray)
+               {
+                   if (safe == nullptr || button == 2)
+                       return; // Cancel
+                   if (button == 1)
+                   {
+                       proceed(); // Don't save
+                       return;
+                   }
+                   const auto a = safe->proc.getActivePreset();
+                   if (a.factory || a.file == juce::File())
+                       safe->saveActiveAs(proceed);
+                   else if (safe->proc.saveActivePreset())
+                       proceed();
+               });
 }
 
 void MnArpeeAudioEditor::promptName(const juce::String& title, const juce::String& message,
                                     const juce::String& initial, std::function<void(juce::String)> done)
 {
-    auto* window = new juce::AlertWindow(title, message, juce::MessageBoxIconType::NoIcon, this);
-    window->setLookAndFeel(&lnf);
-    window->addTextEditor("name", initial);
-    window->addButton("OK", 1, juce::KeyPress(juce::KeyPress::returnKey));
-    window->addButton("Cancel", 0, juce::KeyPress(juce::KeyPress::escapeKey));
-    window->enterModalState(true,
-                            juce::ModalCallbackFunction::create(
-                                [window, done = std::move(done)](int result)
-                                {
-                                    if (result == 1)
-                                        done(window->getTextEditorContents("name").trim());
-                                }),
-                            true);
+    showDialog(title, message, { { {}, initial } }, juce::StringArray { "OK", "Cancel" }, 0, 1,
+               [done = std::move(done)](int button, juce::StringArray values)
+               {
+                   if (button == 0)
+                       done(values[0].trim());
+               });
 }
 
 void MnArpeeAudioEditor::promptSave(const juce::String& initialName, const juce::String& initialStyles,
                                     std::function<void(juce::String, juce::String)> done)
 {
-    auto* window = new juce::AlertWindow("Save preset", "Name and musical styles of the preset:",
-                                         juce::MessageBoxIconType::NoIcon, this);
-    window->setLookAndFeel(&lnf);
-    window->addTextEditor("name", initialName, "Name:");
-    window->addTextEditor("styles", initialStyles, "Styles (comma separated, e.g. House, Trance):");
-    window->addButton("OK", 1, juce::KeyPress(juce::KeyPress::returnKey));
-    window->addButton("Cancel", 0, juce::KeyPress(juce::KeyPress::escapeKey));
-    window->enterModalState(true,
-                            juce::ModalCallbackFunction::create(
-                                [window, done = std::move(done)](int result)
-                                {
-                                    if (result == 1)
-                                        done(window->getTextEditorContents("name").trim(),
-                                             window->getTextEditorContents("styles").trim());
-                                }),
-                            true);
+    showDialog("Save preset", "", { { "Name", initialName }, { "Styles (comma separated, e.g. House, Trance)", initialStyles } },
+               juce::StringArray { "Save", "Cancel" }, 0, 1,
+               [done = std::move(done)](int button, juce::StringArray values)
+               {
+                   if (button == 0)
+                       done(values[0].trim(), values[1].trim());
+               });
 }
 
 void MnArpeeAudioEditor::saveActiveAs(std::function<void()> then)
@@ -665,10 +827,8 @@ void MnArpeeAudioEditor::saveActiveAs(std::function<void()> then)
                    safe->proc.setActivePresetStyles(styles);
                    if (name.isEmpty() || ! safe->proc.saveActivePresetAs(name))
                    {
-                       juce::AlertWindow::showMessageBoxAsync(juce::MessageBoxIconType::WarningIcon, "Cannot save",
-                                                              name.isEmpty() ? juce::String("The name is empty.")
-                                                                             : "A preset named \"" + name + "\" already exists.",
-                                                              "OK", safe.getComponent());
+                       safe->showMessage("Cannot save", name.isEmpty() ? juce::String("The name is empty.")
+                                                                       : "A preset named \"" + name + "\" already exists.");
                        return;
                    }
                    if (then)
@@ -685,9 +845,7 @@ void MnArpeeAudioEditor::renameDialog(int libraryIndex)
                [safe = juce::Component::SafePointer<MnArpeeAudioEditor>(this), libraryIndex](juce::String name)
                {
                    if (safe != nullptr && ! safe->proc.renamePreset(libraryIndex, name))
-                       juce::AlertWindow::showMessageBoxAsync(juce::MessageBoxIconType::WarningIcon, "Cannot rename",
-                                                              "The name is empty or already used by another preset.",
-                                                              "OK", safe.getComponent());
+                       safe->showMessage("Cannot rename", "The name is empty or already used by another preset.");
                });
 }
 
@@ -696,19 +854,13 @@ void MnArpeeAudioEditor::deleteDialog(int libraryIndex)
     const auto list = proc.getPresetList();
     if (libraryIndex < 0 || libraryIndex >= (int) list.size() || list[(size_t) libraryIndex].factory)
         return;
-    juce::AlertWindow::showAsync(
-        juce::MessageBoxOptions()
-            .withIconType(juce::MessageBoxIconType::WarningIcon)
-            .withTitle("Delete preset")
-            .withMessage("Delete \"" + list[(size_t) libraryIndex].name + "\"? The file is moved to the recycle bin.")
-            .withButton("Delete")
-            .withButton("Cancel")
-            .withAssociatedComponent(this),
-        [safe = juce::Component::SafePointer<MnArpeeAudioEditor>(this), libraryIndex](int result)
-        {
-            if (safe != nullptr && result == 1)
-                safe->proc.deletePreset(libraryIndex);
-        });
+    showDialog("Delete preset", "Delete \"" + list[(size_t) libraryIndex].name + "\"? The file is moved to the recycle bin.", {},
+               juce::StringArray { "Delete", "Cancel" }, 1, 1,
+               [safe = juce::Component::SafePointer<MnArpeeAudioEditor>(this), libraryIndex](int button, juce::StringArray)
+               {
+                   if (safe != nullptr && button == 0)
+                       safe->proc.deletePreset(libraryIndex);
+               });
 }
 
 void MnArpeeAudioEditor::newClicked()
@@ -803,9 +955,7 @@ void MnArpeeAudioEditor::importPresets()
                                                if (safe == nullptr || file == juce::File())
                                                    return;
                                                if (safe->proc.importPresets(file) == 0)
-                                                   juce::AlertWindow::showMessageBoxAsync(
-                                                       juce::MessageBoxIconType::WarningIcon, "Import",
-                                                       "No presets were found in that file.", "OK", safe.getComponent());
+                                                   safe->showMessage("Import", "No presets were found in that file.");
                                            });
         });
 }
@@ -962,6 +1112,8 @@ void MnArpeeAudioEditor::resized()
 
     if (presetBrowser != nullptr)
         presetBrowser->setBounds(getLocalBounds());
+    if (dialog != nullptr)
+        dialog->setBounds(getLocalBounds());
 
     // Grid inside the card (label strip on top).
     grid.setBounds(gridCard.getX() + 6, gridCard.getY() + 24,
