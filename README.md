@@ -22,8 +22,7 @@ Held notes are sorted by pitch before they reach the engine.
 - The chord the held notes form (Cmaj7, Am, C/E, G5, ...) is shown at the right end of the "PATTERN" strip
 - Latch (a new chord replaces the latched one), sustain pedal, panic / all-notes-off, CC/bend/aftertouch pass-through, output on the input channel
 - Sample-accurate MIDI handling; the engine is allocation-free on the audio thread and edits reach it without locks
-- Matrix UI: the lane captions (Type, Key, Octave, Velocity) choose what the matrix shows; clicking a cell sets the step, in the value lanes dragging paints across steps
-- Value lanes under the matrix (as in BlueARP): drag a box up and down or use the mouse wheel
+- Matrix UI: the matrix is for the keys (Random, Root, Key 1..5): clicking a cell sets the step. Under it are the other values as lanes: TYPE, OCTAVE and VELOCITY; drag a box up and down or use the mouse wheel, and the dice in front of a lane fills it randomly
 
 ## Build (Windows)
 

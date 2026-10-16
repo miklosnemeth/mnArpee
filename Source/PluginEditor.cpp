@@ -171,6 +171,18 @@ MnArpeeAudioEditor::MnArpeeAudioEditor(MnArpeeAudioProcessor& p)
     grid.onStepClicked([this](int step, int row) { onGridClicked(step, row); });
     grid.onLaneAdjusted([this](int step, StepGrid::Lane lane, int delta) { onLaneAdjusted(step, lane, delta); });
     grid.onContextRequested([this](int step, StepGrid::Lane lane, int row) { showPatternMenu(step, lane, row); });
+    grid.onRandomizeRequested(
+        [this](StepGrid::Lane lane)
+        {
+            auto edited = shownProgram;
+            std::mt19937 rng((unsigned) juce::Time::currentTimeMillis());
+            mnArpee::randomizeLane(edited, lane == StepGrid::Lane::Type     ? mnArpee::PatternLane::Type
+                                           : lane == StepGrid::Lane::Octave ? mnArpee::PatternLane::Octave
+                                           : lane == StepGrid::Lane::Velocity ? mnArpee::PatternLane::Velocity
+                                                                              : mnArpee::PatternLane::Key,
+                                   rng);
+            applySteps(edited);
+        });
 
     prevPresetButton.onClick = [this] { stepPreset(-1); };
     nextPresetButton.onClick = [this] { stepPreset(1); };
@@ -1053,7 +1065,7 @@ void MnArpeeAudioEditor::showPatternMenu(int step, StepGrid::Lane lane, int row)
         case StepGrid::Lane::Type:
         {
             patternLane = PatternLane::Type;
-            const auto type = row >= 0 ? StepGrid::typeForRow(row) : st.type;
+            const auto type = st.type;
             value = (int) type;
             valueText = type == StepType::Off ? "Off" : type == StepType::Rest ? "Rest" : type == StepType::Tie ? "Tie"
                       : type == StepType::Random ? "Random" : "Normal";
@@ -1062,13 +1074,13 @@ void MnArpeeAudioEditor::showPatternMenu(int step, StepGrid::Lane lane, int row)
         }
         case StepGrid::Lane::Octave:
             patternLane = PatternLane::Octave;
-            value = row >= 0 ? StepGrid::octaveForRow(row) : (int) st.octave;
+            value = (int) st.octave;
             valueText = value > 0 ? "+" + juce::String(value) : juce::String(value);
             laneName = "octaves";
             break;
         case StepGrid::Lane::Velocity:
             patternLane = PatternLane::Velocity;
-            value = row >= 0 ? StepGrid::velocityForRow(row) : (int) st.velocity;
+            value = (int) st.velocity;
             valueText = juce::String(value);
             laneName = "velocities";
             break;
@@ -1173,13 +1185,7 @@ void MnArpeeAudioEditor::onGridClicked(int step, int row)
     using mnArpee::StepType;
     editStep = step;
     auto st = shownProgram.steps[(size_t) step];
-    if (grid.getLane() == StepGrid::Lane::Type)
-        st.type = StepGrid::typeForRow(row);
-    else if (grid.getLane() == StepGrid::Lane::Octave)
-        st.octave = (std::int8_t) StepGrid::octaveForRow(row);
-    else if (grid.getLane() == StepGrid::Lane::Velocity)
-        st.velocity = (std::uint8_t) StepGrid::velocityForRow(row);
-    else if (row != StepGrid::randomRow)
+    if (row != StepGrid::randomRow)
     {
         // Key and Root rows: toggle the step on that key (a Tie step stays a Tie).
         const int key = StepGrid::keyForRow(row);
@@ -1191,7 +1197,9 @@ void MnArpeeAudioEditor::onGridClicked(int step, int row)
         st.keyIndex = (std::int8_t) key;
     }
     else
+    {
         st.type = st.type == StepType::Random ? StepType::Off : StepType::Random;
+    }
     commitStep(st);
     grid.setEditStep(step);
 }
