@@ -137,6 +137,55 @@ void setLaneValue(Program& p, PatternLane lane, int value)
         }
 }
 
+void generateKeys(Program& p, GeneratorMode mode, int numKeys, std::mt19937& rng)
+{
+    const int n = std::clamp(numKeys, 1, maxInputKeys);
+    std::vector<int> order;
+    switch (mode)
+    {
+        case GeneratorMode::Up:
+            for (int k = 0; k < n; ++k)
+                order.push_back(k);
+            break;
+        case GeneratorMode::Down:
+            for (int k = n - 1; k >= 0; --k)
+                order.push_back(k);
+            break;
+        case GeneratorMode::UpDown:
+            for (int k = 0; k < n; ++k)
+                order.push_back(k);
+            for (int k = n - 2; k >= 1; --k)
+                order.push_back(k);
+            break;
+        case GeneratorMode::DownUp:
+            for (int k = n - 1; k >= 0; --k)
+                order.push_back(k);
+            for (int k = 1; k <= n - 2; ++k)
+                order.push_back(k);
+            break;
+        case GeneratorMode::Converge:
+            for (int lo = 0, hi = n - 1; lo <= hi;)
+            {
+                order.push_back(lo++);
+                if (lo <= hi)
+                    order.push_back(hi--);
+            }
+            break;
+        case GeneratorMode::Random: break;
+    }
+
+    int count = std::clamp(p.numSteps, 0, maxSteps);
+    if (count < 2)
+        count = maxSteps; // thru modes: fill the stored pattern
+    for (int i = 0; i < count; ++i)
+    {
+        auto& s = p.steps[(size_t) i];
+        s.type = StepType::Normal;
+        s.keyIndex = static_cast<std::int8_t>(mode == GeneratorMode::Random ? (int) (rng() % (unsigned) n)
+                                                                            : order[(size_t) i % order.size()]);
+    }
+}
+
 void shiftPattern(Program& p, int direction)
 {
     const int n = std::clamp(p.numSteps, 0, maxSteps);

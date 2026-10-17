@@ -159,6 +159,11 @@ void reversePattern(Program& p);
 // Fills the playing steps of one lane with random values (the first step is never a rest or a tie).
 void randomizeLane(Program& p, PatternLane lane, std::mt19937& rng);
 
+// Fills the keys of the playing steps in a classic arp order over the first numKeys keys
+// (type Normal; octave, velocity and ratchet are left alone).
+enum class GeneratorMode { Up, Down, UpDown, DownUp, Converge, Random };
+void generateKeys(Program& p, GeneratorMode mode, int numKeys, std::mt19937& rng);
+
 Program makeInitProgram(std::string_view name = "Init");
 Bank makeFactoryBank();
 

@@ -1262,6 +1262,19 @@ void MnArpeeAudioEditor::showPatternMenu(int step, StepGrid::Lane lane, int row)
     menu.setLookAndFeel(&lnf);
     menu.addItem(1, "Set all steps to " + valueText);
     menu.addItem(5, juce::String("Randomize the ") + laneName);
+    {
+        // Generate keys > mode > number of keys (ids 100 + mode * 10 + keys).
+        static const char* modes[] = { "Up", "Down", "Up-Down", "Down-Up", "Converge", "Random" };
+        juce::PopupMenu generate;
+        for (int mode = 0; mode < 6; ++mode)
+        {
+            juce::PopupMenu keys;
+            for (int n = 3; n <= mnArpee::maxInputKeys; ++n)
+                keys.addItem(100 + mode * 10 + n, juce::String(n) + " keys");
+            generate.addSubMenu(modes[mode], keys);
+        }
+        menu.addSubMenu("Generate keys", generate);
+    }
     menu.addSeparator();
     menu.addItem(2, "Shift pattern left");
     menu.addItem(3, "Shift pattern right");
@@ -1276,6 +1289,13 @@ void MnArpeeAudioEditor::showPatternMenu(int step, StepGrid::Lane lane, int row)
                            if (safe == nullptr || result == 0)
                                return;
                            auto edited = safe->shownProgram;
+                           if (result >= 100)
+                           {
+                               std::mt19937 rng((unsigned) juce::Time::currentTimeMillis());
+                               mnArpee::generateKeys(edited, (mnArpee::GeneratorMode) ((result - 100) / 10), (result - 100) % 10, rng);
+                               safe->applySteps(edited);
+                               return;
+                           }
                            switch (result)
                            {
                                case 1: mnArpee::setLaneValue(edited, patternLane, value); break;

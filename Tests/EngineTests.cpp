@@ -632,6 +632,35 @@ int main()
         check(ordered, "ratchet-notes-do-not-overlap");
     }
 
+    // 37. Generated key orders.
+    {
+        auto keys = [](GeneratorMode mode, int numKeys, int steps)
+        {
+            auto p = makeInitProgram("Gen");
+            p.numSteps = steps;
+            for (int i = 0; i < maxSteps; ++i)
+                p.steps[(size_t) i].type = StepType::Rest; // proves that the generator makes them Normal
+            std::mt19937 rng(3);
+            generateKeys(p, mode, numKeys, rng);
+            std::vector<int> out;
+            for (int i = 0; i < steps; ++i)
+                out.push_back(p.steps[(size_t) i].keyIndex);
+            return std::make_pair(out, p);
+        };
+        check(keys(GeneratorMode::Up, 4, 8).first == std::vector<int> { 0, 1, 2, 3, 0, 1, 2, 3 }, "generate-up");
+        check(keys(GeneratorMode::Down, 3, 6).first == std::vector<int> { 2, 1, 0, 2, 1, 0 }, "generate-down");
+        check(keys(GeneratorMode::UpDown, 4, 12).first == std::vector<int> { 0, 1, 2, 3, 2, 1, 0, 1, 2, 3, 2, 1 }, "generate-up-down");
+        check(keys(GeneratorMode::DownUp, 4, 6).first == std::vector<int> { 3, 2, 1, 0, 1, 2 }, "generate-down-up");
+        check(keys(GeneratorMode::Converge, 5, 5).first == std::vector<int> { 0, 4, 1, 3, 2 }, "generate-converge");
+        const auto random = keys(GeneratorMode::Random, 3, 16);
+        bool inRange = true;
+        for (int k : random.first)
+            inRange = inRange && k >= 0 && k <= 2;
+        const auto up = keys(GeneratorMode::Up, 4, 8);
+        check(inRange && up.second.steps[0].type == StepType::Normal && up.second.steps[8].type == StepType::Rest,
+              "generate-random-stays-within-the-keys-and-leaves-other-steps");
+    }
+
     std::printf("%d checks, %d failures\n", checks, failures);
     return failures == 0 ? 0 : 1;
 }
