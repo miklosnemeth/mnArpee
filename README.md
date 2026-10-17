@@ -18,11 +18,13 @@ Held notes are sorted by pitch before they reach the engine.
 - Host sync: steps lock to the song position (bar grid) and the pattern position follows it; free-run when the transport is stopped (a new phrase starts the pattern right away)
 - Preset library like mnKord: about 40 factory presets in two groups, **Bassline** (only the root of the held chord) and **Melodic** (the held keys), each tagged with musical styles (Trance, House, Techno, Disco, Funk, Pop, Synthwave, Ambient, Chill, Dubstep), plus your own; a preset browser inside the plugin window (search, group and style filters), stars (favourites, shared by all projects), previous/next arrows, New, Save (a dot marks unsaved changes; Save as asks for the name and the styles), and a Menu with Save as, Revert, Rename, Style, Import, Export, Show in folder and Delete; a preset switches at the end of the running pattern
 - The host's program list mirrors the preset list (128 slots, unused ones show "-")
-- Pattern tools: right click in the matrix or on a value box for Set all steps to the clicked value, Randomize the lane, Shift left/right, Reverse, Clear, Copy / Paste pattern (the pattern goes to the system clipboard as the preset XML)
+- Pattern tools: right click in the matrix or on a value box for Set all steps to the clicked value, Generate keys (Up, Down, Up-Down, Down-Up, Converge, Random over 3..5 keys), Randomize the lane, Shift left/right, Reverse, Clear, Copy / Paste pattern (the pattern goes to the system clipboard as the preset XML)
+- Undo / redo of the step edits (header buttons, Ctrl+Z, Ctrl+Y); keyboard shortcuts: Ctrl+C / Ctrl+V copy and paste the pattern, Ctrl+S save, Left / Right previous and next preset (click the matrix first, so the editor has the keyboard)
+- Zoom of the whole editor (Menu > Zoom, 80..200%, kept with the project)
 - The chord the held notes form (Cmaj7, Am, C/E, G5, ...) is shown at the right end of the "PATTERN" strip
 - Latch (a new chord replaces the latched one), sustain pedal, panic / all-notes-off, CC/bend/aftertouch pass-through, output on the input channel
 - Sample-accurate MIDI handling; the engine is allocation-free on the audio thread and edits reach it without locks
-- Matrix UI: the matrix is for the keys (Random, Root, Key 1..5): clicking a cell sets the step, and the dice in the corner above the row labels fills the keys randomly. Under it are the other values as lanes: TYPE, OCTAVE and VELOCITY; drag a box up and down or use the mouse wheel, and the dice in front of a lane fills it randomly
+- Matrix UI: the matrix is for the keys (Random, Root, Key 1..5): clicking a cell sets the step, and the dice in the corner above the row labels fills the keys randomly. Under it are the other values as lanes: TYPE, OCTAVE, VELOCITY and RATCHET (1..4: the step plays its note that many times, evenly spread over the step); drag a box up and down or use the mouse wheel, and the dice in front of a lane fills it randomly
 
 ## Build (Windows)
 

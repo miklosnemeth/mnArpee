@@ -312,6 +312,8 @@ void ArpEngine::emitOff(int note, int at)
 
 void ArpEngine::killAll(int at)
 {
+    for (auto& on : pendingOns)
+        on.used = false;
     for (int n = 0; n < 128; ++n)
         emitOff(n, at);
 }
@@ -322,11 +324,55 @@ void ArpEngine::scheduleOff(int note, double ppq)
     pendingOffPpq[(size_t) note] = ppq;
 }
 
+void ArpEngine::scheduleOn(int note, int velocity, double onPpq, double offPpq)
+{
+    for (auto& on : pendingOns)
+        if (! on.used)
+        {
+            on = PendingOn{ onPpq, offPpq, note, velocity, true };
+            return;
+        }
+}
+
 void ArpEngine::flushOffs(double uptoPpq)
 {
-    for (int n = 0; n < 128; ++n)
-        if (hasPendingOff[(size_t) n] && pendingOffPpq[(size_t) n] <= uptoPpq)
-            emitOff(n, sampleAt(pendingOffPpq[(size_t) n]));
+    // Note-offs and the later notes of a ratchet that are due, in time order (an off first when
+    // both fall on the same time).
+    for (;;)
+    {
+        int onIndex = -1;
+        double onTime = 0.0;
+        for (int i = 0; i < (int) pendingOns.size(); ++i)
+            if (pendingOns[(size_t) i].used && pendingOns[(size_t) i].onPpq <= uptoPpq
+                && (onIndex < 0 || pendingOns[(size_t) i].onPpq < onTime))
+            {
+                onIndex = i;
+                onTime = pendingOns[(size_t) i].onPpq;
+            }
+        int offNote = -1;
+        double offTime = 0.0;
+        for (int n = 0; n < 128; ++n)
+            if (hasPendingOff[(size_t) n] && pendingOffPpq[(size_t) n] <= uptoPpq
+                && (offNote < 0 || pendingOffPpq[(size_t) n] < offTime))
+            {
+                offNote = n;
+                offTime = pendingOffPpq[(size_t) n];
+            }
+
+        if (onIndex < 0 && offNote < 0)
+            break;
+        if (offNote >= 0 && (onIndex < 0 || offTime <= onTime))
+        {
+            emitOff(offNote, sampleAt(offTime));
+        }
+        else
+        {
+            auto& on = pendingOns[(size_t) onIndex];
+            on.used = false;
+            emitOn(on.note, on.velocity, sampleAt(on.onPpq));
+            scheduleOff(on.note, on.offPpq);
+        }
+    }
 }
 
 //==============================================================================
@@ -431,18 +477,33 @@ void ArpEngine::playOneStep(const Program& prog, const InputNotes& input, double
             emitOn(note, step.velocity, at);
         }
 
-        // Gate, lengthened by directly following Rest steps (up to the pattern end) and
-        // held over into a following Tie step.
-        const double gateQ = stepQ * (std::clamp(prog.gatePercent, 1, 125) / 100.0)
-                             * (std::clamp((int) step.gateScalePercent, 10, 800) / 100.0);
-        int restSteps = 0;
-        int k = stepIndex + 1;
-        for (; k < numSteps && prog.steps[(size_t) k].type == StepType::Rest; ++k)
-            ++restSteps;
-        double offAt = t + std::max(gateQ, oneSample) + restSteps * stepQ;
-        if (k < numSteps && prog.steps[(size_t) k].type == StepType::Tie)
-            offAt = std::max(offAt, stepTime(prog, gridIndex + 1 + restSteps, stepQ) + oneSample);
-        scheduleOff(note, offAt);
+        const double gateFraction = (std::clamp(prog.gatePercent, 1, 125) / 100.0)
+                                    * (std::clamp((int) step.gateScalePercent, 10, 800) / 100.0);
+        const int ratchet = step.type == StepType::Tie ? 1 : std::clamp((int) step.ratchet, 1, 4);
+        if (ratchet > 1)
+        {
+            // Ratchet: the step is cut into equal parts, each a note of its own (shorter than its
+            // part, so every note is off before the next one starts).
+            const double partQ = stepQ / ratchet;
+            const double partGate = std::max(partQ * std::min(gateFraction, 0.95), oneSample);
+            for (int part = 1; part < ratchet; ++part)
+                scheduleOn(note, step.velocity, t + part * partQ, t + part * partQ + partGate);
+            scheduleOff(note, t + partGate);
+        }
+        else
+        {
+            // Gate, lengthened by directly following Rest steps (up to the pattern end) and
+            // held over into a following Tie step.
+            const double gateQ = stepQ * gateFraction;
+            int restSteps = 0;
+            int k = stepIndex + 1;
+            for (; k < numSteps && prog.steps[(size_t) k].type == StepType::Rest; ++k)
+                ++restSteps;
+            double offAt = t + std::max(gateQ, oneSample) + restSteps * stepQ;
+            if (k < numSteps && prog.steps[(size_t) k].type == StepType::Tie)
+                offAt = std::max(offAt, stepTime(prog, gridIndex + 1 + restSteps, stepQ) + oneSample);
+            scheduleOff(note, offAt);
+        }
     }
 
     lastPlayedStep = stepIndex;

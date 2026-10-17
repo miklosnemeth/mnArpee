@@ -600,6 +600,67 @@ int main()
               "pattern-randomize-the-playing-steps");
     }
 
+    // 36. Ratchet: a step plays its note 2..4 times, evenly spread over the step.
+    {
+        auto e = std::make_unique<ArpEngine>();
+        auto b = singleProgramBank(2, SyncRate::R1_8, 80);
+        b->programs[0].steps[0].ratchet = 3;
+        b->programs[0].steps[1].ratchet = 1;
+        e->setBank(*b);
+        e->noteOn(60, 100);
+        Runner r;
+        auto evs = r.run(*e, 1.1); // 1/8 at 120 bpm = 11025 samples per step
+        std::vector<long long> ons;
+        for (const auto& ev : evs)
+            if (ev.ev.isNoteOn && ons.size() < 4)
+                ons.push_back(ev.sample);
+        check(ons.size() == 4 && ons[0] == 0 && near(ons[1], 3675, 2) && near(ons[2], 7350, 2) && near(ons[3], eighth, 2),
+              "ratchet-spreads-notes-over-the-step");
+        e->noteOff(60);
+        const auto tail = r.run(*e, 0.6);
+        evs.insert(evs.end(), tail.begin(), tail.end());
+        check(balanced(evs), "ratchet-notes-are-balanced");
+
+        // Every note of the ratchet is off before the next one starts.
+        bool ordered = true;
+        int sounding = 0;
+        for (const auto& ev : evs)
+        {
+            sounding += ev.ev.isNoteOn ? 1 : -1;
+            ordered = ordered && sounding >= 0 && sounding <= 1;
+        }
+        check(ordered, "ratchet-notes-do-not-overlap");
+    }
+
+    // 37. Generated key orders.
+    {
+        auto keys = [](GeneratorMode mode, int numKeys, int steps)
+        {
+            auto p = makeInitProgram("Gen");
+            p.numSteps = steps;
+            for (int i = 0; i < maxSteps; ++i)
+                p.steps[(size_t) i].type = StepType::Rest; // proves that the generator makes them Normal
+            std::mt19937 rng(3);
+            generateKeys(p, mode, numKeys, rng);
+            std::vector<int> out;
+            for (int i = 0; i < steps; ++i)
+                out.push_back(p.steps[(size_t) i].keyIndex);
+            return std::make_pair(out, p);
+        };
+        check(keys(GeneratorMode::Up, 4, 8).first == std::vector<int> { 0, 1, 2, 3, 0, 1, 2, 3 }, "generate-up");
+        check(keys(GeneratorMode::Down, 3, 6).first == std::vector<int> { 2, 1, 0, 2, 1, 0 }, "generate-down");
+        check(keys(GeneratorMode::UpDown, 4, 12).first == std::vector<int> { 0, 1, 2, 3, 2, 1, 0, 1, 2, 3, 2, 1 }, "generate-up-down");
+        check(keys(GeneratorMode::DownUp, 4, 6).first == std::vector<int> { 3, 2, 1, 0, 1, 2 }, "generate-down-up");
+        check(keys(GeneratorMode::Converge, 5, 5).first == std::vector<int> { 0, 4, 1, 3, 2 }, "generate-converge");
+        const auto random = keys(GeneratorMode::Random, 3, 16);
+        bool inRange = true;
+        for (int k : random.first)
+            inRange = inRange && k >= 0 && k <= 2;
+        const auto up = keys(GeneratorMode::Up, 4, 8);
+        check(inRange && up.second.steps[0].type == StepType::Normal && up.second.steps[8].type == StepType::Rest,
+              "generate-random-stays-within-the-keys-and-leaves-other-steps");
+    }
+
     std::printf("%d checks, %d failures\n", checks, failures);
     return failures == 0 ? 0 : 1;
 }

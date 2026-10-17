@@ -133,7 +133,57 @@ void setLaneValue(Program& p, PatternLane lane, int value)
             case PatternLane::Type: s.type = static_cast<StepType>(value); break;
             case PatternLane::Octave: s.octave = static_cast<std::int8_t>(std::clamp(value, -3, 3)); break;
             case PatternLane::Velocity: s.velocity = static_cast<std::uint8_t>(std::clamp(value, 1, 127)); break;
+            case PatternLane::Ratchet: s.ratchet = static_cast<std::uint8_t>(std::clamp(value, 1, 4)); break;
         }
+}
+
+void generateKeys(Program& p, GeneratorMode mode, int numKeys, std::mt19937& rng)
+{
+    const int n = std::clamp(numKeys, 1, maxInputKeys);
+    std::vector<int> order;
+    switch (mode)
+    {
+        case GeneratorMode::Up:
+            for (int k = 0; k < n; ++k)
+                order.push_back(k);
+            break;
+        case GeneratorMode::Down:
+            for (int k = n - 1; k >= 0; --k)
+                order.push_back(k);
+            break;
+        case GeneratorMode::UpDown:
+            for (int k = 0; k < n; ++k)
+                order.push_back(k);
+            for (int k = n - 2; k >= 1; --k)
+                order.push_back(k);
+            break;
+        case GeneratorMode::DownUp:
+            for (int k = n - 1; k >= 0; --k)
+                order.push_back(k);
+            for (int k = 1; k <= n - 2; ++k)
+                order.push_back(k);
+            break;
+        case GeneratorMode::Converge:
+            for (int lo = 0, hi = n - 1; lo <= hi;)
+            {
+                order.push_back(lo++);
+                if (lo <= hi)
+                    order.push_back(hi--);
+            }
+            break;
+        case GeneratorMode::Random: break;
+    }
+
+    int count = std::clamp(p.numSteps, 0, maxSteps);
+    if (count < 2)
+        count = maxSteps; // thru modes: fill the stored pattern
+    for (int i = 0; i < count; ++i)
+    {
+        auto& s = p.steps[(size_t) i];
+        s.type = StepType::Normal;
+        s.keyIndex = static_cast<std::int8_t>(mode == GeneratorMode::Random ? (int) (rng() % (unsigned) n)
+                                                                            : order[(size_t) i % order.size()]);
+    }
 }
 
 void shiftPattern(Program& p, int direction)
@@ -172,6 +222,9 @@ void randomizeLane(Program& p, PatternLane lane, std::mt19937& rng)
                 break;
             case PatternLane::Octave: s.octave = static_cast<std::int8_t>(r < 70 ? 0 : (r < 85 ? 1 : -1)); break;
             case PatternLane::Velocity: s.velocity = static_cast<std::uint8_t>(60 + (int) (rng() % 68u)); break;
+            case PatternLane::Ratchet:
+                s.ratchet = static_cast<std::uint8_t>(r < 70 ? 1 : r < 88 ? 2 : r < 96 ? 3 : 4);
+                break;
         }
     }
 }

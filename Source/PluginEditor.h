@@ -33,6 +33,19 @@ public:
 };
 
 //==============================================================================
+// HistoryButton: the undo (curved arrow to the left) and redo (to the right) icon button.
+//==============================================================================
+class HistoryButton : public juce::Button
+{
+public:
+    explicit HistoryButton(bool redoIn) : juce::Button(redoIn ? "redo" : "undo"), redo(redoIn) {}
+    void paintButton(juce::Graphics& g, bool highlighted, bool down) override;
+
+private:
+    bool redo;
+};
+
+//==============================================================================
 // ValueBar: a header value drawn as one line ("OCT +3"). Only the vertical mouse movement
 // changes it (dragging up raises it, the horizontal movement is ignored) and the wheel steps it
 // by one interval, so the value never jumps to where the mouse was clicked.
@@ -65,6 +78,7 @@ public:
     ~MnArpeeAudioEditor() override;
 
     void paint(juce::Graphics&) override;
+    bool keyPressed(const juce::KeyPress&) override;
     void paintOverChildren(juce::Graphics&) override;
     void resized() override;
 
@@ -80,6 +94,8 @@ private:
     // Pattern tools (right click in the matrix): set all, shift, reverse, randomize, clear, copy, paste.
     void showPatternMenu(int step, StepGrid::Lane lane, int row);
     void applySteps(const mnArpee::Program& edited);
+    void copyPattern();
+    void pastePattern();
     void promptSave(const juce::String& initialName, const juce::String& initialStyles,
                     std::function<void(juce::String, juce::String)> done);
     // The plugin's own dialog, inside the editor: a title, a message, optional text fields (label,
@@ -124,6 +140,7 @@ private:
     juce::ArrowButton prevPresetButton { "previous preset", 0.5f, Pal::text() };
     juce::ArrowButton nextPresetButton { "next preset", 0.0f, Pal::text() };
     juce::TextButton presetButton, newButton, saveButton, menuButton;
+    HistoryButton undoButton { false }, redoButton { true };
     ValueBar rateSlider, octaveSlider, gateSlider, swingSlider, stepsSlider;
     juce::ToggleButton latchButton;
     juce::Rectangle<int> brandArea, versionArea, statusArea;

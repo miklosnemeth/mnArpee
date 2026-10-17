@@ -155,6 +155,7 @@ void MnArpeeAudioProcessor::setStep(int stepIndex, const mnArpee::Step& step)
     if (stepIndex < 0 || stepIndex >= mnArpee::maxSteps)
         return;
     const juce::ScopedLock lock(modelLock);
+    pushUndoLocked();
     model.programs[(size_t) activeSlot.load()].steps[(size_t) stepIndex] = step;
     publishBank();
 }
@@ -162,8 +163,63 @@ void MnArpeeAudioProcessor::setStep(int stepIndex, const mnArpee::Step& step)
 void MnArpeeAudioProcessor::setAllSteps(const std::array<mnArpee::Step, mnArpee::maxSteps>& steps)
 {
     const juce::ScopedLock lock(modelLock);
+    pushUndoLocked();
     model.programs[(size_t) activeSlot.load()].steps = steps;
     publishBank();
+}
+
+void MnArpeeAudioProcessor::pushUndoLocked()
+{
+    // A burst of edits (dragging a value) is one undo step: the state before the first edit.
+    const auto now = juce::Time::getMillisecondCounter();
+    if (undoStack.empty() || now - lastEditMs > 600)
+    {
+        undoStack.push_back(model.programs[(size_t) activeSlot.load()].steps);
+        if (undoStack.size() > 100)
+            undoStack.erase(undoStack.begin());
+    }
+    lastEditMs = now;
+    redoStack.clear();
+}
+
+bool MnArpeeAudioProcessor::canUndo() const
+{
+    const juce::ScopedLock lock(modelLock);
+    return ! undoStack.empty();
+}
+
+bool MnArpeeAudioProcessor::canRedo() const
+{
+    const juce::ScopedLock lock(modelLock);
+    return ! redoStack.empty();
+}
+
+bool MnArpeeAudioProcessor::undo()
+{
+    const juce::ScopedLock lock(modelLock);
+    if (undoStack.empty())
+        return false;
+    auto& steps = model.programs[(size_t) activeSlot.load()].steps;
+    redoStack.push_back(steps);
+    steps = undoStack.back();
+    undoStack.pop_back();
+    lastEditMs = 0;
+    publishBank();
+    return true;
+}
+
+bool MnArpeeAudioProcessor::redo()
+{
+    const juce::ScopedLock lock(modelLock);
+    if (redoStack.empty())
+        return false;
+    auto& steps = model.programs[(size_t) activeSlot.load()].steps;
+    undoStack.push_back(steps);
+    steps = redoStack.back();
+    redoStack.pop_back();
+    lastEditMs = 0;
+    publishBank();
+    return true;
 }
 
 //==============================================================================
@@ -187,6 +243,8 @@ void MnArpeeAudioProcessor::activatePresetLocked(const mnArpee::Preset& preset, 
     model.programs[(size_t) slot].name.set(preset.name.toStdString());
     active = preset;
     active.program = {};
+    undoStack.clear(); // a new pattern starts a new history
+    redoStack.clear();
     activeSlot.store(slot);
     loadParamsFrom(model.programs[(size_t) slot]);
     savedSnapshot = saved ? mnArpee::presetSnapshot(preset) : juce::String();
@@ -619,6 +677,7 @@ void MnArpeeAudioProcessor::getStateInformation(juce::MemoryBlock& destData)
     if (auto xml = state.createXml())
     {
         xml->setAttribute("preset", presetText);
+        xml->setAttribute("zoom", (double) zoom.load());
         copyXmlToBinary(*xml, destData);
     }
 }
@@ -703,6 +762,7 @@ void MnArpeeAudioProcessor::setStateInformation(const void* data, int sizeInByte
     }
 
     apvts.replaceState(juce::ValueTree::fromXml(*xml));
+    setZoom((float) xml->getDoubleAttribute("zoom", 1.0));
     if (! havePreset)
         return; // nothing usable in the state: the parameters are what was loaded
 

@@ -10,14 +10,14 @@ constexpr int gutterTop = 20; // column labels (1,5,9,...)
 constexpr int cellGap = 3;
 constexpr int laneRowH = 25;  // value lane row height
 constexpr int laneGap = 8;    // between the matrix and the value lanes
-constexpr int numLaneRows = 3;
+constexpr int numLaneRows = 4;
 constexpr int minVisibleSteps = 16; // columns always shown
 constexpr int dragPixelsPerUnit = 8; // type and octave; the velocity moves one unit per pixel
 
-// Value lanes under the matrix, top to bottom: step type, octave, velocity.
+// Value lanes under the matrix, top to bottom: step type, octave, velocity, ratchet.
 constexpr StepGrid::Lane laneOfRow[numLaneRows] = { StepGrid::Lane::Type, StepGrid::Lane::Octave,
-                                                    StepGrid::Lane::Velocity };
-constexpr const char* laneCaptions[numLaneRows] = { "TYPE", "OCTAVE", "VELOCITY" };
+                                                    StepGrid::Lane::Velocity, StepGrid::Lane::Ratchet };
+constexpr const char* laneCaptions[numLaneRows] = { "TYPE", "OCTAVE", "VELOCITY", "RATCHET" };
 }
 
 namespace
@@ -321,6 +321,10 @@ void StepGrid::paint(juce::Graphics& g)
                     }
                     break;
                 case Lane::Key: break; // the keys are the matrix
+                case Lane::Ratchet:
+                    text = juce::String(step.ratchet);
+                    dim = silent;
+                    break;
                 case Lane::Octave:
                     text = step.octave > 0 ? "+" + juce::String(step.octave) : juce::String(step.octave);
                     dim = silent;
@@ -378,6 +382,8 @@ void StepGrid::clickAt(juce::Point<int> p)
 
 void StepGrid::mouseDown(const juce::MouseEvent& e)
 {
+    if (auto* editor = findParentComponentOfClass<juce::AudioProcessorEditor>())
+        editor->grabKeyboardFocus(); // the keyboard shortcuts of the editor
     lastClickStep = lastClickRow = -1;
     dragStep = dragLaneRow = -1;
 
