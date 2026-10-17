@@ -594,25 +594,6 @@ int main()
                       "unsaved-changes-dialog-dont-save-goes-on");
             }
         }
-
-        // Keyboard shortcuts of the editor: Ctrl+Z / Ctrl+Y undo and redo, Left / Right change the preset.
-        {
-            auto q = makeProcessor();
-            std::unique_ptr<juce::AudioProcessorEditor> ed(q->createEditor());
-            ed->setSize(900, 560);
-            auto st = q->getProgramCopy().steps[4];
-            st.velocity = 44;
-            q->setStep(4, st);
-            const bool undone = ed->keyPressed(juce::KeyPress('Z', juce::ModifierKeys::ctrlModifier, 0))
-                                && q->getProgramCopy().steps[4].velocity == 96;
-            const bool redone = ed->keyPressed(juce::KeyPress('Y', juce::ModifierKeys::ctrlModifier, 0))
-                                && q->getProgramCopy().steps[4].velocity == 44;
-            q->loadPreset(0);
-            ed->keyPressed(juce::KeyPress(juce::KeyPress::rightKey));
-            check(undone && redone, "ctrl-z-and-ctrl-y-undo-and-redo");
-            check(q->getActivePresetIndex() == 1, "arrow-keys-change-the-preset");
-            check(! ed->keyPressed(juce::KeyPress('Q', juce::ModifierKeys::noModifiers, 0)), "other-keys-are-not-taken");
-        }
     }
     else
     {

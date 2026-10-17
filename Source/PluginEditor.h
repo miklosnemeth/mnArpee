@@ -78,7 +78,6 @@ public:
     ~MnArpeeAudioEditor() override;
 
     void paint(juce::Graphics&) override;
-    bool keyPressed(const juce::KeyPress&) override;
     void paintOverChildren(juce::Graphics&) override;
     void resized() override;
 

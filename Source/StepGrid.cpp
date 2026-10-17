@@ -382,8 +382,6 @@ void StepGrid::clickAt(juce::Point<int> p)
 
 void StepGrid::mouseDown(const juce::MouseEvent& e)
 {
-    if (auto* editor = findParentComponentOfClass<juce::AudioProcessorEditor>())
-        editor->grabKeyboardFocus(); // the keyboard shortcuts of the editor
     lastClickStep = lastClickRow = -1;
     dragStep = dragLaneRow = -1;
 
