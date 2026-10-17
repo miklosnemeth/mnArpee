@@ -186,6 +186,51 @@ void generateKeys(Program& p, GeneratorMode mode, int numKeys, std::mt19937& rng
     }
 }
 
+void generateBassline(Program& p, std::mt19937& rng)
+{
+    int n = std::clamp(p.numSteps, 0, maxSteps);
+    if (n < 2)
+        n = maxSteps; // thru modes: fill the stored pattern
+    auto chance = [&rng](int percent) { return (int) (rng() % 100u) < percent; };
+
+    for (int attempt = 0; attempt < 8; ++attempt)
+    {
+        int notes = 0;
+        for (int i = 0; i < n; ++i)
+        {
+            Step s;
+            s.keyIndex = rootKeyIndex;
+            const bool onBeat = i % 4 == 0;
+            const StepType previous = i > 0 ? p.steps[(size_t) i - 1].type : StepType::Normal;
+            const int roll = (int) (rng() % 100u);
+            if (i == 0 || roll < (onBeat ? 80 : 50))
+                s.type = StepType::Normal;
+            else if (roll < (onBeat ? 85 : 62))
+                s.type = StepType::Off;
+            else if (roll < (onBeat ? 92 : 80))
+                s.type = StepType::Rest;
+            else
+                s.type = previous == StepType::Normal || previous == StepType::Tie ? StepType::Tie : StepType::Normal;
+
+            if (s.type == StepType::Normal || s.type == StepType::Tie)
+            {
+                ++notes;
+                s.velocity = static_cast<std::uint8_t>(i == 0 ? 118
+                                                       : onBeat ? 100 + (int) (rng() % 20u)
+                                                       : chance(25) ? 60 + (int) (rng() % 15u)
+                                                                    : 82 + (int) (rng() % 18u));
+                if (i > 0 && chance(15))
+                    s.octave = 1;
+                if (s.type == StepType::Normal && ! onBeat && chance(8))
+                    s.ratchet = 2;
+            }
+            p.steps[(size_t) i] = s;
+        }
+        if (notes >= n / 3)
+            break; // not too sparse
+    }
+}
+
 void shiftPattern(Program& p, int direction)
 {
     const int n = std::clamp(p.numSteps, 0, maxSteps);

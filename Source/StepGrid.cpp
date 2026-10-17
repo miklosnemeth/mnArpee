@@ -131,6 +131,14 @@ juce::Rectangle<int> StepGrid::keysDice() const
     return { 8, 2, laneRowH + 4, gutterTop };
 }
 
+juce::Rectangle<int> StepGrid::rootDice() const
+{
+    // At the left of the "Root" label.
+    const auto cell = cellRect(0, rootRow);
+    const int h = std::min(cell.getHeight(), laneRowH);
+    return { 8, cell.getCentreY() - h / 2, laneRowH + 4, h };
+}
+
 juce::Rectangle<int> StepGrid::laneDice(int laneRow) const
 {
     // At the left of the caption.
@@ -354,6 +362,7 @@ void StepGrid::paint(juce::Graphics& g)
     }
 
     drawDice(g, keysDice().toFloat().reduced(2.0f));
+    drawDice(g, rootDice().toFloat().reduced(2.0f));
 
     // Playhead arrow in the header.
     if (playStep >= 0 && playStep < n)
@@ -403,6 +412,12 @@ void StepGrid::mouseDown(const juce::MouseEvent& e)
     {
         if (randomizeRequested)
             randomizeRequested(Lane::Key);
+        return;
+    }
+    if (rootDice().expanded(2).contains(e.getPosition()))
+    {
+        if (randomizeRequested)
+            randomizeRequested(Lane::Root);
         return;
     }
     for (int lr = 0; lr < numLaneRows; ++lr)

@@ -201,6 +201,12 @@ MnArpeeAudioEditor::MnArpeeAudioEditor(MnArpeeAudioProcessor& p)
         {
             auto edited = shownProgram;
             std::mt19937 rng((unsigned) juce::Time::currentTimeMillis());
+            if (lane == StepGrid::Lane::Root)
+            {
+                mnArpee::generateBassline(edited, rng);
+                applySteps(edited);
+                return;
+            }
             mnArpee::randomizeLane(edited, lane == StepGrid::Lane::Type     ? mnArpee::PatternLane::Type
                                            : lane == StepGrid::Lane::Octave ? mnArpee::PatternLane::Octave
                                            : lane == StepGrid::Lane::Velocity ? mnArpee::PatternLane::Velocity
@@ -1349,6 +1355,7 @@ void MnArpeeAudioEditor::showPatternMenu(int step, StepGrid::Lane lane, int row)
         }
         menu.addSubMenu("Generate keys", generate);
     }
+    menu.addItem(9, "Random bass line (root only)");
     menu.addSeparator();
     menu.addItem(2, "Shift pattern left");
     menu.addItem(3, "Shift pattern right");
@@ -1386,6 +1393,12 @@ void MnArpeeAudioEditor::showPatternMenu(int step, StepGrid::Lane lane, int row)
                                {
                                    const auto init = mnArpee::makeInitProgram();
                                    edited.steps = init.steps;
+                                   break;
+                               }
+                               case 9:
+                               {
+                                   std::mt19937 rng((unsigned) juce::Time::currentTimeMillis());
+                                   mnArpee::generateBassline(edited, rng);
                                    break;
                                }
                                case 7: safe->copyPattern(); return;

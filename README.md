@@ -24,7 +24,7 @@ Held notes are sorted by pitch before they reach the engine.
 - The chord the held notes form (Cmaj7, Am, C/E, G5, ...) is shown at the right end of the "PATTERN" strip
 - Latch (a new chord replaces the latched one), sustain pedal, panic / all-notes-off, CC/bend/aftertouch pass-through, output on the input channel
 - Sample-accurate MIDI handling; the engine is allocation-free on the audio thread and edits reach it without locks
-- Matrix UI: the matrix is for the keys (Random, Root, Key 1..5): clicking a cell sets the step, and the dice in the corner above the row labels fills the keys randomly. Under it are the other values as lanes: TYPE, OCTAVE, VELOCITY and RATCHET (1..4: the step plays its note that many times, evenly spread over the step); drag a box up and down or use the mouse wheel, and the dice in front of a lane fills it randomly
+- Matrix UI: the matrix is for the keys (Random, Root, Key 1..5): clicking a cell sets the step, the dice in the corner above the row labels fills the keys randomly, and the dice at the Root row makes a random bass line (Root steps only, with accents, ghost notes, rests, glides, octave jumps and ratchets; also in the right-click menu). Under it are the other values as lanes: TYPE, OCTAVE, VELOCITY and RATCHET (1..4: the step plays its note that many times, evenly spread over the step); drag a box up and down or use the mouse wheel, and the dice in front of a lane fills it randomly
 
 ## Build (Windows)
 

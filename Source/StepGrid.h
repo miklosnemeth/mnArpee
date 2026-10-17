@@ -8,7 +8,7 @@
 // StepGrid: the step matrix with the value lanes under it. Column = step.
 //  - The matrix is for the keys: bottom to top Random, Root, Key 1 .. Key 5 (clicking toggles the
 //    step on that key; Tie steps are drawn linked to the previous column, Rest and Off as a mark).
-//    A dice above the row labels fills the keys randomly.
+//    A dice above the row labels fills the keys randomly; the dice at the Root row makes a random bass line.
 //  - Under it, one row per other value: TYPE, OCTAVE, VELOCITY and RATCHET. A value box is adjusted by
 //    dragging up and down or with the mouse wheel; the dice in front of the lane fills it randomly.
 //==============================================================================
@@ -17,11 +17,11 @@ class StepGrid : public juce::Component
 public:
     using StepClicked = std::function<void(int stepIndex, int row)>;
     // A value box was grabbed (delta 0) or adjusted by `delta` units.
-    enum class Lane { Key, Type, Octave, Velocity, Ratchet };
+    enum class Lane { Key, Type, Octave, Velocity, Ratchet, Root };
     using LaneAdjusted = std::function<void(int stepIndex, Lane lane, int delta)>;
     // Right click on a matrix cell (Lane::Key, row >= 0) or on a value box (row -1).
     using ContextRequested = std::function<void(int stepIndex, Lane lane, int row)>;
-    // The dice of a lane was clicked.
+    // The dice of a lane was clicked (Lane::Root: the dice of the Root row, a random bass line).
     using RandomizeRequested = std::function<void(Lane lane)>;
 
     // Unified dark palette (used by the whole UI).
@@ -81,6 +81,7 @@ private:
     juce::Rectangle<int> laneCaption(int laneRow) const;
     juce::Rectangle<int> laneDice(int laneRow) const;
     juce::Rectangle<int> keysDice() const;
+    juce::Rectangle<int> rootDice() const;
     bool laneBoxAt(juce::Point<int> p, int& step, int& laneRow) const;
 
     mnArpee::Program program;

@@ -661,6 +661,46 @@ int main()
               "generate-random-stays-within-the-keys-and-leaves-other-steps");
     }
 
+    // 38. A random bass line: root only, a strong first step, a few notes, different every time.
+    {
+        auto make = [](unsigned seed, int steps)
+        {
+            auto p = makeInitProgram("Bass");
+            p.numSteps = steps;
+            for (int i = 0; i < maxSteps; ++i)
+            {
+                p.steps[(size_t) i].type = StepType::Random; // proves that they are replaced
+                p.steps[(size_t) i].keyIndex = 3;
+            }
+            std::mt19937 rng(seed);
+            generateBassline(p, rng);
+            return p;
+        };
+        bool rootOnly = true, firstStrong = true, enoughNotes = true;
+        for (unsigned seed = 1; seed <= 40; ++seed)
+        {
+            const auto p = make(seed, 16);
+            int notes = 0;
+            for (int i = 0; i < 16; ++i)
+            {
+                const auto& s = p.steps[(size_t) i];
+                const bool plays = s.type == StepType::Normal || s.type == StepType::Tie;
+                notes += plays ? 1 : 0;
+                rootOnly = rootOnly && s.type != StepType::Random && (! plays || s.keyIndex == rootKeyIndex);
+            }
+            firstStrong = firstStrong && p.steps[0].type == StepType::Normal && p.steps[0].velocity >= 110;
+            enoughNotes = enoughNotes && notes >= 16 / 3;
+        }
+        check(rootOnly, "bassline-plays-only-the-root");
+        check(firstStrong && enoughNotes, "bassline-starts-strong-and-is-not-too-sparse");
+        const auto a = make(1, 16), b = make(2, 16);
+        bool different = false;
+        for (int i = 0; i < 16; ++i)
+            different = different || a.steps[(size_t) i].type != b.steps[(size_t) i].type
+                        || a.steps[(size_t) i].velocity != b.steps[(size_t) i].velocity;
+        check(different && make(1, 16).steps[20].type == StepType::Random, "bassline-differs-and-leaves-steps-past-the-end");
+    }
+
     std::printf("%d checks, %d failures\n", checks, failures);
     return failures == 0 ? 0 : 1;
 }
