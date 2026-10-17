@@ -164,6 +164,11 @@ void randomizeLane(Program& p, PatternLane lane, std::mt19937& rng);
 enum class GeneratorMode { Up, Down, UpDown, DownUp, Converge, Random };
 void generateKeys(Program& p, GeneratorMode mode, int numKeys, std::mt19937& rng);
 
+// A random bass line: every playing step becomes the Root key (or a rest, off or tie): a strong first
+// step, accents on the beats, ghost notes, a few octave jumps, glides and ratchets. Other values of
+// the steps (scale, gate, chance) are reset.
+void generateBassline(Program& p, std::mt19937& rng);
+
 Program makeInitProgram(std::string_view name = "Init");
 Bank makeFactoryBank();
 
