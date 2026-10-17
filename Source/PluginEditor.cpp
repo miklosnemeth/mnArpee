@@ -191,7 +191,6 @@ MnArpeeAudioEditor::MnArpeeAudioEditor(MnArpeeAudioProcessor& p)
     setScaleFactor(proc.getZoom());
     setResizable(true, true);
     setResizeLimits(840, 480, 1600, 1000);
-    setWantsKeyboardFocus(true);
 
     addAndMakeVisible(grid);
     grid.onStepClicked([this](int step, int row) { onGridClicked(step, row); });
@@ -226,8 +225,8 @@ MnArpeeAudioEditor::MnArpeeAudioEditor(MnArpeeAudioProcessor& p)
     menuButton.setButtonText("Menu");
     menuButton.setTooltip("Save as, revert, rename, import, export, delete");
     menuButton.onClick = [this] { showPresetMenu(); };
-    undoButton.setTooltip("Undo (Ctrl+Z)");
-    redoButton.setTooltip("Redo (Ctrl+Y)");
+    undoButton.setTooltip("Undo");
+    redoButton.setTooltip("Redo");
     undoButton.onClick = [this] { proc.undo(); };
     redoButton.onClick = [this] { proc.redo(); };
     addAndMakeVisible(undoButton);
@@ -1277,32 +1276,6 @@ void MnArpeeAudioEditor::pastePattern()
     if (auto* steps = proc.getApvts().getParameter("steps"))
         steps->setValueNotifyingHost(steps->convertTo0to1((float) clip.program.numSteps));
     applySteps(edited);
-}
-
-bool MnArpeeAudioEditor::keyPressed(const juce::KeyPress& key)
-{
-    if (dialog != nullptr || presetBrowser != nullptr)
-        return false; // they take their own keys
-    const bool command = key.getModifiers().isCommandDown();
-    const bool shift = key.getModifiers().isShiftDown();
-    const int code = key.getKeyCode();
-    if (command && code == 'Z' && ! shift)
-        proc.undo();
-    else if (command && ((code == 'Z' && shift) || code == 'Y'))
-        proc.redo();
-    else if (command && code == 'C')
-        copyPattern();
-    else if (command && code == 'V')
-        pastePattern();
-    else if (command && code == 'S')
-        saveClicked();
-    else if (! command && code == juce::KeyPress::leftKey)
-        stepPreset(-1);
-    else if (! command && code == juce::KeyPress::rightKey)
-        stepPreset(1);
-    else
-        return false;
-    return true;
 }
 
 void MnArpeeAudioEditor::showPatternMenu(int step, StepGrid::Lane lane, int row)
