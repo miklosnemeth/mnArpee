@@ -112,6 +112,7 @@ struct Step
     // Gate multiplier in percent: 100 = unchanged (instead of the manual's GATE TIME "2x" etc.).
     std::uint16_t gateScalePercent = 100;
     std::uint8_t chance = 100;   // 1..100%
+    std::uint8_t ratchet = 1;    // 1..4: the note is repeated this many times within the step
 };
 
 struct Program
@@ -148,8 +149,8 @@ constexpr StepType stepTypeFromInt(int v) noexcept
 static_assert(std::is_trivially_copyable_v<Bank>, "Bank must be copyable without allocation");
 
 // Pattern editing (the numeric lane values are Key: -1 root / 0..4 key 1..5 / -2 random step,
-// Type: StepType, Octave: -3..3, Velocity: 1..127).
-enum class PatternLane { Key, Type, Octave, Velocity };
+// Type: StepType, Octave: -3..3, Velocity: 1..127, Ratchet: 1..4).
+enum class PatternLane { Key, Type, Octave, Velocity, Ratchet };
 // Sets one lane of every stored step (not just the playing ones) to a value.
 void setLaneValue(Program& p, PatternLane lane, int value);
 // Rotates the playing steps by one: direction < 0 moves them left, > 0 right.

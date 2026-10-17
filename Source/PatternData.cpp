@@ -133,6 +133,7 @@ void setLaneValue(Program& p, PatternLane lane, int value)
             case PatternLane::Type: s.type = static_cast<StepType>(value); break;
             case PatternLane::Octave: s.octave = static_cast<std::int8_t>(std::clamp(value, -3, 3)); break;
             case PatternLane::Velocity: s.velocity = static_cast<std::uint8_t>(std::clamp(value, 1, 127)); break;
+            case PatternLane::Ratchet: s.ratchet = static_cast<std::uint8_t>(std::clamp(value, 1, 4)); break;
         }
 }
 
@@ -172,6 +173,9 @@ void randomizeLane(Program& p, PatternLane lane, std::mt19937& rng)
                 break;
             case PatternLane::Octave: s.octave = static_cast<std::int8_t>(r < 70 ? 0 : (r < 85 ? 1 : -1)); break;
             case PatternLane::Velocity: s.velocity = static_cast<std::uint8_t>(60 + (int) (rng() % 68u)); break;
+            case PatternLane::Ratchet:
+                s.ratchet = static_cast<std::uint8_t>(r < 70 ? 1 : r < 88 ? 2 : r < 96 ? 3 : 4);
+                break;
         }
     }
 }

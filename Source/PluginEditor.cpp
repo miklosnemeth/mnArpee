@@ -177,6 +177,7 @@ MnArpeeAudioEditor::MnArpeeAudioEditor(MnArpeeAudioProcessor& p)
             mnArpee::randomizeLane(edited, lane == StepGrid::Lane::Type     ? mnArpee::PatternLane::Type
                                            : lane == StepGrid::Lane::Octave ? mnArpee::PatternLane::Octave
                                            : lane == StepGrid::Lane::Velocity ? mnArpee::PatternLane::Velocity
+                                           : lane == StepGrid::Lane::Ratchet ? mnArpee::PatternLane::Ratchet
                                                                               : mnArpee::PatternLane::Key,
                                    rng);
             applySteps(edited);
@@ -1247,6 +1248,12 @@ void MnArpeeAudioEditor::showPatternMenu(int step, StepGrid::Lane lane, int row)
             valueText = juce::String(value);
             laneName = "velocities";
             break;
+        case StepGrid::Lane::Ratchet:
+            patternLane = PatternLane::Ratchet;
+            value = (int) st.ratchet;
+            valueText = juce::String(value);
+            laneName = "ratchets";
+            break;
     }
 
     mnArpee::Preset clip;
@@ -1336,6 +1343,9 @@ void MnArpeeAudioEditor::onLaneAdjusted(int step, StepGrid::Lane lane, int delta
                 break;
             case StepGrid::Lane::Velocity:
                 st.velocity = (std::uint8_t) std::clamp((int) st.velocity + delta, 1, 127);
+                break;
+            case StepGrid::Lane::Ratchet:
+                st.ratchet = (std::uint8_t) std::clamp((int) st.ratchet + delta, 1, 4);
                 break;
         }
         commitStep(st);

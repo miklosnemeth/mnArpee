@@ -80,6 +80,7 @@ std::unique_ptr<juce::XmlElement> presetToXml(const Preset& preset)
         step->setAttribute("velocity", (int) s.velocity);
         step->setAttribute("gate", (int) s.gateScalePercent);
         step->setAttribute("chance", (int) s.chance);
+        step->setAttribute("ratchet", (int) s.ratchet);
     }
     return xml;
 }
@@ -122,6 +123,7 @@ bool presetFromXml(const juce::XmlElement& xml, Preset& out)
         s.velocity = (std::uint8_t) juce::jlimit(0, 127, e->getIntAttribute("velocity", 96));
         s.gateScalePercent = (std::uint16_t) juce::jlimit(10, 800, e->getIntAttribute("gate", 100));
         s.chance = (std::uint8_t) juce::jlimit(1, 100, e->getIntAttribute("chance", 100));
+        s.ratchet = (std::uint8_t) juce::jlimit(1, 4, e->getIntAttribute("ratchet", 1));
     }
 
     p.factory = false;

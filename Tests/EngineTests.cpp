@@ -600,6 +600,38 @@ int main()
               "pattern-randomize-the-playing-steps");
     }
 
+    // 36. Ratchet: a step plays its note 2..4 times, evenly spread over the step.
+    {
+        auto e = std::make_unique<ArpEngine>();
+        auto b = singleProgramBank(2, SyncRate::R1_8, 80);
+        b->programs[0].steps[0].ratchet = 3;
+        b->programs[0].steps[1].ratchet = 1;
+        e->setBank(*b);
+        e->noteOn(60, 100);
+        Runner r;
+        auto evs = r.run(*e, 1.1); // 1/8 at 120 bpm = 11025 samples per step
+        std::vector<long long> ons;
+        for (const auto& ev : evs)
+            if (ev.ev.isNoteOn && ons.size() < 4)
+                ons.push_back(ev.sample);
+        check(ons.size() == 4 && ons[0] == 0 && near(ons[1], 3675, 2) && near(ons[2], 7350, 2) && near(ons[3], eighth, 2),
+              "ratchet-spreads-notes-over-the-step");
+        e->noteOff(60);
+        const auto tail = r.run(*e, 0.6);
+        evs.insert(evs.end(), tail.begin(), tail.end());
+        check(balanced(evs), "ratchet-notes-are-balanced");
+
+        // Every note of the ratchet is off before the next one starts.
+        bool ordered = true;
+        int sounding = 0;
+        for (const auto& ev : evs)
+        {
+            sounding += ev.ev.isNoteOn ? 1 : -1;
+            ordered = ordered && sounding >= 0 && sounding <= 1;
+        }
+        check(ordered, "ratchet-notes-do-not-overlap");
+    }
+
     std::printf("%d checks, %d failures\n", checks, failures);
     return failures == 0 ? 0 : 1;
 }

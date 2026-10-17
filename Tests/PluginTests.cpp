@@ -289,6 +289,20 @@ int main()
         check(p->getProgramCopy().steps[10].octave == 2 && p->getActivePreset().dirty, "set-all-steps-replaces-the-pattern");
     }
 
+    // The ratchet of a step is saved with the preset.
+    {
+        auto p = makeProcessor();
+        p->newPreset();
+        auto st = p->getProgramCopy().steps[2];
+        st.ratchet = 3;
+        p->setStep(2, st);
+        check(p->saveActivePresetAs("Ratchet Arp"), "save-ratchet-preset");
+        const int index = presetIndex(*p, "Ratchet Arp");
+        check(index >= 0 && p->getPresetList()[(size_t) index].program.steps[2].ratchet == 3
+                  && p->getPresetList()[(size_t) index].program.steps[1].ratchet == 1,
+              "ratchet-is-saved-in-the-preset");
+    }
+
     // State: the project stores the active preset's content.
     {
         auto p = makeProcessor();

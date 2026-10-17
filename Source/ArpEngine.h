@@ -174,6 +174,7 @@ private:
     void emitOff(int note, int at);
     void killAll(int at);
     void scheduleOff(int note, double ppq);
+    void scheduleOn(int note, int velocity, double onPpq, double offPpq);
     void flushOffs(double uptoPpq);
 
     Bank bank;
@@ -205,6 +206,14 @@ private:
     std::array<bool, 128> sounding {};
     std::array<bool, 128> hasPendingOff {};
     std::array<double, 128> pendingOffPpq {};
+    // Notes of a ratchet that are still to start: when, how long, which.
+    struct PendingOn
+    {
+        double onPpq = 0.0, offPpq = 0.0;
+        int note = 0, velocity = 96;
+        bool used = false;
+    };
+    std::array<PendingOn, 32> pendingOns {};
     bool panicPending = false;
     int outChannel = 1;
 

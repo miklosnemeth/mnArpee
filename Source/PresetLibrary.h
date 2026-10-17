@@ -13,7 +13,7 @@
 //   <mnArpeePreset version="1">
 //     <Preset name="..." group="..." author="..." tags="..." rate="1/16" gate="80" swing="0" octave="0"
 //             transpose="0" steps="16">
-//       <Step type="normal" key="1" scale="0" octave="0" velocity="96" gate="100" chance="100"/>
+//       <Step type="normal" key="1" scale="0" octave="0" velocity="96" gate="100" chance="100" ratchet="1"/>
 //       ... one Step per stored step
 //     </Preset>
 //   </mnArpeePreset>
