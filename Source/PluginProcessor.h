@@ -7,6 +7,7 @@
 
 #include <array>
 #include <atomic>
+#include <vector>
 
 //==============================================================================
 // MnArpeeAudioProcessor: VST3/Standalone MIDI-effect.
@@ -88,6 +89,15 @@ public:
     int getActiveSlot() const { return activeSlot.load(); }
     mnArpee::Program getProgramCopy() const;
     void setStep(int stepIndex, const mnArpee::Step& step);
+    // Undo / redo of the step edits of the active pattern (edits within 0.6 s are one step; a preset
+    // load starts a new history).
+    bool canUndo() const;
+    bool canRedo() const;
+    bool undo();
+    bool redo();
+    // The size of the editor: 0.5 .. 3 (kept with the project).
+    float getZoom() const { return zoom.load(); }
+    void setZoom(float factor) { zoom.store(juce::jlimit(0.5f, 3.0f, factor)); }
     // Replaces all the steps of the active pattern (pattern tools, paste).
     void setAllSteps(const std::array<mnArpee::Step, mnArpee::maxSteps>& steps);
     // Increments whenever the model changes (edits, preset load, state load).
@@ -145,6 +155,8 @@ private:
     // Message thread, with modelLock held.
     mnArpee::Preset currentPresetLocked() const;
     void activatePresetLocked(const mnArpee::Preset& preset, bool saved, bool restartPlayback);
+    // Remembers the steps before an edit (modelLock held).
+    void pushUndoLocked();
 
     void pickUpPendingBank();
     void applyParamsToEngine();
@@ -170,6 +182,10 @@ private:
     mnArpee::Preset active;              // name, group, author and file of the active preset
     juce::String savedSnapshot;          // its content when it was loaded or saved
     std::atomic<int> pendingHostProgram { -1 };
+    using StepList = std::array<mnArpee::Step, mnArpee::maxSteps>;
+    std::vector<StepList> undoStack, redoStack;
+    juce::int64 lastEditMs = 0;
+    std::atomic<float> zoom { 1.0f };
 
     // Hand-over to the audio thread.
     juce::SpinLock pendingLock;

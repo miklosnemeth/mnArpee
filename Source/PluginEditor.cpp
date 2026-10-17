@@ -130,6 +130,32 @@ juce::Label* MnArpeeLookAndFeel::createSliderTextBox(juce::Slider& s)
 }
 
 //==============================================================================
+// HistoryButton
+//==============================================================================
+void HistoryButton::paintButton(juce::Graphics& g, bool highlighted, bool down)
+{
+    const auto r = getLocalBounds().toFloat().reduced(1.0f);
+    g.setColour(down ? Pal::cardHi().brighter(0.2f) : highlighted ? Pal::cardHi().brighter(0.1f) : Pal::cardHi());
+    g.fillRoundedRectangle(r, 5.0f);
+    g.setColour(Pal::border());
+    g.drawRoundedRectangle(r, 5.0f, 1.0f);
+
+    // A curved arrow: the arc, and the head at its end (mirrored for redo).
+    const auto c = r.getCentre();
+    const float rad = std::min(r.getWidth(), r.getHeight()) * 0.28f;
+    juce::Path arc;
+    arc.addCentredArc(c.x, c.y + 1.0f, rad, rad, 0.0f, -2.3f, 1.6f, true);
+    juce::Path head;
+    head.addTriangle(-4.5f, 0.0f, 4.5f, 0.0f, 0.0f, -6.0f);
+    g.setColour(isEnabled() ? Pal::text() : Pal::dimText().withAlpha(0.35f));
+    juce::AffineTransform flip = redo ? juce::AffineTransform::scale(-1.0f, 1.0f, c.x, c.y) : juce::AffineTransform();
+    g.strokePath(arc, juce::PathStrokeType(2.0f), flip);
+    const auto tip = arc.getPointAlongPath(0.0f).transformedBy(flip);
+    head = head.createPathWithRoundedCorners(1.0f);
+    g.fillPath(head, juce::AffineTransform::rotation(redo ? 0.6f : -0.6f).translated(tip.x, tip.y));
+}
+
+//==============================================================================
 // ValueBar
 //==============================================================================
 void ValueBar::mouseDown(const juce::MouseEvent& e)
@@ -162,8 +188,10 @@ MnArpeeAudioEditor::MnArpeeAudioEditor(MnArpeeAudioProcessor& p)
 {
     setLookAndFeel(&lnf);
     setSize(900, 560);
+    setScaleFactor(proc.getZoom());
     setResizable(true, true);
-    setResizeLimits(760, 480, 1600, 1000);
+    setResizeLimits(840, 480, 1600, 1000);
+    setWantsKeyboardFocus(true);
 
     addAndMakeVisible(grid);
     grid.onStepClicked([this](int step, int row) { onGridClicked(step, row); });
@@ -198,6 +226,12 @@ MnArpeeAudioEditor::MnArpeeAudioEditor(MnArpeeAudioProcessor& p)
     menuButton.setButtonText("Menu");
     menuButton.setTooltip("Save as, revert, rename, import, export, delete");
     menuButton.onClick = [this] { showPresetMenu(); };
+    undoButton.setTooltip("Undo (Ctrl+Z)");
+    redoButton.setTooltip("Redo (Ctrl+Y)");
+    undoButton.onClick = [this] { proc.undo(); };
+    redoButton.onClick = [this] { proc.redo(); };
+    addAndMakeVisible(undoButton);
+    addAndMakeVisible(redoButton);
     for (auto* b : { static_cast<juce::Component*>(&prevPresetButton), static_cast<juce::Component*>(&presetButton),
                      static_cast<juce::Component*>(&nextPresetButton), static_cast<juce::Component*>(&newButton),
                      static_cast<juce::Component*>(&saveButton), static_cast<juce::Component*>(&menuButton) })
@@ -903,6 +937,13 @@ void MnArpeeAudioEditor::showPresetMenu()
     menu.addItem(5, "Export...");
     menu.addItem(6, "Show in folder");
     menu.addSeparator();
+    {
+        juce::PopupMenu zoom;
+        for (const int percent : { 80, 90, 100, 110, 125, 150, 175, 200 })
+            zoom.addItem(200 + percent, juce::String(percent) + "%", true, std::abs(proc.getZoom() * 100.0f - (float) percent) < 1.0f);
+        menu.addSubMenu("Zoom", zoom);
+    }
+    menu.addSeparator();
     menu.addItem(7, "Delete", saved);
     menu.showMenuAsync(juce::PopupMenu::Options().withTargetComponent(&menuButton).withParentComponent(this),
                        [safe = juce::Component::SafePointer<MnArpeeAudioEditor>(this)](int result)
@@ -910,6 +951,12 @@ void MnArpeeAudioEditor::showPresetMenu()
                            if (safe == nullptr || result == 0)
                                return;
                            auto& p = safe->proc;
+                           if (result >= 200)
+                           {
+                               p.setZoom((float) (result - 200) / 100.0f);
+                               safe->setScaleFactor(p.getZoom());
+                               return;
+                           }
                            switch (result)
                            {
                                case 1: safe->saveActiveAs(nullptr); break;
@@ -1092,7 +1139,13 @@ void MnArpeeAudioEditor::resized()
     versionArea = brand.removeFromTop(16);
     latchButton.setBounds(latchArea.getX(), latchArea.getCentreY() - 12, 100, 24);
 
-    auto picker = header.withSizeKeepingCentre(26 + 4 + 190 + 4 + 26 + 8 + 52 + 6 + 52 + 6 + 62, 34);
+    // The preset picker and the undo / redo buttons form a group, centred in the header.
+    auto group = header.withSizeKeepingCentre(26 + 4 + 190 + 4 + 26 + 8 + 52 + 6 + 52 + 6 + 62 + 14 + 30 + 6 + 30, 34);
+    auto picker = group.removeFromLeft(26 + 4 + 190 + 4 + 26 + 8 + 52 + 6 + 52 + 6 + 62);
+    group.removeFromLeft(14);
+    undoButton.setBounds(group.removeFromLeft(30));
+    group.removeFromLeft(6);
+    redoButton.setBounds(group.removeFromLeft(30));
     prevPresetButton.setBounds(picker.removeFromLeft(26).reduced(6, 8));
     picker.removeFromLeft(4);
     presetButton.setBounds(picker.removeFromLeft(190));
@@ -1136,6 +1189,8 @@ void MnArpeeAudioEditor::timerCallback()
 {
     // Follow program switches, model changes (edits, state loads) and the step count.
     refreshPresetUi();
+    undoButton.setEnabled(proc.canUndo());
+    redoButton.setEnabled(proc.canRedo());
     const int prog = proc.getActiveSlot();
     int steps = shownProgram.numSteps;
     if (auto* sp = proc.getApvts().getRawParameterValue("steps"))
@@ -1203,6 +1258,52 @@ bool patternOnClipboard(mnArpee::Preset& out)
     return element != nullptr && mnArpee::presetFromXml(*element, out);
 }
 } // namespace
+
+void MnArpeeAudioEditor::copyPattern()
+{
+    mnArpee::Preset copy;
+    copy.name = "Pattern";
+    copy.program = proc.getProgramCopy();
+    juce::SystemClipboard::copyTextToClipboard(mnArpee::presetToXml(copy)->toString());
+}
+
+void MnArpeeAudioEditor::pastePattern()
+{
+    mnArpee::Preset clip;
+    if (! patternOnClipboard(clip))
+        return;
+    auto edited = shownProgram;
+    edited.steps = clip.program.steps;
+    if (auto* steps = proc.getApvts().getParameter("steps"))
+        steps->setValueNotifyingHost(steps->convertTo0to1((float) clip.program.numSteps));
+    applySteps(edited);
+}
+
+bool MnArpeeAudioEditor::keyPressed(const juce::KeyPress& key)
+{
+    if (dialog != nullptr || presetBrowser != nullptr)
+        return false; // they take their own keys
+    const bool command = key.getModifiers().isCommandDown();
+    const bool shift = key.getModifiers().isShiftDown();
+    const int code = key.getKeyCode();
+    if (command && code == 'Z' && ! shift)
+        proc.undo();
+    else if (command && ((code == 'Z' && shift) || code == 'Y'))
+        proc.redo();
+    else if (command && code == 'C')
+        copyPattern();
+    else if (command && code == 'V')
+        pastePattern();
+    else if (command && code == 'S')
+        saveClicked();
+    else if (! command && code == juce::KeyPress::leftKey)
+        stepPreset(-1);
+    else if (! command && code == juce::KeyPress::rightKey)
+        stepPreset(1);
+    else
+        return false;
+    return true;
+}
 
 void MnArpeeAudioEditor::showPatternMenu(int step, StepGrid::Lane lane, int row)
 {
@@ -1314,21 +1415,8 @@ void MnArpeeAudioEditor::showPatternMenu(int step, StepGrid::Lane lane, int row)
                                    edited.steps = init.steps;
                                    break;
                                }
-                               case 7:
-                               {
-                                   mnArpee::Preset copy;
-                                   copy.name = "Pattern";
-                                   copy.program = safe->proc.getProgramCopy();
-                                   juce::SystemClipboard::copyTextToClipboard(mnArpee::presetToXml(copy)->toString());
-                                   return;
-                               }
-                               case 8:
-                               {
-                                   edited.steps = clip.program.steps;
-                                   if (auto* steps = safe->proc.getApvts().getParameter("steps"))
-                                       steps->setValueNotifyingHost(steps->convertTo0to1((float) clip.program.numSteps));
-                                   break;
-                               }
+                               case 7: safe->copyPattern(); return;
+                               case 8: safe->pastePattern(); return;
                                default: return;
                            }
                            safe->applySteps(edited);

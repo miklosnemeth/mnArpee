@@ -303,6 +303,55 @@ int main()
               "ratchet-is-saved-in-the-preset");
     }
 
+    // Undo / redo of the step edits.
+    {
+        auto p = makeProcessor();
+        check(! p->canUndo() && ! p->canRedo(), "no-undo-at-first");
+        auto st = p->getProgramCopy().steps[2];
+        st.octave = 1;
+        p->setStep(2, st);
+        st.octave = 2; // a burst of edits: one undo step
+        p->setStep(2, st);
+        check(p->canUndo() && p->getProgramCopy().steps[2].octave == 2, "edit-can-be-undone");
+        check(p->undo() && p->getProgramCopy().steps[2].octave == 0 && p->canRedo(), "undo-restores-the-steps-before-the-burst");
+        check(p->redo() && p->getProgramCopy().steps[2].octave == 2 && ! p->canRedo(), "redo-brings-the-edit-back");
+
+        juce::Thread::sleep(700); // a later edit is a step of its own
+        st.octave = -1;
+        p->setStep(2, st);
+        p->undo();
+        check(p->getProgramCopy().steps[2].octave == 2, "later-edit-is-its-own-undo-step");
+        juce::Thread::sleep(700);
+        auto other = p->getProgramCopy().steps[3];
+        other.velocity = 33;
+        p->setStep(3, other);
+        check(! p->canRedo(), "a-new-edit-clears-redo");
+        p->loadPreset(presetIndex(*p, "Up 8ths"));
+        check(! p->canUndo() && ! p->canRedo(), "preset-load-starts-a-new-history");
+
+        std::array<mnArpee::Step, mnArpee::maxSteps> steps {};
+        for (auto& step : steps)
+            step.ratchet = 2;
+        p->setAllSteps(steps);
+        check(p->undo() && p->getProgramCopy().steps[5].ratchet == 1, "set-all-steps-can-be-undone");
+    }
+
+    // The zoom is kept with the project and applied to the editor.
+    {
+        auto p = makeProcessor();
+        p->setZoom(1.25f);
+        juce::MemoryBlock state;
+        p->getStateInformation(state);
+        auto q = makeProcessor();
+        q->setStateInformation(state.getData(), (int) state.getSize());
+        check(std::abs(q->getZoom() - 1.25f) < 0.001f, "zoom-is-saved-in-the-state");
+        if (haveDisplay())
+        {
+            std::unique_ptr<juce::AudioProcessorEditor> ed(q->createEditor());
+            check(std::abs(ed->getTransform().getScaleFactor() - 1.25f) < 0.01f, "editor-uses-the-zoom");
+        }
+    }
+
     // State: the project stores the active preset's content.
     {
         auto p = makeProcessor();
@@ -544,6 +593,25 @@ int main()
                 check(q->getActivePreset().name.startsWith("New Arp") && q->getActivePreset().file == juce::File(),
                       "unsaved-changes-dialog-dont-save-goes-on");
             }
+        }
+
+        // Keyboard shortcuts of the editor: Ctrl+Z / Ctrl+Y undo and redo, Left / Right change the preset.
+        {
+            auto q = makeProcessor();
+            std::unique_ptr<juce::AudioProcessorEditor> ed(q->createEditor());
+            ed->setSize(900, 560);
+            auto st = q->getProgramCopy().steps[4];
+            st.velocity = 44;
+            q->setStep(4, st);
+            const bool undone = ed->keyPressed(juce::KeyPress('Z', juce::ModifierKeys::ctrlModifier, 0))
+                                && q->getProgramCopy().steps[4].velocity == 96;
+            const bool redone = ed->keyPressed(juce::KeyPress('Y', juce::ModifierKeys::ctrlModifier, 0))
+                                && q->getProgramCopy().steps[4].velocity == 44;
+            q->loadPreset(0);
+            ed->keyPressed(juce::KeyPress(juce::KeyPress::rightKey));
+            check(undone && redone, "ctrl-z-and-ctrl-y-undo-and-redo");
+            check(q->getActivePresetIndex() == 1, "arrow-keys-change-the-preset");
+            check(! ed->keyPressed(juce::KeyPress('Q', juce::ModifierKeys::noModifiers, 0)), "other-keys-are-not-taken");
         }
     }
     else
