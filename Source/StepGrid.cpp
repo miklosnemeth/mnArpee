@@ -18,7 +18,7 @@ constexpr int dragPixelsPerUnit = 8; // type, octave and ratchet; velocity: 1 px
 constexpr StepGrid::Lane laneOfRow[numLaneRows] = { StepGrid::Lane::Type, StepGrid::Lane::Octave,
                                                     StepGrid::Lane::Velocity, StepGrid::Lane::Gate,
                                                     StepGrid::Lane::Ratchet };
-constexpr const char* laneCaptions[numLaneRows] = { "TYPE", "OCTAVE", "VELOCITY", "GATE", "RATCHET" };
+constexpr const char* laneCaptions[numLaneRows] = { "TYPE", "OCTAVE", "VELOCITY", "STEP GATE", "RATCHET" };
 }
 
 namespace
