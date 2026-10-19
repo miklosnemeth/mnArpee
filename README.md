@@ -91,7 +91,7 @@ Preset file (a bank file with several `<Preset>` elements is accepted by **Impor
 
 ## Installer (Windows)
 
-The installer puts the VST3 into `%CommonProgramFiles%\VST3` (the Standalone is not included) and the
+The installer puts the VST3 into `%CommonProgramFiles%\VST3\MNAudio` (the Standalone is not included) and the
 license and readme into `%CommonProgramFiles%\MNAudio\mnArpee`. It is built with
 [Inno Setup 6](https://jrsoftware.org/isinfo.php) from a Release build:
 
@@ -107,7 +107,7 @@ the version is the project version in `CMakeLists.txt`. By hand, the command abo
 Upgrades: the installer finds an earlier mnArpee through its uninstall entry (same AppId), shows which version it
 replaces on the last page, asks before it installs an older version over a newer one (a silent install does not),
 asks a DAW that has the plugin loaded to close, runs the old uninstaller silently before it installs, and removes
-the old `Program Files\MNAudio\mnArpee` folder of earlier installers.
+the old `Program Files\MNAudio\mnArpee` folder and the old `VST3\mnArpee.vst3` of earlier installers.
 
 Presets are not part of the installer: the plugin writes its factory presets to
 `Documents\MNAudio\mnArpee` the first time it runs, and the uninstaller leaves your own presets alone.
