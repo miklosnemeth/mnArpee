@@ -716,7 +716,9 @@ int main()
         const long long on0 = ons.size() > 1 ? ons[0] : -1, on1 = ons.size() > 1 ? ons[1] : -1;
         const long long off0 = offs.size() > 1 ? offs[0] : -1, off1 = offs.size() > 1 ? offs[1] : -1;
         check(on0 == 0 && near(off0 - on0, eighth / 4, 2) && near(off1 - on1, eighth, 2), "step-gate-scales-the-note-length");
-        check(nearestGateStep(90) == 4 && nearestGateStep(1000) == numGateSteps - 1 && nearestGateStep(5) == 0, "nearest-gate-step");
+        check(nearestGateStep(100) == 18 && nearestGateStep(98) == 18 && nearestGateStep(103) == 19 && nearestGateStep(1000) == numGateSteps - 1
+                  && nearestGateStep(5) == 0 && gateStepPercent(0) == 10 && gateStepPercent(numGateSteps - 1) == 400,
+              "nearest-gate-step");
 
         auto all = makeInitProgram("Gates");
         setLaneValue(all, PatternLane::Gate, 150);
@@ -727,7 +729,7 @@ int main()
         for (int i = 0; i < 16; ++i)
         {
             const int g = random.steps[(size_t) i].gateScalePercent;
-            onSteps = onSteps && nearestGateStep(g) >= 0 && gateSteps[nearestGateStep(g)] == g;
+            onSteps = onSteps && g >= 50 && g <= 150 && g % 5 == 0;
         }
         check(all.steps[31].gateScalePercent == 150 && onSteps, "gate-lane-set-all-and-random-use-the-gate-steps");
     }
@@ -753,7 +755,7 @@ int main()
             inRange = inRange && keys.steps[(size_t) i].keyIndex >= 1 && keys.steps[(size_t) i].keyIndex <= 2
                       && octaves.steps[(size_t) i].octave >= 2 && octaves.steps[(size_t) i].octave <= 3
                       && velocities.steps[(size_t) i].velocity == 100
-                      && (gates.steps[(size_t) i].gateScalePercent == 10 || gates.steps[(size_t) i].gateScalePercent == 25)
+                      && (gates.steps[(size_t) i].gateScalePercent == 10 || gates.steps[(size_t) i].gateScalePercent == 15)
                       && ratchets.steps[(size_t) i].ratchet >= 3 && ratchets.steps[(size_t) i].ratchet <= 4;
         }
         check(inRange, "random-values-stay-in-the-range");

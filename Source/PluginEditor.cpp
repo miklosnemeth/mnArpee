@@ -364,11 +364,11 @@ void MnArpeeAudioEditor::showRangePanel(StepGrid::Lane lane)
         {
             case mnArpee::PatternLane::Key: return "Key " + juce::String(v + 1);
             case mnArpee::PatternLane::Octave: return v > 0 ? "+" + juce::String(v) : juce::String(v);
-            case mnArpee::PatternLane::Gate: return juce::String(mnArpee::gateSteps[juce::jlimit(0, mnArpee::numGateSteps - 1, v)]) + "%";
+            case mnArpee::PatternLane::Gate: return juce::String(mnArpee::gateStepPercent(juce::jlimit(0, mnArpee::numGateSteps - 1, v))) + "%";
             default: return juce::String(v);
         }
     };
-    const double pixels = pl == mnArpee::PatternLane::Velocity ? 2.0 : 12.0;
+    const double pixels = pl == mnArpee::PatternLane::Velocity ? 2.0 : pl == mnArpee::PatternLane::Gate ? 3.0 : 12.0;
 
     juce::Component::SafePointer<MnArpeeAudioEditor> safe(this);
     auto content = std::make_unique<RangePanel>(
@@ -1682,9 +1682,9 @@ void MnArpeeAudioEditor::onLaneAdjusted(int step, StepGrid::Lane lane, int delta
                 break;
             case StepGrid::Lane::Gate:
             {
-                // One notch of the gate steps per unit.
+                // 5 % per unit.
                 const int index = std::clamp(mnArpee::nearestGateStep(st.gateScalePercent) + delta, 0, mnArpee::numGateSteps - 1);
-                st.gateScalePercent = (std::uint16_t) mnArpee::gateSteps[index];
+                st.gateScalePercent = (std::uint16_t) mnArpee::gateStepPercent(index);
                 break;
             }
         }
