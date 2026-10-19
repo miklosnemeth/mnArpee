@@ -101,7 +101,9 @@ cmake --build build --config Release --target mnArpee_VST3
 & "$env:LOCALAPPDATA\Programs\Inno Setup 6\ISCC.exe" /DMyAppVersion=1.0.0 installer\mnArpee.iss
 ```
 
-The result is `build\installer\mnArpee-1.0.0-win-x64-setup.exe`. Use the version in `CMakeLists.txt` for `MyAppVersion`.
+With Inno Setup 6 installed, the normal Release build makes the installer too (the CMake target `mnArpeeInstaller`, part of the default build), so
+`cmake --build build --config Release` gives the VST3, the Standalone and `build\installer\mnArpee-<version>-win-x64-setup.exe` in one go;
+the version is the project version in `CMakeLists.txt`. By hand, the command above builds just the installer. The result is `build\installer\mnArpee-1.0.0-win-x64-setup.exe`. Use the version in `CMakeLists.txt` for `MyAppVersion`.
 Upgrades: the installer finds an earlier mnArpee through its uninstall entry (same AppId), shows which version it
 replaces on the last page, asks before it installs an older version over a newer one (a silent install does not),
 asks a DAW that has the plugin loaded to close, runs the old uninstaller silently before it installs, and removes

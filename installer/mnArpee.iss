@@ -1,10 +1,19 @@
 ; Windows installer for the mnArpee VST3 (the Standalone is not included).
-; Build it with Inno Setup 6 from a Release build, giving the version on the command line:
+; It is built by the normal Release build (the CMake target mnArpeeInstaller, when Inno Setup 6
+; is installed). By hand, from a Release build, giving the version on the command line:
 ;   ISCC.exe /DMyAppVersion=1.0.0 installer\mnArpee.iss
 ; The result is build\installer\mnArpee-<version>-win-x64-setup.exe (see README "Installer").
 
 #ifndef MyAppVersion
   #error Pass the version: ISCC.exe /DMyAppVersion=x.y.z installer\mnArpee.iss
+#endif
+
+; The built VST3 bundle and the output folder; CMake passes them, these are the defaults.
+#ifndef Vst3Bundle
+  #define Vst3Bundle "..\build\mnArpee_artefacts\Release\VST3\mnArpee.vst3"
+#endif
+#ifndef InstallerOutputDir
+  #define InstallerOutputDir "..\build\installer"
 #endif
 
 #define MyAppName "mnArpee"
@@ -28,7 +37,7 @@ RestartApplications=no
 DefaultGroupName=MNAudio
 DisableProgramGroupPage=yes
 LicenseFile=..\LICENSE
-OutputDir=..\build\installer
+OutputDir={#InstallerOutputDir}
 OutputBaseFilename=mnArpee-{#MyAppVersion}-win-x64-setup
 Compression=lzma2
 SolidCompression=yes
@@ -40,7 +49,7 @@ WizardStyle=modern
 
 [Files]
 ; The plugin goes to the standard VST3 folder every host scans.
-Source: "..\build\mnArpee_artefacts\Release\VST3\mnArpee.vst3\*"; DestDir: "{commoncf64}\VST3\mnArpee.vst3"; \
+Source: "{#Vst3Bundle}\*"; DestDir: "{commoncf64}\VST3\mnArpee.vst3"; \
     Flags: ignoreversion recursesubdirs createallsubdirs
 ; Licenses and the readme sit in the install folder.
 Source: "..\LICENSE"; DestDir: "{app}"; Flags: ignoreversion
