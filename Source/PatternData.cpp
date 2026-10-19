@@ -113,6 +113,15 @@ Bank makeFactoryBank()
     return bank;
 }
 
+int nearestGateStep(int percent) noexcept
+{
+    int best = 0;
+    for (int i = 1; i < numGateSteps; ++i)
+        if (std::abs(gateSteps[i] - percent) < std::abs(gateSteps[best] - percent))
+            best = i;
+    return best;
+}
+
 void setLaneValue(Program& p, PatternLane lane, int value)
 {
     for (auto& s : p.steps)
@@ -134,6 +143,7 @@ void setLaneValue(Program& p, PatternLane lane, int value)
             case PatternLane::Octave: s.octave = static_cast<std::int8_t>(std::clamp(value, -3, 3)); break;
             case PatternLane::Velocity: s.velocity = static_cast<std::uint8_t>(std::clamp(value, 1, 127)); break;
             case PatternLane::Ratchet: s.ratchet = static_cast<std::uint8_t>(std::clamp(value, 1, 4)); break;
+            case PatternLane::Gate: s.gateScalePercent = static_cast<std::uint16_t>(std::clamp(value, 10, 800)); break;
         }
 }
 
@@ -269,6 +279,10 @@ void randomizeLane(Program& p, PatternLane lane, std::mt19937& rng)
             case PatternLane::Velocity: s.velocity = static_cast<std::uint8_t>(60 + (int) (rng() % 68u)); break;
             case PatternLane::Ratchet:
                 s.ratchet = static_cast<std::uint8_t>(r < 70 ? 1 : r < 88 ? 2 : r < 96 ? 3 : 4);
+                break;
+            case PatternLane::Gate:
+                // Mostly the preset's gate, some shorter (staccato) and longer (legato) notes.
+                s.gateScalePercent = static_cast<std::uint16_t>(r < 12 ? 50 : r < 28 ? 75 : r < 72 ? 100 : r < 88 ? 125 : r < 96 ? 150 : 200);
                 break;
         }
     }

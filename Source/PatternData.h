@@ -149,8 +149,8 @@ constexpr StepType stepTypeFromInt(int v) noexcept
 static_assert(std::is_trivially_copyable_v<Bank>, "Bank must be copyable without allocation");
 
 // Pattern editing (the numeric lane values are Key: -1 root / 0..4 key 1..5 / -2 random step,
-// Type: StepType, Octave: -3..3, Velocity: 1..127, Ratchet: 1..4).
-enum class PatternLane { Key, Type, Octave, Velocity, Ratchet };
+// Type: StepType, Octave: -3..3, Velocity: 1..127, Ratchet: 1..4, Gate: 10..800 % of the preset gate).
+enum class PatternLane { Key, Type, Octave, Velocity, Ratchet, Gate };
 // Sets one lane of every stored step (not just the playing ones) to a value.
 void setLaneValue(Program& p, PatternLane lane, int value);
 // Rotates the playing steps by one: direction < 0 moves them left, > 0 right.
@@ -168,6 +168,12 @@ void generateKeys(Program& p, GeneratorMode mode, int numKeys, std::mt19937& rng
 // step, accents on the beats, ghost notes, a few octave jumps, glides and ratchets. Other values of
 // the steps (scale, gate, chance) are reset.
 void generateBassline(Program& p, std::mt19937& rng);
+
+// The values a step's gate takes in the editor (percent of the preset's gate; 100 = unchanged).
+inline constexpr int gateSteps[] = { 10, 25, 50, 75, 100, 125, 150, 200, 300, 400, 600, 800 };
+inline constexpr int numGateSteps = (int) (sizeof(gateSteps) / sizeof(gateSteps[0]));
+// The index of the gate step nearest to a percentage.
+int nearestGateStep(int percent) noexcept;
 
 Program makeInitProgram(std::string_view name = "Init");
 Bank makeFactoryBank();
