@@ -732,6 +732,58 @@ int main()
         check(all.steps[31].gateScalePercent == 150 && onSteps, "gate-lane-set-all-and-random-use-the-gate-steps");
     }
 
+    // 40. Random ranges and the reset of a lane.
+    {
+        auto base = makeInitProgram("Ranges");
+        base.numSteps = 16;
+        std::mt19937 rng(5);
+        auto keys = base;
+        randomizeLane(keys, PatternLane::Key, rng, { 1, 2 });
+        auto octaves = base;
+        randomizeLane(octaves, PatternLane::Octave, rng, { 2, 3 });
+        auto velocities = base;
+        randomizeLane(velocities, PatternLane::Velocity, rng, { 100, 100 });
+        auto gates = base;
+        randomizeLane(gates, PatternLane::Gate, rng, { 0, 1 });
+        auto ratchets = base;
+        randomizeLane(ratchets, PatternLane::Ratchet, rng, { 3, 4 });
+        bool inRange = true;
+        for (int i = 0; i < 16; ++i)
+        {
+            inRange = inRange && keys.steps[(size_t) i].keyIndex >= 1 && keys.steps[(size_t) i].keyIndex <= 2
+                      && octaves.steps[(size_t) i].octave >= 2 && octaves.steps[(size_t) i].octave <= 3
+                      && velocities.steps[(size_t) i].velocity == 100
+                      && (gates.steps[(size_t) i].gateScalePercent == 10 || gates.steps[(size_t) i].gateScalePercent == 25)
+                      && ratchets.steps[(size_t) i].ratchet >= 3 && ratchets.steps[(size_t) i].ratchet <= 4;
+        }
+        check(inRange, "random-values-stay-in-the-range");
+        auto odd = base;
+        randomizeLane(odd, PatternLane::Velocity, rng, { 90, 20 }); // an upside down range is fixed
+        check(odd.steps[0].velocity == 90 || odd.steps[0].velocity >= 90, "random-range-minimum-above-maximum-is-fixed");
+        check(odd.steps[20].velocity == 96, "random-leaves-steps-past-the-end");
+
+        auto reset = keys;
+        reset.steps[3].octave = 2;
+        reset.steps[3].velocity = 20;
+        reset.steps[3].gateScalePercent = 400;
+        reset.steps[3].ratchet = 3;
+        reset.steps[3].type = StepType::Tie;
+        for (auto lane : { PatternLane::Key, PatternLane::Type, PatternLane::Octave, PatternLane::Velocity, PatternLane::Gate,
+                           PatternLane::Ratchet })
+            resetLane(reset, lane);
+        check(reset.steps[3].keyIndex == 3 && reset.steps[5].keyIndex == 1 && reset.steps[3].type == StepType::Normal
+                  && reset.steps[3].octave == 0 && reset.steps[3].velocity == 96 && reset.steps[3].gateScalePercent == 100
+                  && reset.steps[3].ratchet == 1 && reset.steps[31].velocity == 96,
+              "reset-lane-restores-the-defaults");
+        bool defaultsInside = true;
+        for (auto lane : { PatternLane::Key, PatternLane::Octave, PatternLane::Velocity, PatternLane::Gate, PatternLane::Ratchet })
+        {
+            const auto d = defaultRandomRange(lane), f = fullRandomRange(lane);
+            defaultsInside = defaultsInside && d.lo >= f.lo && d.hi <= f.hi && d.lo <= d.hi;
+        }
+        check(defaultsInside, "default-random-ranges-are-inside-the-full-ranges");
+    }
+
     std::printf("%d checks, %d failures\n", checks, failures);
     return failures == 0 ? 0 : 1;
 }

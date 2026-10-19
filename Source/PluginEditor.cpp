@@ -156,8 +156,255 @@ void HistoryButton::paintButton(juce::Graphics& g, bool highlighted, bool down)
 }
 
 //==============================================================================
-// ValueBar
+// The random options of a lane: a card over the dimmed editor with the range of the random values (two bars
+// to drag up and down) and the buttons Randomize, Reset range, Reset lane and Close.
+namespace
+{
+class RangePanel : public juce::Component
+{
+public:
+    RangePanel(const juce::String& titleIn, bool hasRangeIn, int boundLo, int boundHi, mnArpee::RandomRange current,
+               std::function<juce::String(int)> textIn, double pixelsPerUnit, std::function<void(mnArpee::RandomRange)> changedIn,
+               std::function<void()> randomizeIn, std::function<void()> resetRangeIn, std::function<void()> resetLaneIn,
+               std::function<void()> closeIn)
+        : title(titleIn), hasRange(hasRangeIn), text(std::move(textIn)), changed(std::move(changedIn)),
+          randomize(std::move(randomizeIn)), resetRange(std::move(resetRangeIn)), resetLane(std::move(resetLaneIn)),
+          close(std::move(closeIn))
+    {
+        if (hasRange)
+        {
+            for (auto* bar : { &minBar, &maxBar })
+            {
+                addAndMakeVisible(*bar); // first: the value label takes the colours of the look and feel
+                bar->setColour(juce::Slider::textBoxOutlineColourId, juce::Colours::transparentBlack);
+                bar->setSliderStyle(juce::Slider::LinearBarVertical);
+                bar->setSliderSnapsToMousePosition(false);
+                bar->setRange(boundLo, boundHi, 1.0);
+                bar->setPixelsPerUnit(pixelsPerUnit);
+                bar->setTextBoxStyle(juce::Slider::TextBoxLeft, true, 80, 20);
+                bar->setTextBoxIsEditable(false);
+            }
+            minBar.setValue(current.lo, juce::dontSendNotification);
+            maxBar.setValue(current.hi, juce::dontSendNotification);
+            minBar.textFromValueFunction = [this](double v) { return "MIN " + text((int) std::lround(v)); };
+            maxBar.textFromValueFunction = [this](double v) { return "MAX " + text((int) std::lround(v)); };
+            minBar.updateText();
+            maxBar.updateText();
+            // The minimum never goes above the maximum, and the other way round.
+            minBar.onValueChange = [this]
+            {
+                if (minBar.getValue() > maxBar.getValue())
+                    maxBar.setValue(minBar.getValue(), juce::dontSendNotification), maxBar.updateText();
+                report();
+            };
+            maxBar.onValueChange = [this]
+            {
+                if (maxBar.getValue() < minBar.getValue())
+                    minBar.setValue(maxBar.getValue(), juce::dontSendNotification), minBar.updateText();
+                report();
+            };
+        }
+        const char* names[] = { "Randomize", "Reset range", "Reset lane", "Close" };
+        for (int i = 0; i < 4; ++i)
+        {
+            if (i == 1 && ! hasRange)
+                continue; // nothing to reset
+            auto b = std::make_unique<juce::TextButton>(names[i]);
+            b->onClick = [this, i]
+            {
+                if (i == 0)
+                    randomize();
+                else if (i == 1)
+                    resetRange();
+                else if (i == 2)
+                    resetLane();
+                else
+                    close();
+            };
+            if (i == 0)
+                b->setColour(juce::TextButton::buttonColourId, Pal::accent().darker(0.55f));
+            addAndMakeVisible(*b);
+            buttons.push_back(std::move(b));
+        }
+        setWantsKeyboardFocus(false);
+    }
+
+    void setRange(mnArpee::RandomRange range)
+    {
+        minBar.setValue(range.lo, juce::dontSendNotification);
+        maxBar.setValue(range.hi, juce::dontSendNotification);
+        minBar.updateText();
+        maxBar.updateText();
+    }
+
+    void resized() override
+    {
+        const int panelW = std::min(500, getWidth() - 40);
+        const int panelH = 20 + 28 + 12 + (hasRange ? 34 + 14 : 20) + 36 + 20;
+        panel = juce::Rectangle<int>(panelW, panelH).withCentre({ getWidth() / 2, getHeight() / 2 });
+        auto r = panel.reduced(20, 20);
+        titleArea = r.removeFromTop(28);
+        r.removeFromTop(12);
+        if (hasRange)
+        {
+            auto bars = r.removeFromTop(34);
+            minBar.setBounds(bars.removeFromLeft(bars.getWidth() / 2 - 6));
+            bars.removeFromLeft(12);
+            maxBar.setBounds(bars);
+            r.removeFromTop(14);
+        }
+        else
+        {
+            r.removeFromTop(20);
+        }
+        auto row = r.removeFromTop(36);
+        for (int i = (int) buttons.size() - 1; i >= 0; --i)
+        {
+            const int w = std::max(92, juce::GlyphArrangement::getStringWidthInt(mnArpee::fonts::text(17.0f, true),
+                                                                                  buttons[(size_t) i]->getButtonText()) + 32);
+            buttons[(size_t) i]->setBounds(row.removeFromRight(w));
+            row.removeFromRight(8);
+        }
+    }
+
+    void paint(juce::Graphics& g) override
+    {
+        g.setColour(juce::Colours::black.withAlpha(0.5f));
+        g.fillRect(getLocalBounds());
+        g.setColour(Pal::card());
+        g.fillRoundedRectangle(panel.toFloat(), 8.0f);
+        g.setColour(Pal::border());
+        g.drawRoundedRectangle(panel.toFloat().reduced(0.5f), 8.0f, 1.0f);
+        g.setColour(Pal::accent());
+        g.setFont(mnArpee::fonts::text(21.0f, true));
+        g.drawText(title, titleArea, juce::Justification::centredLeft);
+        if (! hasRange)
+        {
+            g.setColour(Pal::dimText());
+            g.setFont(mnArpee::fonts::text(15.0f, true));
+            g.drawText("The step types have no range.", panel.reduced(20, 0).withTrimmedTop(60).withHeight(20),
+                       juce::Justification::centredLeft);
+        }
+    }
+
+    void mouseDown(const juce::MouseEvent& e) override
+    {
+        if (! panel.contains(e.getPosition()))
+            close();
+    }
+
+private:
+    void report()
+    {
+        changed({ (int) std::lround(minBar.getValue()), (int) std::lround(maxBar.getValue()) });
+    }
+
+    juce::String title;
+    bool hasRange;
+    std::function<juce::String(int)> text;
+    std::function<void(mnArpee::RandomRange)> changed;
+    std::function<void()> randomize, resetRange, resetLane, close;
+    ValueBar minBar, maxBar;
+    std::vector<std::unique_ptr<juce::TextButton>> buttons;
+    juce::Rectangle<int> panel, titleArea;
+};
+} // namespace
+
+namespace
+{
+mnArpee::PatternLane patternLaneOf(StepGrid::Lane lane)
+{
+    switch (lane)
+    {
+        case StepGrid::Lane::Type: return mnArpee::PatternLane::Type;
+        case StepGrid::Lane::Octave: return mnArpee::PatternLane::Octave;
+        case StepGrid::Lane::Velocity: return mnArpee::PatternLane::Velocity;
+        case StepGrid::Lane::Ratchet: return mnArpee::PatternLane::Ratchet;
+        case StepGrid::Lane::Gate: return mnArpee::PatternLane::Gate;
+        default: return mnArpee::PatternLane::Key;
+    }
+}
+} // namespace
+
+void MnArpeeAudioEditor::randomizeLane(StepGrid::Lane lane)
+{
+    auto edited = shownProgram;
+    std::mt19937 rng((unsigned) juce::Time::currentTimeMillis());
+    if (lane == StepGrid::Lane::Root)
+        mnArpee::generateBassline(edited, rng);
+    else
+        mnArpee::randomizeLane(edited, patternLaneOf(lane), rng, proc.getRandomRange(patternLaneOf(lane)));
+    applySteps(edited);
+}
+
+void MnArpeeAudioEditor::closeRangePanel()
+{
+    if (rangePanel == nullptr)
+        return;
+    rangePanel->setVisible(false);
+    juce::Component::SafePointer<juce::Component> doomed(rangePanel.release());
+    juce::MessageManager::callAsync([doomed] { delete doomed.getComponent(); });
+}
+
+void MnArpeeAudioEditor::showRangePanel(StepGrid::Lane lane)
+{
+    if (lane == StepGrid::Lane::Root)
+        return; // the bass line has no range
+    closeRangePanel();
+    closeDialog();
+    closePresetBrowser();
+
+    const auto pl = patternLaneOf(lane);
+    const auto full = mnArpee::fullRandomRange(pl);
+    const bool hasRange = pl != mnArpee::PatternLane::Type;
+    const char* titles[] = { "KEYS", "TYPE", "OCTAVE", "VELOCITY", "RATCHET", "GATE" };
+    std::function<juce::String(int)> text = [pl](int v)
+    {
+        switch (pl)
+        {
+            case mnArpee::PatternLane::Key: return "Key " + juce::String(v + 1);
+            case mnArpee::PatternLane::Octave: return v > 0 ? "+" + juce::String(v) : juce::String(v);
+            case mnArpee::PatternLane::Gate: return juce::String(mnArpee::gateSteps[juce::jlimit(0, mnArpee::numGateSteps - 1, v)]) + "%";
+            default: return juce::String(v);
+        }
+    };
+    const double pixels = pl == mnArpee::PatternLane::Velocity ? 2.0 : 12.0;
+
+    juce::Component::SafePointer<MnArpeeAudioEditor> safe(this);
+    auto content = std::make_unique<RangePanel>(
+        juce::String("Random ") + titles[(int) pl], hasRange, full.lo, full.hi, proc.getRandomRange(pl), text, pixels,
+        [safe, pl](mnArpee::RandomRange range)
+        {
+            if (safe != nullptr)
+                safe->proc.setRandomRange(pl, range);
+        },
+        [safe, lane] { if (safe != nullptr) safe->randomizeLane(lane); },
+        [safe, pl]
+        {
+            if (safe == nullptr)
+                return;
+            safe->proc.setRandomRange(pl, mnArpee::defaultRandomRange(pl));
+            if (auto* panel = dynamic_cast<RangePanel*>(safe->rangePanel.get()))
+                panel->setRange(mnArpee::defaultRandomRange(pl));
+        },
+        [safe, pl]
+        {
+            if (safe == nullptr)
+                return;
+            auto edited = safe->shownProgram;
+            mnArpee::resetLane(edited, pl);
+            safe->applySteps(edited);
+        },
+        [safe] { if (safe != nullptr) safe->closeRangePanel(); });
+    content->setBounds(getLocalBounds());
+    addAndMakeVisible(*content);
+    content->toFront(true);
+    rangePanel = std::move(content);
+}
+
 //==============================================================================
+// ValueBar
+//==================================================================================
 void ValueBar::mouseDown(const juce::MouseEvent& e)
 {
     valueOnMouseDown = getValue();
@@ -196,26 +443,8 @@ MnArpeeAudioEditor::MnArpeeAudioEditor(MnArpeeAudioProcessor& p)
     grid.onStepClicked([this](int step, int row) { onGridClicked(step, row); });
     grid.onLaneAdjusted([this](int step, StepGrid::Lane lane, int delta) { onLaneAdjusted(step, lane, delta); });
     grid.onContextRequested([this](int step, StepGrid::Lane lane, int row) { showPatternMenu(step, lane, row); });
-    grid.onRandomizeRequested(
-        [this](StepGrid::Lane lane)
-        {
-            auto edited = shownProgram;
-            std::mt19937 rng((unsigned) juce::Time::currentTimeMillis());
-            if (lane == StepGrid::Lane::Root)
-            {
-                mnArpee::generateBassline(edited, rng);
-                applySteps(edited);
-                return;
-            }
-            mnArpee::randomizeLane(edited, lane == StepGrid::Lane::Type     ? mnArpee::PatternLane::Type
-                                           : lane == StepGrid::Lane::Octave ? mnArpee::PatternLane::Octave
-                                           : lane == StepGrid::Lane::Velocity ? mnArpee::PatternLane::Velocity
-                                           : lane == StepGrid::Lane::Ratchet ? mnArpee::PatternLane::Ratchet
-                                           : lane == StepGrid::Lane::Gate ? mnArpee::PatternLane::Gate
-                                                                              : mnArpee::PatternLane::Key,
-                                   rng);
-            applySteps(edited);
-        });
+    grid.onRandomizeRequested([this](StepGrid::Lane lane) { randomizeLane(lane); });
+    grid.onRandomOptionsRequested([this](StepGrid::Lane lane) { showRangePanel(lane); });
 
     prevPresetButton.onClick = [this] { stepPreset(-1); };
     nextPresetButton.onClick = [this] { stepPreset(1); };
@@ -275,6 +504,7 @@ MnArpeeAudioEditor::~MnArpeeAudioEditor()
     stopTimer();
     presetBrowser.reset();
     dialog.reset();
+    rangePanel.reset();
     setLookAndFeel(nullptr);
 }
 
@@ -1185,6 +1415,8 @@ void MnArpeeAudioEditor::resized()
         presetBrowser->setBounds(getLocalBounds());
     if (dialog != nullptr)
         dialog->setBounds(getLocalBounds());
+    if (rangePanel != nullptr)
+        rangePanel->setBounds(getLocalBounds());
 
     // Grid inside the card (label strip on top).
     grid.setBounds(gridCard.getX() + 6, gridCard.getY() + 24,
