@@ -357,7 +357,7 @@ void MnArpeeAudioEditor::showRangePanel(StepGrid::Lane lane)
     const auto pl = patternLaneOf(lane);
     const auto full = mnArpee::fullRandomRange(pl);
     const bool hasRange = pl != mnArpee::PatternLane::Type;
-    const char* titles[] = { "KEYS", "TYPE", "OCTAVE", "VELOCITY", "RATCHET", "GATE" };
+    const char* titles[] = { "KEYS", "TYPE", "OCTAVE", "VELOCITY", "RATCHET", "STEP GATE" };
     std::function<juce::String(int)> text = [pl](int v)
     {
         switch (pl)
@@ -487,6 +487,7 @@ MnArpeeAudioEditor::MnArpeeAudioEditor(MnArpeeAudioProcessor& p)
                   4.0, 8.0);
     setupValueBar(octaveSlider, [signedValue](double v) { return "OCT " + signedValue(v); }, 0.0, 14.0);
     setupValueBar(gateSlider, [](double v) { return "GATE " + juce::String((int) std::lround(v)) + "%"; }, 80.0, 2.0);
+    gateSlider.setTooltip("GATE: how long the notes of this preset sound, as a percentage of a step (1-125%). The STEP GATE row below the matrix scales it for single steps.");
     setupValueBar(swingSlider, [signedValue](double v) { return "SWING " + signedValue(v) + "%"; }, 0.0, 2.5);
     setupValueBar(stepsSlider, [](double v) { return "STEPS " + juce::String((int) std::lround(v)); }, 16.0, 7.0);
 
@@ -1571,7 +1572,7 @@ void MnArpeeAudioEditor::showPatternMenu(int step, StepGrid::Lane lane, int row)
             patternLane = PatternLane::Gate;
             value = (int) st.gateScalePercent;
             valueText = juce::String(value) + "%";
-            laneName = "gates";
+            laneName = "step gates";
             break;
     }
 
