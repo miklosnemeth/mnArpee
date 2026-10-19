@@ -336,6 +336,22 @@ int main()
         check(p->undo() && p->getProgramCopy().steps[5].ratchet == 1, "set-all-steps-can-be-undone");
     }
 
+    // The random ranges are kept with the project.
+    {
+        auto p = makeProcessor();
+        check(p->getRandomRange(mnArpee::PatternLane::Velocity).lo == 60 && p->getRandomRange(mnArpee::PatternLane::Velocity).hi == 127,
+              "random-ranges-start-with-the-defaults");
+        p->setRandomRange(mnArpee::PatternLane::Octave, { -2, 3 });
+        p->setRandomRange(mnArpee::PatternLane::Velocity, { 90, 400 }); // clamped
+        juce::MemoryBlock state;
+        p->getStateInformation(state);
+        auto q = makeProcessor();
+        q->setStateInformation(state.getData(), (int) state.getSize());
+        check(q->getRandomRange(mnArpee::PatternLane::Octave).lo == -2 && q->getRandomRange(mnArpee::PatternLane::Octave).hi == 3
+                  && q->getRandomRange(mnArpee::PatternLane::Velocity).lo == 90 && q->getRandomRange(mnArpee::PatternLane::Velocity).hi == 127,
+              "random-ranges-are-saved-in-the-state");
+    }
+
     // The zoom is kept with the project and applied to the editor.
     {
         auto p = makeProcessor();
@@ -593,6 +609,51 @@ int main()
                 check(q->getActivePreset().name.startsWith("New Arp") && q->getActivePreset().file == juce::File(),
                       "unsaved-changes-dialog-dont-save-goes-on");
             }
+        }
+
+        // Right click on the dice of the keys: the random options panel (range, Reset lane).
+        {
+            std::function<juce::Component*(juce::Component&, const std::function<bool(juce::Component&)>&)> find;
+            find = [&find](juce::Component& root, const std::function<bool(juce::Component&)>& match) -> juce::Component*
+            {
+                for (auto* child : root.getChildren())
+                {
+                    if (child->isVisible() && match(*child))
+                        return child;
+                    if (child->isVisible())
+                        if (auto* found = find(*child, match))
+                            return found;
+                }
+                return nullptr;
+            };
+            auto q = makeProcessor();
+            std::unique_ptr<juce::AudioProcessorEditor> ed(q->createEditor());
+            ed->setSize(900, 560);
+            auto st = q->getProgramCopy().steps[5];
+            st.keyIndex = 4;
+            q->setStep(5, st);
+            auto* grid = dynamic_cast<StepGrid*>(find(*ed, [](juce::Component& c) { return dynamic_cast<StepGrid*>(&c) != nullptr; }));
+            if (grid != nullptr)
+            {
+                // The dice of the keys is in the corner above the row labels.
+                const juce::Point<float> at(20.0f, 12.0f);
+                grid->mouseDown(juce::MouseEvent(juce::Desktop::getInstance().getMainMouseSource(), at,
+                                                 juce::ModifierKeys::rightButtonModifier, 0.5f, 0.0f, 0.0f, 0.0f, 0.0f, grid, grid,
+                                                 juce::Time::getCurrentTime(), at, juce::Time::getCurrentTime(), 1, false));
+            }
+            auto* resetLane = find(*ed, [](juce::Component& c)
+                                   { auto* b = dynamic_cast<juce::TextButton*>(&c); return b != nullptr && b->getButtonText() == "Reset lane"; });
+            auto* resetRange = find(*ed, [](juce::Component& c)
+                                    { auto* b = dynamic_cast<juce::TextButton*>(&c); return b != nullptr && b->getButtonText() == "Reset range"; });
+            check(grid != nullptr && resetLane != nullptr && resetRange != nullptr, "dice-right-click-opens-the-random-options");
+            q->setRandomRange(mnArpee::PatternLane::Key, { 2, 3 });
+            if (auto* b = dynamic_cast<juce::TextButton*>(resetRange))
+                b->onClick();
+            check(q->getRandomRange(mnArpee::PatternLane::Key).lo == 0 && q->getRandomRange(mnArpee::PatternLane::Key).hi == 4,
+                  "reset-range-restores-the-default-range");
+            if (auto* b = dynamic_cast<juce::TextButton*>(resetLane))
+                b->onClick();
+            check(q->getProgramCopy().steps[5].keyIndex == 1, "reset-lane-button-restores-the-keys");
         }
     }
     else

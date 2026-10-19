@@ -46,6 +46,8 @@ MnArpeeAudioProcessor::MnArpeeAudioProcessor()
     stepsParam = apvts.getRawParameterValue("steps");
     latchParam = apvts.getRawParameterValue("latch");
 
+    for (int i = 0; i < (int) randomRanges.size(); ++i)
+        randomRanges[(size_t) i] = mnArpee::defaultRandomRange((mnArpee::PatternLane) i);
     library.refresh();
     model.numPrograms = 2;
 
@@ -180,6 +182,21 @@ void MnArpeeAudioProcessor::pushUndoLocked()
     }
     lastEditMs = now;
     redoStack.clear();
+}
+
+mnArpee::RandomRange MnArpeeAudioProcessor::getRandomRange(mnArpee::PatternLane lane) const
+{
+    const juce::ScopedLock lock(modelLock);
+    return randomRanges[(size_t) lane];
+}
+
+void MnArpeeAudioProcessor::setRandomRange(mnArpee::PatternLane lane, mnArpee::RandomRange range)
+{
+    const auto full = mnArpee::fullRandomRange(lane);
+    range.lo = juce::jlimit(full.lo, full.hi, range.lo);
+    range.hi = juce::jlimit(range.lo, full.hi, range.hi);
+    const juce::ScopedLock lock(modelLock);
+    randomRanges[(size_t) lane] = range;
 }
 
 bool MnArpeeAudioProcessor::canUndo() const
@@ -678,6 +695,13 @@ void MnArpeeAudioProcessor::getStateInformation(juce::MemoryBlock& destData)
     {
         xml->setAttribute("preset", presetText);
         xml->setAttribute("zoom", (double) zoom.load());
+        {
+            const juce::ScopedLock lock(modelLock);
+            juce::StringArray ranges;
+            for (const auto& r : randomRanges)
+                ranges.add(juce::String(r.lo) + "," + juce::String(r.hi));
+            xml->setAttribute("randomRanges", ranges.joinIntoString(" "));
+        }
         copyXmlToBinary(*xml, destData);
     }
 }
@@ -763,6 +787,16 @@ void MnArpeeAudioProcessor::setStateInformation(const void* data, int sizeInByte
 
     apvts.replaceState(juce::ValueTree::fromXml(*xml));
     setZoom((float) xml->getDoubleAttribute("zoom", 1.0));
+    {
+        juce::StringArray ranges;
+        ranges.addTokens(xml->getStringAttribute("randomRanges"), " ", "");
+        for (int i = 0; i < ranges.size() && i < (int) randomRanges.size(); ++i)
+        {
+            const auto parts = juce::StringArray::fromTokens(ranges[i], ",", "");
+            if (parts.size() == 2)
+                setRandomRange((mnArpee::PatternLane) i, { parts[0].getIntValue(), parts[1].getIntValue() });
+        }
+    }
     if (! havePreset)
         return; // nothing usable in the state: the parameters are what was loaded
 

@@ -402,6 +402,21 @@ void StepGrid::mouseDown(const juce::MouseEvent& e)
 
     if (e.mods.isPopupMenu())
     {
+        // The dice: the options of its random values.
+        if (randomOptionsRequested)
+        {
+            if (keysDice().expanded(2).contains(e.getPosition()))
+            {
+                randomOptionsRequested(Lane::Key);
+                return;
+            }
+            for (int lr = 0; lr < numLaneRows; ++lr)
+                if (laneDice(lr).expanded(2).contains(e.getPosition()))
+                {
+                    randomOptionsRequested(laneOfRow[lr]);
+                    return;
+                }
+        }
         int step = -1, laneRow = -1, row = -1;
         if (contextRequested && laneBoxAt(e.getPosition(), step, laneRow))
             contextRequested(step, laneOfRow[laneRow], -1);

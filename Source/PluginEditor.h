@@ -106,6 +106,11 @@ private:
                     std::function<void(int button, juce::StringArray values)> done);
     void showMessage(const juce::String& title, const juce::String& message);
     void closeDialog();
+    // The panel of the random options of a lane (right click on its dice): the range of the random values,
+    // Randomize, Reset range, Reset lane.
+    void showRangePanel(StepGrid::Lane lane);
+    void closeRangePanel();
+    void randomizeLane(StepGrid::Lane lane);
     // A header value shown as one line ("OCT +3") that is dragged to change.
     void setupValueBar(ValueBar& s, std::function<juce::String(double)> text, double defaultValue,
                        double pixelsPerUnit);
@@ -163,6 +168,7 @@ private:
     std::unique_ptr<juce::FileChooser> fileChooser;
     std::unique_ptr<juce::Component> presetBrowser; // overlay inside the editor, null while closed
     std::unique_ptr<juce::Component> dialog;        // the dialog, null while closed
+    std::unique_ptr<juce::Component> rangePanel;    // the random options, null while closed
 
     // The program shown in the grid (a copy, so a state load can never leave it dangling).
     mnArpee::Program shownProgram;

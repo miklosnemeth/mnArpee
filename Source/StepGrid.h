@@ -21,6 +21,8 @@ public:
     using LaneAdjusted = std::function<void(int stepIndex, Lane lane, int delta)>;
     // Right click on a matrix cell (Lane::Key, row >= 0) or on a value box (row -1).
     using ContextRequested = std::function<void(int stepIndex, Lane lane, int row)>;
+    // The dice of a lane was right clicked: its random options.
+    using RandomOptionsRequested = std::function<void(Lane lane)>;
     // The dice of a lane was clicked (Lane::Root: the dice of the Root row, a random bass line).
     using RandomizeRequested = std::function<void(Lane lane)>;
 
@@ -51,6 +53,7 @@ public:
     void onLaneAdjusted(LaneAdjusted fn) { adjusted = std::move(fn); }
     void onContextRequested(ContextRequested fn) { contextRequested = std::move(fn); }
     void onRandomizeRequested(RandomizeRequested fn) { randomizeRequested = std::move(fn); }
+    void onRandomOptionsRequested(RandomOptionsRequested fn) { randomOptionsRequested = std::move(fn); }
 
     void paint(juce::Graphics& g) override;
     void mouseDown(const juce::MouseEvent& e) override;
@@ -96,4 +99,5 @@ private:
     LaneAdjusted adjusted;
     ContextRequested contextRequested;
     RandomizeRequested randomizeRequested;
+    RandomOptionsRequested randomOptionsRequested;
 };

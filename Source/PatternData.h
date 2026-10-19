@@ -156,8 +156,20 @@ void setLaneValue(Program& p, PatternLane lane, int value);
 // Rotates the playing steps by one: direction < 0 moves them left, > 0 right.
 void shiftPattern(Program& p, int direction);
 void reversePattern(Program& p);
+// The range of the random values of a lane, as lane units: Key 0..4 (Key 1..5), Octave -3..3, Velocity 1..127,
+// Ratchet 1..4, Gate 0..numGateSteps-1 (an index into gateSteps). The Type lane has no range.
+struct RandomRange
+{
+    int lo = 0, hi = 0;
+};
+RandomRange fullRandomRange(PatternLane lane) noexcept;    // what the lane can hold
+RandomRange defaultRandomRange(PatternLane lane) noexcept; // what the dice uses at first
 // Fills the playing steps of one lane with random values (the first step is never a rest or a tie).
-void randomizeLane(Program& p, PatternLane lane, std::mt19937& rng);
+void randomizeLane(Program& p, PatternLane lane, std::mt19937& rng, RandomRange range);
+void randomizeLane(Program& p, PatternLane lane, std::mt19937& rng); // the default range
+// Puts a lane of every stored step back to its default: Key 1..4 repeating, Type Normal, Octave 0,
+// Velocity 96, Gate 100%, Ratchet 1.
+void resetLane(Program& p, PatternLane lane);
 
 // Fills the keys of the playing steps in a classic arp order over the first numKeys keys
 // (type Normal; octave, velocity and ratchet are left alone).

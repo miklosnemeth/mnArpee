@@ -260,8 +260,38 @@ void reversePattern(Program& p)
         std::reverse(p.steps.begin(), p.steps.begin() + n);
 }
 
-void randomizeLane(Program& p, PatternLane lane, std::mt19937& rng)
+RandomRange fullRandomRange(PatternLane lane) noexcept
 {
+    switch (lane)
+    {
+        case PatternLane::Key: return { 0, maxInputKeys - 1 };
+        case PatternLane::Octave: return { -3, 3 };
+        case PatternLane::Velocity: return { 1, 127 };
+        case PatternLane::Ratchet: return { 1, 4 };
+        case PatternLane::Gate: return { 0, numGateSteps - 1 };
+        default: return { 0, 0 };
+    }
+}
+
+RandomRange defaultRandomRange(PatternLane lane) noexcept
+{
+    switch (lane)
+    {
+        case PatternLane::Octave: return { -1, 1 };
+        case PatternLane::Velocity: return { 60, 127 };
+        case PatternLane::Ratchet: return { 1, 2 };
+        case PatternLane::Gate: return { 2, 6 }; // 50 .. 150 %
+        default: return fullRandomRange(lane);
+    }
+}
+
+void randomizeLane(Program& p, PatternLane lane, std::mt19937& rng, RandomRange range)
+{
+    const auto full = fullRandomRange(lane);
+    range.lo = std::clamp(range.lo, full.lo, full.hi);
+    range.hi = std::clamp(range.hi, range.lo, full.hi);
+    auto between = [&rng, &range]() { return range.lo + (int) (rng() % (unsigned) (range.hi - range.lo + 1)); };
+
     int n = std::clamp(p.numSteps, 0, maxSteps);
     if (n < 2)
         n = maxSteps; // thru modes: fill the stored pattern
@@ -271,19 +301,42 @@ void randomizeLane(Program& p, PatternLane lane, std::mt19937& rng)
         const int r = (int) (rng() % 100u);
         switch (lane)
         {
-            case PatternLane::Key: s.keyIndex = static_cast<std::int8_t>(rng() % (unsigned) maxInputKeys); break;
+            case PatternLane::Key: s.keyIndex = static_cast<std::int8_t>(between()); break;
             case PatternLane::Type:
                 s.type = r < 60 || i == 0 ? StepType::Normal : r < 80 ? StepType::Off : r < 90 ? StepType::Rest : StepType::Tie;
                 break;
-            case PatternLane::Octave: s.octave = static_cast<std::int8_t>(r < 70 ? 0 : (r < 85 ? 1 : -1)); break;
-            case PatternLane::Velocity: s.velocity = static_cast<std::uint8_t>(60 + (int) (rng() % 68u)); break;
+            case PatternLane::Octave:
+                // Half of the steps stay in the octave of the chord (when it is in the range).
+                s.octave = static_cast<std::int8_t>(range.lo <= 0 && range.hi >= 0 && r < 50 ? 0 : between());
+                break;
+            case PatternLane::Velocity: s.velocity = static_cast<std::uint8_t>(between()); break;
             case PatternLane::Ratchet:
-                s.ratchet = static_cast<std::uint8_t>(r < 70 ? 1 : r < 88 ? 2 : r < 96 ? 3 : 4);
+                // Mostly the lowest value (a single note).
+                s.ratchet = static_cast<std::uint8_t>(r < 60 ? range.lo : between());
                 break;
-            case PatternLane::Gate:
-                // Mostly the preset's gate, some shorter (staccato) and longer (legato) notes.
-                s.gateScalePercent = static_cast<std::uint16_t>(r < 12 ? 50 : r < 28 ? 75 : r < 72 ? 100 : r < 88 ? 125 : r < 96 ? 150 : 200);
-                break;
+            case PatternLane::Gate: s.gateScalePercent = static_cast<std::uint16_t>(gateSteps[between()]); break;
+        }
+    }
+}
+
+void randomizeLane(Program& p, PatternLane lane, std::mt19937& rng)
+{
+    randomizeLane(p, lane, rng, defaultRandomRange(lane));
+}
+
+void resetLane(Program& p, PatternLane lane)
+{
+    for (int i = 0; i < maxSteps; ++i)
+    {
+        auto& s = p.steps[(size_t) i];
+        switch (lane)
+        {
+            case PatternLane::Key: s.keyIndex = static_cast<std::int8_t>(i % 4); break;
+            case PatternLane::Type: s.type = StepType::Normal; break;
+            case PatternLane::Octave: s.octave = 0; break;
+            case PatternLane::Velocity: s.velocity = 96; break;
+            case PatternLane::Ratchet: s.ratchet = 1; break;
+            case PatternLane::Gate: s.gateScalePercent = 100; break;
         }
     }
 }

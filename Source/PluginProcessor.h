@@ -95,6 +95,9 @@ public:
     bool canRedo() const;
     bool undo();
     bool redo();
+    // The range of the random values of a lane (the right click on its dice; kept with the project).
+    mnArpee::RandomRange getRandomRange(mnArpee::PatternLane lane) const;
+    void setRandomRange(mnArpee::PatternLane lane, mnArpee::RandomRange range);
     // The size of the editor: 0.5 .. 3 (kept with the project).
     float getZoom() const { return zoom.load(); }
     void setZoom(float factor) { zoom.store(juce::jlimit(0.5f, 3.0f, factor)); }
@@ -186,6 +189,7 @@ private:
     std::vector<StepList> undoStack, redoStack;
     juce::int64 lastEditMs = 0;
     std::atomic<float> zoom { 1.0f };
+    std::array<mnArpee::RandomRange, 6> randomRanges {}; // by PatternLane; filled with the defaults in the constructor
 
     // Hand-over to the audio thread.
     juce::SpinLock pendingLock;
