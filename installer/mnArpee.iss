@@ -48,8 +48,8 @@ UninstallDisplayName={#MyAppName} {#MyAppVersion}
 WizardStyle=modern
 
 [Files]
-; The plugin goes to the standard VST3 folder every host scans.
-Source: "{#Vst3Bundle}\*"; DestDir: "{commoncf64}\VST3\mnArpee.vst3"; \
+; The plugin goes to the standard VST3 folder every host scans, in a folder of its own for MNAudio.
+Source: "{#Vst3Bundle}\*"; DestDir: "{commoncf64}\VST3\MNAudio\mnArpee.vst3"; \
     Flags: ignoreversion recursesubdirs createallsubdirs
 ; Licenses and the readme sit in the install folder.
 Source: "..\LICENSE"; DestDir: "{app}"; Flags: ignoreversion
@@ -58,8 +58,9 @@ Source: "..\Resources\Fonts\Montserrat-OFL.txt"; DestDir: "{app}\Licenses"; Flag
 Source: "..\Resources\Fonts\RobotoCondensed-LICENSE.txt"; DestDir: "{app}\Licenses"; Flags: ignoreversion
 
 [InstallDelete]
-; Older installers put the license and readme in Program Files.
+; Older installers put the license and readme in Program Files, and the plugin directly in the VST3 folder.
 Type: filesandordirs; Name: "{autopf}\MNAudio\mnArpee"
+Type: filesandordirs; Name: "{commoncf64}\VST3\mnArpee.vst3"
 
 [Code]
 // An older (or the same) version of mnArpee on this machine is found through the uninstall entry
