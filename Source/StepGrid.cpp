@@ -10,14 +10,15 @@ constexpr int gutterTop = 20; // column labels (1,5,9,...)
 constexpr int cellGap = 3;
 constexpr int laneRowH = 25;  // value lane row height
 constexpr int laneGap = 8;    // between the matrix and the value lanes
-constexpr int numLaneRows = 4;
+constexpr int numLaneRows = 5;
 constexpr int minVisibleSteps = 16; // columns always shown
 constexpr int dragPixelsPerUnit = 8; // type and octave; the velocity moves one unit per pixel
 
-// Value lanes under the matrix, top to bottom: step type, octave, velocity, ratchet.
+// Value lanes under the matrix, top to bottom: step type, octave, velocity, gate, ratchet.
 constexpr StepGrid::Lane laneOfRow[numLaneRows] = { StepGrid::Lane::Type, StepGrid::Lane::Octave,
-                                                    StepGrid::Lane::Velocity, StepGrid::Lane::Ratchet };
-constexpr const char* laneCaptions[numLaneRows] = { "TYPE", "OCTAVE", "VELOCITY", "RATCHET" };
+                                                    StepGrid::Lane::Velocity, StepGrid::Lane::Gate,
+                                                    StepGrid::Lane::Ratchet };
+constexpr const char* laneCaptions[numLaneRows] = { "TYPE", "OCTAVE", "VELOCITY", "GATE", "RATCHET" };
 }
 
 namespace
@@ -333,6 +334,11 @@ void StepGrid::paint(juce::Graphics& g)
                     text = juce::String(step.ratchet);
                     dim = silent;
                     break;
+                case Lane::Gate:
+                    text = juce::String(step.gateScalePercent);
+                    dim = silent;
+                    break;
+                case Lane::Root: break; // only the dice of the Root row
                 case Lane::Octave:
                     text = step.octave > 0 ? "+" + juce::String(step.octave) : juce::String(step.octave);
                     dim = silent;

@@ -701,6 +701,37 @@ int main()
         check(different && make(1, 16).steps[20].type == StepType::Random, "bassline-differs-and-leaves-steps-past-the-end");
     }
 
+    // 39. The gate of a step (percent of the preset's gate): a short and a long note.
+    {
+        auto e = std::make_unique<ArpEngine>();
+        auto b = singleProgramBank(2, SyncRate::R1_8, 50); // the preset gate: 50% of 11025 samples
+        b->programs[0].steps[0].gateScalePercent = 50;
+        b->programs[0].steps[1].gateScalePercent = 200;
+        e->setBank(*b);
+        e->noteOn(60, 100);
+        const auto evs = runFor(*e, 0.6);
+        std::vector<long long> ons, offs;
+        for (const auto& ev : evs)
+            (ev.ev.isNoteOn ? ons : offs).push_back(ev.sample);
+        const long long on0 = ons.size() > 1 ? ons[0] : -1, on1 = ons.size() > 1 ? ons[1] : -1;
+        const long long off0 = offs.size() > 1 ? offs[0] : -1, off1 = offs.size() > 1 ? offs[1] : -1;
+        check(on0 == 0 && near(off0 - on0, eighth / 4, 2) && near(off1 - on1, eighth, 2), "step-gate-scales-the-note-length");
+        check(nearestGateStep(90) == 4 && nearestGateStep(1000) == numGateSteps - 1 && nearestGateStep(5) == 0, "nearest-gate-step");
+
+        auto all = makeInitProgram("Gates");
+        setLaneValue(all, PatternLane::Gate, 150);
+        std::mt19937 rng(11);
+        auto random = all;
+        randomizeLane(random, PatternLane::Gate, rng);
+        bool onSteps = true;
+        for (int i = 0; i < 16; ++i)
+        {
+            const int g = random.steps[(size_t) i].gateScalePercent;
+            onSteps = onSteps && nearestGateStep(g) >= 0 && gateSteps[nearestGateStep(g)] == g;
+        }
+        check(all.steps[31].gateScalePercent == 150 && onSteps, "gate-lane-set-all-and-random-use-the-gate-steps");
+    }
+
     std::printf("%d checks, %d failures\n", checks, failures);
     return failures == 0 ? 0 : 1;
 }
