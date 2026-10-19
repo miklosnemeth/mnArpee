@@ -83,6 +83,28 @@ target_link_libraries(mnArpee
         juce::juce_recommended_config_flags
         juce::juce_recommended_warning_flags
 )
+
+# The Windows installer is part of the normal build: "cmake --build build --config Release" makes
+# the VST3, the Standalone and the installer (build/installer), when Inno Setup 6 is installed.
+if(WIN32)
+    set(mnarpee_program_files_x86 "$ENV{ProgramFiles\(x86\)}")
+    find_program(MNARPEE_ISCC ISCC.exe
+        HINTS "$ENV{LOCALAPPDATA}/Programs/Inno Setup 6" "$ENV{ProgramFiles}/Inno Setup 6"
+              "${mnarpee_program_files_x86}/Inno Setup 6")
+    if(MNARPEE_ISCC)
+        add_custom_target(mnArpeeInstaller ALL
+            COMMAND ${CMAKE_COMMAND} -DCONFIG=$<CONFIG> "-DISCC=${MNARPEE_ISCC}" -DVERSION=${PROJECT_VERSION}
+                    "-DBUNDLE=${CMAKE_BINARY_DIR}/mnArpee_artefacts/$<CONFIG>/VST3/mnArpee.vst3"
+                    "-DOUTPUT=${CMAKE_BINARY_DIR}/installer"
+                    "-DISS=${CMAKE_SOURCE_DIR}/installer/mnArpee.iss"
+                    -P "${CMAKE_SOURCE_DIR}/installer/build-installer.cmake"
+            COMMENT "Building the Windows installer"
+            VERBATIM)
+        add_dependencies(mnArpeeInstaller mnArpee_VST3 mnArpee_Standalone)
+    else()
+        message(STATUS "Inno Setup 6 not found: the installer is not built")
+    endif()
+endif()
 endif()
 
 option(MNARPEE_BUILD_TESTS "Build the engine tests (mnArpeeTests) and, with JUCE, the plugin tests (mnArpeePluginTests)" OFF)
