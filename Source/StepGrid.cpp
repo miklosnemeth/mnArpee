@@ -12,7 +12,7 @@ constexpr int laneRowH = 25;  // value lane row height
 constexpr int laneGap = 8;    // between the matrix and the value lanes
 constexpr int numLaneRows = 5;
 constexpr int minVisibleSteps = 16; // columns always shown
-constexpr int dragPixelsPerUnit = 8; // type and octave; the velocity moves one unit per pixel
+constexpr int dragPixelsPerUnit = 8; // type, octave and ratchet; velocity: 1 px per unit, gate: 3 px (5 % per unit)
 
 // Value lanes under the matrix, top to bottom: step type, octave, velocity, gate, ratchet.
 constexpr StepGrid::Lane laneOfRow[numLaneRows] = { StepGrid::Lane::Type, StepGrid::Lane::Octave,
@@ -483,7 +483,8 @@ void StepGrid::mouseDrag(const juce::MouseEvent& e)
         // Dragging up raises the value.
         dragRemainder += dragLastY - e.getPosition().y;
         dragLastY = e.getPosition().y;
-        const int perUnit = laneOfRow[dragLaneRow] == Lane::Velocity ? 1 : dragPixelsPerUnit;
+        const auto dragLane = laneOfRow[dragLaneRow];
+        const int perUnit = dragLane == Lane::Velocity ? 1 : dragLane == Lane::Gate ? 3 : dragPixelsPerUnit;
         const int units = dragRemainder / perUnit;
         if (units != 0 && adjusted)
         {

@@ -115,11 +115,7 @@ Bank makeFactoryBank()
 
 int nearestGateStep(int percent) noexcept
 {
-    int best = 0;
-    for (int i = 1; i < numGateSteps; ++i)
-        if (std::abs(gateSteps[i] - percent) < std::abs(gateSteps[best] - percent))
-            best = i;
-    return best;
+    return std::clamp((percent - 10 + 2) / 5, 0, numGateSteps - 1); // (rounded; below 10 is the first step)
 }
 
 void setLaneValue(Program& p, PatternLane lane, int value)
@@ -280,7 +276,7 @@ RandomRange defaultRandomRange(PatternLane lane) noexcept
         case PatternLane::Octave: return { -1, 1 };
         case PatternLane::Velocity: return { 60, 127 };
         case PatternLane::Ratchet: return { 1, 2 };
-        case PatternLane::Gate: return { 2, 6 }; // 50 .. 150 %
+        case PatternLane::Gate: return { 8, 28 }; // 50 .. 150 %
         default: return fullRandomRange(lane);
     }
 }
@@ -314,7 +310,7 @@ void randomizeLane(Program& p, PatternLane lane, std::mt19937& rng, RandomRange 
                 // Mostly the lowest value (a single note).
                 s.ratchet = static_cast<std::uint8_t>(r < 60 ? range.lo : between());
                 break;
-            case PatternLane::Gate: s.gateScalePercent = static_cast<std::uint16_t>(gateSteps[between()]); break;
+            case PatternLane::Gate: s.gateScalePercent = static_cast<std::uint16_t>(gateStepPercent(between())); break;
         }
     }
 }
