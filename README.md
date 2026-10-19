@@ -11,7 +11,7 @@ Held notes are sorted by pitch before they reach the engine.
   - Root plays the root of the held chord (triads, sus, 7th chords, power chords, inversions too), else the lowest note
 - up to 32 steps per pattern, step types: Off / Normal / Rest / Tie / Random (every step plays one note)
   - Rest lengthens the previous note by a step, Tie plays legato (new note starts before the old one ends; a note tied to itself keeps sounding)
-- Per step: KEY SELECT (Root, Key 1..5), octave -3..+3, velocity, ratchet, chance and STEP GATE (10..800% of the pattern's GATE)
+- Per step: KEY SELECT (Root, Key 1..5), octave -3..+3, velocity, ratchet, chance and STEP GATE (10..400% of the pattern's GATE, in steps of 5%)
 - Per pattern: rate 1/64..3/8 (bar fractions, BlueArp manual), gate 1..125%, swing -50..+50%, octave -2..+2, steps 0..32
   - Two gates: the header's **GATE** is the note length of the whole pattern (a percentage of a step); the **STEP GATE** row under the matrix scales it for single steps. The length of a note is GATE x STEP GATE
   - The header values (rate, octave, gate, swing, steps) always belong to the active preset
