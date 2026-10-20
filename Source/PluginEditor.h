@@ -32,18 +32,7 @@ public:
     juce::Font getSliderPopupFont(juce::Slider&) override;
 };
 
-//==============================================================================
-// HistoryButton: the undo (curved arrow to the left) and redo (to the right) icon button.
-//==============================================================================
-class HistoryButton : public juce::Button
-{
-public:
-    explicit HistoryButton(bool redoIn) : juce::Button(redoIn ? "redo" : "undo"), redo(redoIn) {}
-    void paintButton(juce::Graphics& g, bool highlighted, bool down) override;
-
-private:
-    bool redo;
-};
+using HistoryButton = mnaudio::ui::HistoryButton;
 
 //==============================================================================
 // ValueBar: a header value drawn as one line ("OCT +3"). Only the vertical mouse movement

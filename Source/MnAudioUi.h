@@ -141,4 +141,37 @@ inline void paintDirtyDot(juce::Graphics& g, juce::Rectangle<int> presetButtonBo
     g.setColour(Palette::accent());
     g.fillEllipse((float) presetButtonBounds.getX() + 10.0f, (float) presetButtonBounds.getCentreY() - 4.0f, 8.0f, 8.0f);
 }
+
+// The undo (curved arrow to the left) and redo (to the right) button of the header.
+class HistoryButton : public juce::Button
+{
+public:
+    explicit HistoryButton(bool redoIn) : juce::Button(redoIn ? "redo" : "undo"), redo(redoIn) {}
+
+    void paintButton(juce::Graphics& g, bool highlighted, bool down) override
+    {
+        const auto r = getLocalBounds().toFloat().reduced(1.0f);
+        g.setColour(down ? Palette::cardHi().brighter(0.2f) : highlighted ? Palette::cardHi().brighter(0.1f) : Palette::cardHi());
+        g.fillRoundedRectangle(r, 5.0f);
+        g.setColour(Palette::border());
+        g.drawRoundedRectangle(r, 5.0f, 1.0f);
+
+        // A curved arrow: the arc, and the head at its end (mirrored for redo).
+        const auto c = r.getCentre();
+        const float rad = std::min(r.getWidth(), r.getHeight()) * 0.28f;
+        juce::Path arc;
+        arc.addCentredArc(c.x, c.y + 1.0f, rad, rad, 0.0f, -2.3f, 1.6f, true);
+        juce::Path head;
+        head.addTriangle(-4.5f, 0.0f, 4.5f, 0.0f, 0.0f, -6.0f);
+        g.setColour(isEnabled() ? Palette::text() : Palette::dimText().withAlpha(0.35f));
+        juce::AffineTransform flip = redo ? juce::AffineTransform::scale(-1.0f, 1.0f, c.x, c.y) : juce::AffineTransform();
+        g.strokePath(arc, juce::PathStrokeType(2.0f), flip);
+        const auto tip = arc.getPointAlongPath(0.0f).transformedBy(flip);
+        head = head.createPathWithRoundedCorners(1.0f);
+        g.fillPath(head, juce::AffineTransform::rotation(redo ? 0.6f : -0.6f).translated(tip.x, tip.y));
+    }
+
+private:
+    bool redo;
+};
 } // namespace mnaudio::ui

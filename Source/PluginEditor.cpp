@@ -131,32 +131,6 @@ juce::Label* MnArpeeLookAndFeel::createSliderTextBox(juce::Slider& s)
 }
 
 //==============================================================================
-// HistoryButton
-//==============================================================================
-void HistoryButton::paintButton(juce::Graphics& g, bool highlighted, bool down)
-{
-    const auto r = getLocalBounds().toFloat().reduced(1.0f);
-    g.setColour(down ? Pal::cardHi().brighter(0.2f) : highlighted ? Pal::cardHi().brighter(0.1f) : Pal::cardHi());
-    g.fillRoundedRectangle(r, 5.0f);
-    g.setColour(Pal::border());
-    g.drawRoundedRectangle(r, 5.0f, 1.0f);
-
-    // A curved arrow: the arc, and the head at its end (mirrored for redo).
-    const auto c = r.getCentre();
-    const float rad = std::min(r.getWidth(), r.getHeight()) * 0.28f;
-    juce::Path arc;
-    arc.addCentredArc(c.x, c.y + 1.0f, rad, rad, 0.0f, -2.3f, 1.6f, true);
-    juce::Path head;
-    head.addTriangle(-4.5f, 0.0f, 4.5f, 0.0f, 0.0f, -6.0f);
-    g.setColour(isEnabled() ? Pal::text() : Pal::dimText().withAlpha(0.35f));
-    juce::AffineTransform flip = redo ? juce::AffineTransform::scale(-1.0f, 1.0f, c.x, c.y) : juce::AffineTransform();
-    g.strokePath(arc, juce::PathStrokeType(2.0f), flip);
-    const auto tip = arc.getPointAlongPath(0.0f).transformedBy(flip);
-    head = head.createPathWithRoundedCorners(1.0f);
-    g.fillPath(head, juce::AffineTransform::rotation(redo ? 0.6f : -0.6f).translated(tip.x, tip.y));
-}
-
-//==============================================================================
 // The random options of a lane: a card over the dimmed editor with the range of the random values (two bars
 // to drag up and down) and the buttons Randomize, Reset range, Reset lane and Close.
 namespace
