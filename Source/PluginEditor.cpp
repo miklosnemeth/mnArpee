@@ -1,4 +1,5 @@
 #include "PluginEditor.h"
+#include "MnAudioUi.h"
 #include "PluginProcessor.h"
 
 #include "Fonts.h"
@@ -1284,42 +1285,23 @@ void MnArpeeAudioEditor::paintOverChildren(juce::Graphics& g)
 {
     // Unsaved changes: a dot at the left of the preset name.
     if (shownPresetValid && shownPreset.dirty)
-    {
-        const auto b = presetButton.getBounds();
-        g.setColour(Pal::accent());
-        g.fillEllipse((float) b.getX() + 10.0f, (float) b.getCentreY() - 4.0f, 8.0f, 8.0f);
-    }
+        mnaudio::ui::paintDirtyDot(g, presetButton.getBounds());
 }
 
 void MnArpeeAudioEditor::paint(juce::Graphics& g)
 {
-    g.fillAll(Pal::bg());
-    g.setColour(Pal::border());
-    g.drawRect(getLocalBounds(), 1);
+    mnaudio::ui::paintWindow(g, getLocalBounds());
 
     // Cards behind the controls.
-    g.setColour(Pal::card());
-    g.fillRoundedRectangle(paramsCard.toFloat(), 8.0f);
-    g.setColour(Pal::border());
-    g.drawRoundedRectangle(paramsCard.toFloat(), 8.0f, 1.0f);
+    mnaudio::ui::paintCard(g, paramsCard);
+    mnaudio::ui::paintCard(g, gridCard);
 
-    g.setColour(Pal::card());
-    g.fillRoundedRectangle(gridCard.toFloat(), 8.0f);
-    g.setColour(Pal::border());
-    g.drawRoundedRectangle(gridCard.toFloat(), 8.0f, 1.0f);
+    mnaudio::ui::paintBrand(g, brandArea, versionArea,
+                            "mnArpee", "v" MNARPEE_VERSION_STRING,
+                            mnArpee::fonts::title(mnaudio::ui::metrics::titleSize),
+                            mnArpee::fonts::text(mnaudio::ui::metrics::versionSize, true));
 
-    // Title. The variable font's default instance plus synthetic bold is a bit light,
-    // so the text is stroked twice with a small offset (as in mnKord).
-    g.setColour(Pal::accent());
-    g.setFont(mnArpee::fonts::title(28.0f));
-    for (const float dx : { 0.0f, 0.6f })
-        g.drawText("mnArpee", brandArea.toFloat().translated(dx, 0.0f), juce::Justification::centredLeft);
-
-    // The version under the logo.
-    g.setColour(Pal::dimText());
-    g.setFont(mnArpee::fonts::text(13.0f, true));
-    g.drawText("v" MNARPEE_VERSION_STRING, versionArea, juce::Justification::centredLeft);
-
+    // Section labels.
     // Section labels.
     g.setFont(mnArpee::fonts::text(16.0f, true));
     g.setColour(Pal::dimText());
@@ -1366,38 +1348,24 @@ void MnArpeeAudioEditor::paint(juce::Graphics& g)
 
 void MnArpeeAudioEditor::resized()
 {
-    auto area = getLocalBounds().reduced(12);
-
-    // Header: brand, the preset picker (arrows, name, New, Save, Menu), the held notes and the latch.
-    auto header = area.removeFromTop(56);
-    auto latchArea = header.removeFromRight(112);
-    auto brand = header.removeFromLeft(170);
-    brandArea = brand.removeFromTop(38);
-    versionArea = brand.removeFromTop(16);
-    latchButton.setBounds(latchArea.getX(), latchArea.getCentreY() - 12, 100, 24);
-
-    // The preset picker and the undo / redo buttons form a group, centred in the header.
-    auto group = header.withSizeKeepingCentre(26 + 4 + 190 + 4 + 26 + 8 + 52 + 6 + 52 + 6 + 62 + 14 + 30 + 6 + 30, 34);
-    auto picker = group.removeFromLeft(26 + 4 + 190 + 4 + 26 + 8 + 52 + 6 + 52 + 6 + 62);
-    group.removeFromLeft(14);
-    undoButton.setBounds(group.removeFromLeft(30));
-    group.removeFromLeft(6);
-    redoButton.setBounds(group.removeFromLeft(30));
-    prevPresetButton.setBounds(picker.removeFromLeft(26).reduced(6, 8));
-    picker.removeFromLeft(4);
-    presetButton.setBounds(picker.removeFromLeft(190));
-    picker.removeFromLeft(4);
-    nextPresetButton.setBounds(picker.removeFromLeft(26).reduced(6, 8));
-    picker.removeFromLeft(8);
-    newButton.setBounds(picker.removeFromLeft(52));
-    picker.removeFromLeft(6);
-    saveButton.setBounds(picker.removeFromLeft(52));
-    picker.removeFromLeft(6);
-    menuButton.setBounds(picker.removeFromLeft(62));
+    // Header: brand, the preset picker (arrows, name, New, Save, Menu) with undo / redo, and the latch.
+    const auto head = mnaudio::ui::layoutHeader(getLocalBounds(), 112);
+    brandArea = head.brand;
+    versionArea = head.version;
+    latchButton.setBounds(head.right.getX(), head.right.getCentreY() - 12, 100, 24);
+    undoButton.setBounds(head.undo);
+    redoButton.setBounds(head.redo);
+    prevPresetButton.setBounds(head.prev);
+    presetButton.setBounds(head.preset);
+    nextPresetButton.setBounds(head.next);
+    newButton.setBounds(head.newButton);
+    saveButton.setBounds(head.save);
+    menuButton.setBounds(head.menu);
+    auto area = head.below;
 
     // Values card: one row of "LABEL value" bars.
     paramsCard = area.removeFromTop(54);
-    area.removeFromTop(10);
+    area.removeFromTop(mnaudio::ui::metrics::cardGap);
 
     // The rest is the matrix card.
     gridCard = area;

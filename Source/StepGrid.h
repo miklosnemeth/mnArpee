@@ -1,5 +1,7 @@
 #pragma once
 
+#include "MnAudioUi.h"
+
 #include <JuceHeader.h>
 
 #include "ArpEngine.h"
@@ -26,21 +28,8 @@ public:
     // The dice of a lane was clicked (Lane::Root: the dice of the Root row, a random bass line).
     using RandomizeRequested = std::function<void(Lane lane)>;
 
-    // Unified dark palette (used by the whole UI).
-    struct Palette
-    {
-        static juce::Colour bg()      { return juce::Colour(0xff0b1510); }
-        static juce::Colour card()    { return juce::Colour(0xff13211a); }
-        static juce::Colour cardHi()  { return juce::Colour(0xff1c3026); }
-        static juce::Colour border()  { return juce::Colour(0xff2d4a3a); }
-        static juce::Colour text()    { return juce::Colour(0xfff0faf3); }
-        static juce::Colour dimText() { return juce::Colour(0xffb4cdbc); }
-        static juce::Colour accent()  { return juce::Colour(0xff3ddc84); }
-        static juce::Colour accent2() { return juce::Colour(0xffff5d5d); }
-        static juce::Colour danger()  { return juce::Colour(0xffff7a7a); }
-        static juce::Colour cellOff() { return juce::Colour(0xff22352b); }
-        static juce::Colour playHead(){ return juce::Colour(0x40e8ffa0); }
-    };
+    // The palette of the whole UI is shared with mnKord (MnAudioUi.h).
+    using Palette = mnaudio::ui::Palette;
 
     StepGrid();
 
