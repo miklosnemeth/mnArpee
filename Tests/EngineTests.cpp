@@ -273,6 +273,18 @@ int main()
               "tie-same-note-sustains");
     }
 
+    // 11b. A Rest at the start of the pattern lengthens the last note of the previous round.
+    {
+        auto e = std::make_unique<ArpEngine>();
+        auto b = singleProgramBank(4, SyncRate::R1_8, 50);
+        b->programs[0].steps[0].type = StepType::Rest;
+        e->setBank(*b);
+        e->noteOn(60, 100);
+        auto evs = runFor(*e, 1.3);
+        // step 3 sounds at 3 eighths and lasts a half step plus the Rest of the next round
+        check(near(findAbs(evs, false, 60, 2), eighth * 3 + eighth * 3 / 2), "rest-wraps-over-the-pattern-end");
+    }
+
     // 12. Panic releases sounding notes.
     {
         auto e = std::make_unique<ArpEngine>();
