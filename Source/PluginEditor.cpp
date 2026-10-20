@@ -66,33 +66,63 @@ void MnArpeeLookAndFeel::drawPopupMenuBackground(juce::Graphics& g, int w, int h
 }
 
 void MnArpeeLookAndFeel::drawToggleButton(juce::Graphics& g, juce::ToggleButton& btn,
-                                          bool highlighted, bool)
+                                          bool highlighted, bool down)
 {
-    auto r = btn.getLocalBounds().toFloat().reduced(1.0f);
-    auto box = r.removeFromLeft(r.getHeight());
+    // A chip: filled with the accent colour when on.
+    auto r = btn.getLocalBounds().toFloat().reduced(0.5f);
     const bool on = btn.getToggleState();
-    g.setColour(on ? Pal::accent() : Pal::cardHi());
-    g.fillRoundedRectangle(box, box.getHeight() * 0.35f);
-    g.setColour(highlighted ? Pal::accent().brighter(0.2f) : Pal::border());
-    g.drawRoundedRectangle(box, box.getHeight() * 0.35f, 1.0f);
-    if (on)
-    {
-        g.setColour(Pal::bg());
-        auto tick = box.reduced(box.getWidth() * 0.3f);
-        juce::Path p;
-        p.startNewSubPath(tick.getX(), tick.getCentreY());
-        p.lineTo(tick.getCentreX(), tick.getBottom());
-        p.lineTo(tick.getRight(), tick.getY());
-        g.strokePath(p, juce::PathStrokeType(2.0f));
-    }
-    g.setColour(Pal::text());
-    g.setFont(mnArpee::fonts::text(17.0f, true));
-    g.drawText(btn.getButtonText(), r.reduced(6.0f, 0.0f), juce::Justification::centredLeft);
+    const float radius = r.getHeight() * 0.3f;
+    juce::Colour fill = on ? Pal::accent() : Pal::cardHi();
+    if (down)
+        fill = fill.darker(0.15f);
+    else if (highlighted)
+        fill = on ? Pal::accent().brighter(0.15f) : Pal::cardHi().brighter(0.08f);
+    g.setColour(fill);
+    g.fillRoundedRectangle(r, radius);
+    g.setColour(on ? Pal::accent() : (highlighted ? Pal::accent().withAlpha(0.6f) : Pal::border()));
+    g.drawRoundedRectangle(r, radius, 1.0f);
+    g.setColour(on ? Pal::bg() : Pal::text());
+    g.setFont(mnArpee::fonts::text(16.0f, true));
+    g.drawText(btn.getButtonText(), r, juce::Justification::centred);
 }
 
 juce::Font MnArpeeLookAndFeel::getComboBoxFont(juce::ComboBox& box)
 {
     return mnArpee::fonts::text(juce::jmin(17.0f, (float) box.getHeight() * 0.62f), true);
+}
+
+namespace
+{
+juce::TextLayout tooltipLayout(const juce::String& text, int maxWidth)
+{
+    juce::AttributedString s;
+    s.setJustification(juce::Justification::centredLeft);
+    s.append(text, mnArpee::fonts::text(15.0f, true), Pal::text());
+    juce::TextLayout layout;
+    layout.createLayoutWithBalancedLineLengths(s, (float) maxWidth);
+    return layout;
+}
+} // namespace
+
+juce::Rectangle<int> MnArpeeLookAndFeel::getTooltipBounds(const juce::String& tipText, juce::Point<int> screenPos,
+                                                          juce::Rectangle<int> parentArea)
+{
+    const auto layout = tooltipLayout(tipText, 320);
+    const int w = (int) std::ceil(layout.getWidth()) + 20;
+    const int h = (int) std::ceil(layout.getHeight()) + 14;
+    return juce::Rectangle<int>(screenPos.x > parentArea.getCentreX() ? screenPos.x - (w + 12) : screenPos.x + 24,
+                                screenPos.y > parentArea.getCentreY() ? screenPos.y - (h + 6) : screenPos.y + 18, w, h)
+        .constrainedWithin(parentArea);
+}
+
+void MnArpeeLookAndFeel::drawTooltip(juce::Graphics& g, const juce::String& text, int width, int height)
+{
+    const auto r = juce::Rectangle<float>((float) width, (float) height).reduced(0.5f);
+    g.setColour(Pal::card());
+    g.fillRoundedRectangle(r, 6.0f);
+    g.setColour(Pal::border());
+    g.drawRoundedRectangle(r, 6.0f, 1.0f);
+    tooltipLayout(text, 320).draw(g, juce::Rectangle<float>(10.0f, 7.0f, (float) width - 20.0f, (float) height - 14.0f));
 }
 
 juce::Font MnArpeeLookAndFeel::getPopupMenuFont() { return mnArpee::fonts::text(17.0f, true); }
@@ -296,6 +326,7 @@ mnArpee::PatternLane patternLaneOf(StepGrid::Lane lane)
         case StepGrid::Lane::Velocity: return mnArpee::PatternLane::Velocity;
         case StepGrid::Lane::Ratchet: return mnArpee::PatternLane::Ratchet;
         case StepGrid::Lane::Gate: return mnArpee::PatternLane::Gate;
+        case StepGrid::Lane::Chance: return mnArpee::PatternLane::Chance;
         default: return mnArpee::PatternLane::Key;
     }
 }
@@ -332,7 +363,7 @@ void MnArpeeAudioEditor::showRangePanel(StepGrid::Lane lane)
     const auto pl = patternLaneOf(lane);
     const auto full = mnArpee::fullRandomRange(pl);
     const bool hasRange = pl != mnArpee::PatternLane::Type;
-    const char* titles[] = { "KEYS", "TYPE", "OCTAVE", "VELOCITY", "RATCHET", "STEP GATE" };
+    const char* titles[] = { "KEYS", "TYPE", "OCTAVE", "VELOCITY", "RATCHET", "STEP GATE", "CHANCE" };
     std::function<juce::String(int)> text = [pl](int v)
     {
         switch (pl)
@@ -340,10 +371,11 @@ void MnArpeeAudioEditor::showRangePanel(StepGrid::Lane lane)
             case mnArpee::PatternLane::Key: return "Key " + juce::String(v + 1);
             case mnArpee::PatternLane::Octave: return v > 0 ? "+" + juce::String(v) : juce::String(v);
             case mnArpee::PatternLane::Gate: return juce::String(mnArpee::gateStepPercent(juce::jlimit(0, mnArpee::numGateSteps - 1, v))) + "%";
+            case mnArpee::PatternLane::Chance: return juce::String(mnArpee::chanceStepPercent(juce::jlimit(1, mnArpee::numChanceSteps, v))) + "%";
             default: return juce::String(v);
         }
     };
-    const double pixels = pl == mnArpee::PatternLane::Velocity ? 2.0 : pl == mnArpee::PatternLane::Gate ? 3.0 : 12.0;
+    const double pixels = pl == mnArpee::PatternLane::Velocity ? 2.0 : pl == mnArpee::PatternLane::Gate ? 3.0 : pl == mnArpee::PatternLane::Chance ? 6.0 : 12.0;
 
     juce::Component::SafePointer<MnArpeeAudioEditor> safe(this);
     auto content = std::make_unique<RangePanel>(
@@ -409,7 +441,7 @@ MnArpeeAudioEditor::MnArpeeAudioEditor(MnArpeeAudioProcessor& p)
     : AudioProcessorEditor(p), proc(p)
 {
     setLookAndFeel(&lnf);
-    setSize(900, 560);
+    setSize(900, 590);
     setScaleFactor(proc.getZoom());
     setResizable(true, true);
     setResizeLimits(840, 480, 1600, 1000);
@@ -469,6 +501,15 @@ MnArpeeAudioEditor::MnArpeeAudioEditor(MnArpeeAudioProcessor& p)
     addAndMakeVisible(latchButton);
     latchButton.setButtonText("Latch");
     latchAtt = std::make_unique<ButtonAttachment>(apvts, "latch", latchButton);
+    latchButton.setTooltip("Latch: the arpeggio goes on after the keys are released; a new chord replaces it.");
+    addAndMakeVisible(groupButton);
+    groupButton.setButtonText("Group");
+    groupAtt = std::make_unique<ButtonAttachment>(apvts, "group", groupButton);
+    groupButton.setTooltip("Group: the same note in several octaves is one key (the lowest). Off: every held note is a key.");
+    addAndMakeVisible(cutButton);
+    cutButton.setButtonText("Cut");
+    cutAtt = std::make_unique<ButtonAttachment>(apvts, "cut", cutButton);
+    cutButton.setTooltip("Cut: the notes stop at once when the last key is released, not at the end of their gate.");
 
     reloadProgram();
     refreshPresetUi();
@@ -1283,7 +1324,7 @@ void MnArpeeAudioEditor::paint(juce::Graphics& g)
                juce::Justification::centredLeft);
 
     // The held notes, right of the "PATTERN" label. White: a key of the matrix.
-    // Red: left out, more than five notes are held.
+    // Dim: grouped into the key of its pitch class (Group on). Red: left out, more than five notes.
     const auto font = mnArpee::fonts::text(17.0f, true);
     g.setFont(font);
     int x = statusArea.getX();
@@ -1303,7 +1344,9 @@ void MnArpeeAudioEditor::paint(juce::Graphics& g)
         const auto use = (mnArpee::KeyUse) (v & 3);
         leftOut += use == mnArpee::KeyUse::LeftOut ? 1 : 0;
         draw(juce::MidiMessage::getMidiNoteName(v >> 2, true, true, 4) + " ",
-             use == mnArpee::KeyUse::Used ? Pal::text() : Pal::accent2());
+             use == mnArpee::KeyUse::Used ? Pal::text()
+             : use == mnArpee::KeyUse::Merged ? Pal::dimText().withAlpha(0.6f)
+                                              : Pal::accent2());
     }
     if (leftOut > 0)
         draw(" +" + juce::String(leftOut) + " left out", Pal::accent2());
@@ -1320,11 +1363,10 @@ void MnArpeeAudioEditor::paint(juce::Graphics& g)
 
 void MnArpeeAudioEditor::resized()
 {
-    // Header: brand, the preset picker (arrows, name, New, Save, Menu) with undo / redo, and the latch.
-    const auto head = mnaudio::ui::layoutHeader(getLocalBounds(), 112);
+    // Header: brand, the preset picker (arrows, name, New, Save, Menu) with undo / redo.
+    const auto head = mnaudio::ui::layoutHeader(getLocalBounds());
     brandArea = head.brand;
     versionArea = head.version;
-    latchButton.setBounds(head.right.getX(), head.right.getCentreY() - 12, 100, 24);
     undoButton.setBounds(head.undo);
     redoButton.setBounds(head.redo);
     prevPresetButton.setBounds(head.prev);
@@ -1335,7 +1377,7 @@ void MnArpeeAudioEditor::resized()
     menuButton.setBounds(head.menu);
     auto area = head.below;
 
-    // Values card: one row of "LABEL value" bars.
+    // Values card: one row of "LABEL value" bars, then the chips Latch, Group and Cut.
     paramsCard = area.removeFromTop(54);
     area.removeFromTop(mnaudio::ui::metrics::cardGap);
 
@@ -1345,6 +1387,12 @@ void MnArpeeAudioEditor::resized()
 
     auto inner = paramsCard.reduced(12, 11);
     const int gap = 10;
+    const int chipW = 62;
+    for (auto* chip : { &cutButton, &groupButton, &latchButton })
+    {
+        chip->setBounds(inner.removeFromRight(chipW));
+        inner.removeFromRight(chip == &latchButton ? gap + 4 : 6);
+    }
     const int barW = (inner.getWidth() - 4 * gap) / 5;
     for (auto* bar : { &rateSlider, &octaveSlider, &gateSlider, &swingSlider, &stepsSlider })
     {
@@ -1514,6 +1562,12 @@ void MnArpeeAudioEditor::showPatternMenu(int step, StepGrid::Lane lane, int row)
             valueText = juce::String(value) + "%";
             laneName = "step gates";
             break;
+        case StepGrid::Lane::Chance:
+            patternLane = PatternLane::Chance;
+            value = (int) st.chance;
+            valueText = juce::String(value) + "%";
+            laneName = "chances";
+            break;
     }
 
     mnArpee::Preset clip;
@@ -1626,6 +1680,13 @@ void MnArpeeAudioEditor::onLaneAdjusted(int step, StepGrid::Lane lane, int delta
                 // 5 % per unit.
                 const int index = std::clamp(mnArpee::nearestGateStep(st.gateScalePercent) + delta, 0, mnArpee::numGateSteps - 1);
                 st.gateScalePercent = (std::uint16_t) mnArpee::gateStepPercent(index);
+                break;
+            }
+            case StepGrid::Lane::Chance:
+            {
+                // 5 % per unit.
+                const int index = std::clamp(mnArpee::nearestChanceStep(st.chance) + delta, 1, mnArpee::numChanceSteps);
+                st.chance = (std::uint8_t) mnArpee::chanceStepPercent(index);
                 break;
             }
         }

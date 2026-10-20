@@ -118,6 +118,11 @@ int nearestGateStep(int percent) noexcept
     return std::clamp((percent - 10 + 2) / 5, 0, numGateSteps - 1); // (rounded; below 10 is the first step)
 }
 
+int nearestChanceStep(int percent) noexcept
+{
+    return std::clamp((percent + 2) / 5, 1, numChanceSteps);
+}
+
 void setLaneValue(Program& p, PatternLane lane, int value)
 {
     for (auto& s : p.steps)
@@ -140,6 +145,7 @@ void setLaneValue(Program& p, PatternLane lane, int value)
             case PatternLane::Velocity: s.velocity = static_cast<std::uint8_t>(std::clamp(value, 1, 127)); break;
             case PatternLane::Ratchet: s.ratchet = static_cast<std::uint8_t>(std::clamp(value, 1, 4)); break;
             case PatternLane::Gate: s.gateScalePercent = static_cast<std::uint16_t>(std::clamp(value, 10, 800)); break;
+            case PatternLane::Chance: s.chance = static_cast<std::uint8_t>(std::clamp(value, 1, 100)); break;
         }
 }
 
@@ -265,6 +271,7 @@ RandomRange fullRandomRange(PatternLane lane) noexcept
         case PatternLane::Velocity: return { 1, 127 };
         case PatternLane::Ratchet: return { 1, 4 };
         case PatternLane::Gate: return { 0, numGateSteps - 1 };
+        case PatternLane::Chance: return { 1, numChanceSteps };
         default: return { 0, 0 };
     }
 }
@@ -277,6 +284,7 @@ RandomRange defaultRandomRange(PatternLane lane) noexcept
         case PatternLane::Velocity: return { 60, 127 };
         case PatternLane::Ratchet: return { 1, 2 };
         case PatternLane::Gate: return { 8, 28 }; // 50 .. 150 %
+        case PatternLane::Chance: return { 10, 20 }; // 50 .. 100 %
         default: return fullRandomRange(lane);
     }
 }
@@ -311,6 +319,10 @@ void randomizeLane(Program& p, PatternLane lane, std::mt19937& rng, RandomRange 
                 s.ratchet = static_cast<std::uint8_t>(r < 60 ? range.lo : between());
                 break;
             case PatternLane::Gate: s.gateScalePercent = static_cast<std::uint16_t>(gateStepPercent(between())); break;
+            case PatternLane::Chance:
+                // Half of the steps always play.
+                s.chance = static_cast<std::uint8_t>(chanceStepPercent(r < 50 ? range.hi : between()));
+                break;
         }
     }
 }
@@ -333,6 +345,7 @@ void resetLane(Program& p, PatternLane lane)
             case PatternLane::Velocity: s.velocity = 96; break;
             case PatternLane::Ratchet: s.ratchet = 1; break;
             case PatternLane::Gate: s.gateScalePercent = 100; break;
+            case PatternLane::Chance: s.chance = 100; break;
         }
     }
 }

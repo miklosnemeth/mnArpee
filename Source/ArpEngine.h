@@ -76,10 +76,13 @@ struct InputNotes
 };
 
 // The keys the matrix can reach (Key 1..5, Random): the lowest maxInputKeys held notes (the same
-// note in several octaves counts as separate keys). LeftOut is a held note above those.
-enum class KeyUse : int { Used = 0, LeftOut = 1 };
-void reduceToKeys(const InputNotes& all, InputNotes& keys) noexcept;
-KeyUse keyUseOf(const InputNotes& keys, int note) noexcept;
+// note in several octaves counts as separate keys). With groupOctaves, a note counts once per pitch
+// class (the lowest one is the key). What does not make it is
+//  - Merged:   the same note in another octave as a key (grouping on: C3 + C4, C4 is merged into C3),
+//  - LeftOut:  a held note above the five keys.
+enum class KeyUse : int { Used = 0, LeftOut = 1, Merged = 2 };
+void reduceToKeys(const InputNotes& all, InputNotes& keys, bool groupOctaves = false) noexcept;
+KeyUse keyUseOf(const InputNotes& keys, int note, bool groupOctaves = false) noexcept;
 
 // The chord the held notes form (triads, sus, 7th chords, power chord; inversions included).
 struct ChordInfo
@@ -134,6 +137,10 @@ public:
     // Selected program: switches at the end of the running pattern, or at once when idle.
     void setCurrentProgram(int index);
     void setLatch(bool on);
+    // The same note in several octaves is one key (the lowest), instead of a key each.
+    void setGroupOctaves(bool on) { groupOctaves = on; }
+    // Letting go of the last key stops the sounding notes at once, not at the end of their gate.
+    void setCutOnRelease(bool on) { cutOnRelease = on; }
     void setOutputChannel(int channel) { outChannel = channel < 1 ? 1 : (channel > 16 ? 16 : channel); }
     void setRandomFn(RandomFn fn) { randomFn = std::move(fn); }
 
@@ -186,6 +193,8 @@ private:
     std::array<std::uint8_t, 128> latchedVel {};
     int heldCount = 0;
     bool latch = false;
+    bool groupOctaves = false;
+    bool cutOnRelease = false;
     bool sustainDown = false;
     bool hadInput = false;
 

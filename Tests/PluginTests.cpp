@@ -655,6 +655,18 @@ int main()
                 b->onClick();
             check(q->getProgramCopy().steps[5].keyIndex == 1, "reset-lane-button-restores-the-keys");
         }
+        // The Latch, Group and Cut chips are attached to parameters of the host.
+        {
+            auto q = makeProcessor();
+            std::unique_ptr<juce::AudioProcessorEditor> ed(q->createEditor());
+            ed->setSize(900, 590);
+            int chips = 0;
+            for (auto* c : ed->getChildren())
+                if (auto* t = dynamic_cast<juce::ToggleButton*>(c))
+                    chips += t->isVisible() && (t->getButtonText() == "Latch" || t->getButtonText() == "Group" || t->getButtonText() == "Cut") ? 1 : 0;
+            check(chips == 3 && q->getApvts().getParameter("group") != nullptr && q->getApvts().getParameter("cut") != nullptr,
+                  "latch-group-cut-chips-and-parameters");
+        }
     }
     else
     {

@@ -44,12 +44,12 @@ transzportnál az mnArpee saját tempóórával fut, és egy új akkord azonnal 
 Fentről lefelé:
 
 - **Fejléc.** A logó a verzióval, a preset-választó (a nyilak, a preset neve, **New**, **Save**, **Menu**), a
-  visszavonás és az újra gomb, és a **Latch**.
-- **Értékek.** A minta RATE, OCT, GATE, SWING és STEPS értéke. Húzd az értéket fel vagy le, vagy használd az egérgörgőt.
+  visszavonás és az újra gomb.
+- **Értékek.** A minta RATE, OCT, GATE, SWING és STEPS értéke, a jobb szélén pedig a **Latch**, **Group** és **Cut** gombok. Húzd az értéket fel vagy le, vagy használd az egérgörgőt.
   Az oldalirányú mozgás nem csinál semmit, így az érték nem ugrál, ha mozgatod az egeret.
 - **PATTERN.** A lenyomott hangok és az akkord, amit alkotnak (Cmaj7, Am, C/E, G5, ...).
 - **A key-mátrix.** Minden oszlop egy lépés; a sorok mondják meg, melyik hangot játssza a lépés.
-- **A sávok.** A mátrix alatt: TYPE, OCTAVE, VELOCITY, STEP GATE és RATCHET, lépésenként egy-egy mezővel.
+- **A sávok.** A mátrix alatt: TYPE, OCTAVE, VELOCITY, STEP GATE, RATCHET és CHANCE, lépésenként egy-egy mezővel.
 
 A pluginnak **nincsenek billentyűparancsai**. Soha nem vesz el egy billentyűt a DAW-tól.
 
@@ -60,9 +60,9 @@ key" és így tovább. A key-ek a lenyomott hangok:
 
 - A lenyomott hangok magasság szerint rendezettek. A **Key 1** a legalsó hang, a **Key 2** a következő, egészen a
   **Key 5**-ig.
-- Minden lenyomott hang key, ugyanaz a hang más oktávban is (a C3 és a C4 két key).
+- Minden lenyomott hang key, ugyanaz a hang más oktávban is (a C3 és a C4 két key). Kapcsold be a **Group**-ot, hogy az azonos hang több oktávban egy key legyen (a legalsó), és egy széles akkord ne használja el az öt key-t.
 - Ha öt hangnál többet tartasz, a legalsó öt a key, a többi kimarad. A PATTERN sáv mutatja a lenyomott
-  hangokat: a **fehér** egy key, a **piros** kimaradt ("+N left out").
+  hangokat: a **fehér** egy key, a **halvány** a hangnevének key-ébe csoportosult (Group be), a **piros** kimaradt ("+N left out").
 - A **Root** a lenyomott akkord alaphangját játssza. Érti a hármashangzatokat, a sus akkordokat, a szeptimeket, a power
   chordot és a fordításokat is. Ha nem talál akkordot, a legalsó hang a root.
 - A **Random** véletlenszerűen választ a key-ek közül.
@@ -81,6 +81,7 @@ sor ugyanígy működik: kattintásra a lépés véletlen lesz, újabb kattintá
 | **VELOCITY** | 1 és 127 között. |
 | **STEP GATE** | A lépés hangjának hossza: a minta GATE-jének 10 és 400 %-a, 5 %-os lépésekben. A 100 = változatlan. |
 | **RATCHET** | 1 és 4 között. A lépés annyiszor játssza le a hangját, egyenletesen elosztva a lépésen belül. |
+| **CHANCE** | 5 és 100 % között, 5 %-os lépésekben. Az esély, hogy a lépés egyáltalán megszólal: a 100 mindig, az 50 nagyjából minden második alkalommal. |
 
 Húzz egy mezőt fel vagy le, vagy használd az egérgörgőt. A sáv előtti **kocka** véletlen értékekkel tölti ki az egész sávot.
 
@@ -122,8 +123,14 @@ key-eket tölti ki véletlenszerűen.
 Ezek az értékek mindig az aktív presethez tartoznak. Ha módosítasz egyet, a preset neve mellett megjelenik a mentetlen
 változás pontja.
 
-A **Latch** a billentyűk elengedése után is tovább játszatja az arpeggiót. Az új akkord felváltja a lecsapott
-akkordot. A **szusztain pedál** is működik, a hoszt **panic** (all notes off) üzenete pedig azonnal leállít mindent.
+Három gomb van az értékkártya jobb szélén (egérrel rámutatva súgót kapsz; mindhárom hoszt-paraméter):
+
+- A **Latch** a billentyűk elengedése után is tovább játszatja az arpeggiót. Az új akkord felváltja a lecsapott akkordot.
+- A **Group** az azonos hangot több oktávban egy key-nek veszi (a legalsó).
+- A **Cut** az utolsó billentyű elengedésekor azonnal elnémítja a szóló hangokat. Nélküle a hangok a gate végéig vagy a
+  következő lépésig szólnak.
+
+A **szusztain pedál** is működik, a hoszt **panic** (all notes off) üzenete pedig azonnal leállít mindent.
 
 ## Minta-eszközök
 
@@ -186,6 +193,7 @@ választja. A használaton kívüli helyek "-"-t mutatnak.
 - Indulj egy gyári presetből, és módosíts két-három lépést ahelyett, hogy a nulláról rajzolnál.
 - Tegyél a VELOCITY-re véletlen tartományt (például 80–127), és nyomd meg a kockát: gyors út az emberi érzethez.
 - Az ötkey-s minta háromhangos akkordon is jól szól, mert a hiányzó key-ek a rootot játsszák.
+- Tegyél néhány lépésre 50–75 % CHANCE-t (és nyomd meg a sáv kockáját), hogy a minta minden körben kicsit más legyen.
 - Használj RATCHET 2-t vagy 3-at egyes lépéseken pergetéshez, és 200 % vagy nagyobb STEP GATE-et olyan hangokhoz, amelyek
   átnyúlnak a következő lépésre.
 

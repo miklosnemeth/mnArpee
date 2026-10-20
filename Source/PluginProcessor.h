@@ -145,6 +145,8 @@ private:
     {
         int program = -1, rate = -1, gate = -1, swing = -1000, octave = -1000, steps = -1;
         bool latch = false;
+        bool group = false;
+        bool cut = false;
     };
 
     void handleAsyncUpdate() override;
@@ -175,6 +177,8 @@ private:
     std::atomic<float>* octaveParam = nullptr;
     std::atomic<float>* stepsParam = nullptr;
     std::atomic<float>* latchParam = nullptr;
+    std::atomic<float>* groupParam = nullptr;
+    std::atomic<float>* cutParam = nullptr;
 
     // Message thread.
     mutable juce::CriticalSection modelLock;
@@ -189,7 +193,7 @@ private:
     std::vector<StepList> undoStack, redoStack;
     juce::int64 lastEditMs = 0;
     std::atomic<float> zoom { 1.0f };
-    std::array<mnArpee::RandomRange, 6> randomRanges {}; // by PatternLane; filled with the defaults in the constructor
+    std::array<mnArpee::RandomRange, 7> randomRanges {}; // by PatternLane; filled with the defaults in the constructor
 
     // Hand-over to the audio thread.
     juce::SpinLock pendingLock;

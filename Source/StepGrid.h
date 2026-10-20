@@ -19,7 +19,7 @@ class StepGrid : public juce::Component
 public:
     using StepClicked = std::function<void(int stepIndex, int row)>;
     // A value box was grabbed (delta 0) or adjusted by `delta` units.
-    enum class Lane { Key, Type, Octave, Velocity, Ratchet, Root, Gate };
+    enum class Lane { Key, Type, Octave, Velocity, Ratchet, Root, Gate, Chance };
     using LaneAdjusted = std::function<void(int stepIndex, Lane lane, int delta)>;
     // Right click on a matrix cell (Lane::Key, row >= 0) or on a value box (row -1).
     using ContextRequested = std::function<void(int stepIndex, Lane lane, int row)>;
