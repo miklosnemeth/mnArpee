@@ -19,7 +19,7 @@ factory presets and change it.
 `C:\Program Files\Common Files\VST3\MNAudio\` (a folder of its own inside the standard VST3 folder, which DAWs scan).
 Rescan the plugins in your DAW if it does not show up. The Standalone program is not part of the installer.
 
-The license and the readme are installed into `C:\Program Files\MNAudio\mnArpee`. Installing a newer version over an old
+The license, the readme and this user guide (PDF, with Start menu shortcuts) are installed into `C:\Program Files\MNAudio\mnArpee`. Installing a newer version over an old
 one works: Setup shows the version it found ("Upgrade: v1.0.0 -> v1.1.0"), asks before going back to an older one, and
 asks you to close your DAW if it has mnArpee loaded.
 

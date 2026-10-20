@@ -104,7 +104,7 @@ Preset file (a bank file with several `<Preset>` elements is accepted by **Impor
 ## Installer (Windows)
 
 The installer puts the VST3 into `%CommonProgramFiles%\VST3\MNAudio` (the Standalone is not included) and the
-license and readme into `Program Files\MNAudio\mnArpee`. It is built with
+license, the readme and the user guide (English and Hungarian PDF, with Start menu shortcuts) into `Program Files\MNAudio\mnArpee`. It is built with
 [Inno Setup 6](https://jrsoftware.org/isinfo.php) from a Release build:
 
 ```powershell
