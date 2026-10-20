@@ -5,6 +5,11 @@ Held notes are sorted by pitch before they reach the engine.
 
 ![The mnArpee window with the Down 16ths preset](ui-shot.png)
 
+## Documentation
+
+- [User guide](docs/USER_GUIDE.md) ([PDF](docs/mnArpee-User-Guide.pdf)) · [Felhasználói útmutató](docs/USER_GUIDE.hu.md) ([PDF](docs/mnArpee-Felhasznaloi-utmutato.pdf)) · [Documentation home](docs/README.md)
+- Home page: <https://miklosnemeth.github.io/mnArpee/> (English and Hungarian), built from `docs/` by `python site/build-site.py`; the PDFs by `python docs/build-pdf.py`
+
 ## Features (MVP)
 
 - No arp modes: the step matrix draws the whole pattern. Rows, bottom to top: Random, Root, Key 1 .. Key 5

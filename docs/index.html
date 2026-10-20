@@ -1,0 +1,618 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>mnArpee – free pattern arpeggiator plugin (VST3) for Windows</title>
+<meta name="description" content="mnArpee is a free pattern arpeggiator plugin (VST3) for Windows: hold a chord and play the pattern you draw. Step matrix, ratchets, bass lines and 37 factory presets.">
+<meta name="robots" content="index, follow, max-image-preview:large">
+<meta name="author" content="Miklós Németh">
+<link rel="canonical" href="https://miklosnemeth.github.io/mnArpee/">
+<link rel="alternate" hreflang="en" href="https://miklosnemeth.github.io/mnArpee/">
+<link rel="alternate" hreflang="hu" href="https://miklosnemeth.github.io/mnArpee/hu/">
+<link rel="alternate" hreflang="x-default" href="https://miklosnemeth.github.io/mnArpee/">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="mnArpee">
+<meta property="og:title" content="mnArpee – free pattern arpeggiator plugin (VST3) for Windows">
+<meta property="og:description" content="mnArpee is a free pattern arpeggiator plugin (VST3) for Windows: hold a chord and play the pattern you draw. Step matrix, ratchets, bass lines and 37 factory presets.">
+<meta property="og:url" content="https://miklosnemeth.github.io/mnArpee/">
+<meta property="og:locale" content="en_US">
+<meta property="og:locale:alternate" content="hu_HU">
+<meta property="og:image" content="https://miklosnemeth.github.io/mnArpee/images/main.png">
+<meta property="og:image:width" content="900">
+<meta property="og:image:height" content="560">
+<meta property="og:image:alt" content="The mnArpee window with the key matrix and the value lanes">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="mnArpee – free pattern arpeggiator plugin (VST3) for Windows">
+<meta name="twitter:description" content="mnArpee is a free pattern arpeggiator plugin (VST3) for Windows: hold a chord and play the pattern you draw. Step matrix, ratchets, bass lines and 37 factory presets.">
+<meta name="twitter:image" content="https://miklosnemeth.github.io/mnArpee/images/main.png">
+<meta name="color-scheme" content="dark">
+<meta name="theme-color" content="#0b1510">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230b1510'/%3E%3Crect x='6' y='7' width='5' height='18' rx='1.5' fill='%233ddc84'/%3E%3Crect x='13.5' y='7' width='5' height='18' rx='1.5' fill='%23fbfcfb'/%3E%3Crect x='21' y='7' width='5' height='18' rx='1.5' fill='%233ddc84'/%3E%3C/svg%3E">
+<link rel="preload" href="assets/fonts/Montserrat.ttf" as="font" type="font/ttf" crossorigin>
+<style>
+@font-face { font-family: 'Montserrat'; src: url(assets/fonts/Montserrat.ttf) format('truetype'); font-weight: 100 900; font-display: swap; }
+@font-face { font-family: 'Roboto Condensed'; src: url(assets/fonts/RobotoCondensed.ttf) format('truetype'); font-weight: 100 900; font-display: swap; }
+
+:root {
+  --bg: #0b1510;
+  --panel: #13211a;
+  --line: #2d4a3a;
+  --control: #1c3026;
+  --text: #f0faf3;
+  --muted: #b4cdbc;
+  --accent: #3ddc84;
+  --accent-ink: #04210f;
+  --playing: #ffa53a;
+  --radius: 14px;
+}
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+body {
+  margin: 0;
+  background:
+    radial-gradient(1100px 520px at 78% -8%, rgba(61, 220, 132, 0.13), transparent 60%),
+    radial-gradient(900px 480px at 0% 8%, rgba(255, 165, 58, 0.06), transparent 60%),
+    var(--bg);
+  color: var(--text);
+  font-family: 'Segoe UI', system-ui, -apple-system, Roboto, sans-serif;
+  font-size: 17px;
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+}
+a { color: inherit; }
+img { max-width: 100%; display: block; }
+.wrap { width: min(1080px, 100% - 40px); margin-inline: auto; }
+.display { font-family: 'Montserrat', 'Segoe UI', sans-serif; font-weight: 800; letter-spacing: -0.02em; }
+.condensed { font-family: 'Roboto Condensed', 'Segoe UI', sans-serif; font-weight: 700; }
+
+
+/* top bar */
+.top { display: flex; align-items: center; justify-content: space-between; padding: 20px 0; gap: 16px; }
+.brand { font-size: 22px; text-decoration: none; display: flex; align-items: center; gap: 10px; }
+.brand svg { width: 28px; height: 28px; }
+.nav { display: flex; align-items: center; gap: 22px; font-size: 15px; color: var(--muted); }
+.nav a { text-decoration: none; }
+.nav a:hover { color: var(--text); }
+
+/* hero */
+.hero { padding: 54px 0 30px; text-align: center; }
+.eyebrow { display: inline-block; font-size: 13px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--accent); border: 1px solid rgba(61, 220, 132, 0.35); background: rgba(61, 220, 132, 0.07); padding: 5px 14px; border-radius: 999px; }
+.hero h1 { font-size: clamp(64px, 13vw, 132px); line-height: 1; margin: 22px 0 6px; }
+.hero h1 span { color: var(--accent); }
+.tagline { font-size: clamp(22px, 3.6vw, 34px); font-weight: 700; margin: 0 0 14px; }
+.lede { max-width: 680px; margin: 0 auto 30px; color: var(--muted); font-size: 19px; }
+.cta { display: flex; flex-wrap: wrap; gap: 12px; justify-content: center; }
+.btn { display: inline-flex; align-items: center; gap: 9px; padding: 13px 22px; border-radius: 12px; font-weight: 700; text-decoration: none; border: 1px solid var(--line); background: var(--control); color: var(--text); transition: transform .12s, background .12s; }
+.btn:hover { transform: translateY(-1px); background: #284536; }
+.btn.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+.btn.primary:hover { background: #62e898; }
+.btn svg { width: 18px; height: 18px; }
+.facts { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px 22px; margin: 26px 0 0; padding: 0; list-style: none; color: var(--muted); font-size: 14px; }
+.facts li::before { content: "•"; color: var(--accent); margin-right: 8px; }
+
+.shot { margin: 46px auto 0; position: relative; }
+.shot::before { content: ""; position: absolute; inset: 8% 6% -4%; background: radial-gradient(closest-side, rgba(61, 220, 132, 0.28), transparent); filter: blur(34px); z-index: -1; }
+.shot img { border-radius: var(--radius); border: 1px solid var(--line); box-shadow: 0 30px 80px rgba(0, 0, 0, 0.55); width: 100%; }
+
+/* sections */
+section { padding: 78px 0 0; }
+h2 { font-size: clamp(28px, 4.4vw, 42px); margin: 0 0 8px; line-height: 1.15; }
+.sub { color: var(--muted); max-width: 640px; margin: 0 0 34px; }
+
+.steps { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; counter-reset: step; }
+.step { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 22px; position: relative; }
+.step::before { counter-increment: step; content: counter(step); font-family: 'Montserrat', sans-serif; font-weight: 800; font-size: 14px; color: var(--accent-ink); background: var(--accent); width: 30px; height: 30px; border-radius: 50%; display: grid; place-items: center; margin-bottom: 14px; }
+.step h3 { margin: 0 0 6px; font-size: 19px; }
+.step p { margin: 0; color: var(--muted); font-size: 16px; }
+
+.cards { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+.card { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 22px; transition: border-color .15s, transform .15s; }
+.card:hover { border-color: rgba(61, 220, 132, 0.5); transform: translateY(-2px); }
+.card .ic { width: 38px; height: 38px; border-radius: 10px; background: rgba(61, 220, 132, 0.12); color: var(--accent); display: grid; place-items: center; margin-bottom: 14px; }
+.card .ic svg { width: 22px; height: 22px; }
+.card h3 { margin: 0 0 6px; font-size: 18px; }
+.card p { margin: 0; color: var(--muted); font-size: 15.5px; }
+code { font-family: Consolas, 'Cascadia Mono', monospace; font-size: 0.92em; background: var(--control); padding: 1px 6px; border-radius: 5px; }
+
+.gallery { display: grid; grid-template-columns: repeat(2, 1fr); gap: 20px; }
+.gallery figure { margin: 0; }
+.gallery figure:first-child { grid-column: 1 / -1; }
+.gallery img { border-radius: 12px; border: 1px solid var(--line); box-shadow: 0 18px 50px rgba(0, 0, 0, 0.4); width: 100%; }
+.gallery figcaption { color: var(--muted); font-size: 15px; margin-top: 10px; text-align: center; }
+
+.get { display: grid; grid-template-columns: 1.25fr 1fr; gap: 20px; }
+.box { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 26px; }
+.box h3 { margin: 0 0 10px; font-size: 20px; }
+.box ol, .box ul { margin: 0 0 18px; padding-left: 20px; color: var(--muted); }
+.box li { margin: 5px 0; }
+.box p { color: var(--muted); margin: 0 0 14px; }
+.box strong { color: var(--text); }
+
+/* author */
+.author { margin-top: 84px; padding: 46px 0 52px; border-top: 1px solid var(--line); background: linear-gradient(180deg, rgba(61, 220, 132, 0.05), transparent 70%); text-align: center; }
+.author .tag { display: inline-flex; align-items: center; gap: 8px; font-size: 13px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--playing); font-weight: 700; }
+.author .name { font-size: clamp(30px, 6vw, 54px); margin: 12px 0 6px; }
+.author .name b { color: var(--accent); font-weight: inherit; }
+.author p { margin: 0 auto; max-width: 560px; color: var(--muted); }
+.legal { margin-top: 26px; font-size: 14px; color: var(--muted); }
+.legal a { color: var(--text); }
+
+@media (max-width: 860px) {
+  .steps, .cards, .get { grid-template-columns: 1fr; }
+  .gallery { grid-template-columns: 1fr; }
+  .nav a.hide-sm { display: none; }
+  body { font-size: 16px; }
+}
+@media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } * { transition: none !important; } }
+
+/* language links */
+.lang { display: inline-flex; border: 1px solid var(--line); border-radius: 999px; padding: 3px; background: var(--panel); font-size: 13px; font-weight: 700; }
+.lang .cur, .lang a { padding: 4px 12px; border-radius: 999px; }
+.lang .cur { background: var(--accent); color: var(--accent-ink); }
+.lang a { color: var(--muted); }
+.lang a:hover { color: var(--text); }
+
+/* accessibility */
+.sr-only { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+.skip { position: absolute; left: 12px; top: -60px; background: var(--accent); color: var(--accent-ink); padding: 10px 16px; border-radius: 10px; font-weight: 700; z-index: 10; text-decoration: none; }
+.skip:focus { top: 12px; }
+
+/* lists */
+ul.cards, ol.steps, ul.facts, ul.chips, ul.symbols, ul.plain { list-style: none; }
+ol.steps, ul.cards { margin: 0; padding: 0; }
+.listh { font-size: 22px; margin: 46px 0 6px; }
+.featlists { display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; margin-top: 18px; }
+.fl { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 22px 24px; }
+.fl h4 { margin: 0 0 10px; font-size: 17px; color: var(--accent); }
+.fl ul { margin: 0; padding-left: 20px; color: var(--muted); font-size: 15.5px; }
+.fl li { margin: 7px 0; }
+
+.presetgroups { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+.pg { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 20px 22px; }
+.pg h3 { margin: 0 0 10px; font-size: 17px; color: var(--accent); }
+.pg ul { list-style: none; margin: 0; padding: 0; font-size: 15.5px; }
+.pg li { margin: 7px 0; color: var(--muted); }
+.pg li strong { color: var(--text); font-weight: 600; }
+.pg .tags { display: block; font-size: 13px; color: var(--muted); opacity: 0.85; }
+
+.symbols { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px 22px; margin: 18px 0 0; padding: 0; }
+.symbols li { display: flex; gap: 12px; align-items: baseline; padding: 8px 0; border-bottom: 1px solid var(--line); font-size: 15.5px; }
+.symbols code { min-width: 74px; color: var(--accent); font-weight: 700; }
+.symbols span { color: var(--muted); }
+.twocol { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
+.chips { display: flex; flex-wrap: wrap; gap: 8px; margin: 14px 0 0; padding: 0; }
+.chips li { background: var(--control); border: 1px solid var(--line); border-radius: 999px; padding: 5px 14px; font-size: 15px; }
+.plain { margin: 18px 0 0; padding-left: 22px; list-style: disc; color: var(--muted); }
+.plain li { margin: 8px 0; }
+
+.faq { display: grid; gap: 10px; margin-top: 18px; }
+.faq details { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 0 22px; }
+.faq summary { cursor: pointer; padding: 16px 0; font-weight: 700; font-size: 17px; list-style: none; display: flex; justify-content: space-between; gap: 16px; }
+.faq summary::-webkit-details-marker { display: none; }
+.faq summary::after { content: "+"; color: var(--accent); font-size: 22px; line-height: 1; }
+.faq details[open] summary::after { content: "–"; }
+.faq details p { margin: 0 0 18px; color: var(--muted); }
+
+@media (max-width: 860px) {
+  .featlists, .presetgroups, .symbols, .twocol { grid-template-columns: 1fr; }
+}
+.btn:focus-visible, a:focus-visible, summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+
+.presetgroups.two { grid-template-columns: repeat(2, 1fr); }
+@media (max-width: 860px) { .presetgroups.two { grid-template-columns: 1fr; } }
+
+</style>
+<script type="application/ld+json">
+{
+ "@context": "https://schema.org",
+ "@graph": [
+  {
+   "@type": "WebSite",
+   "@id": "https://miklosnemeth.github.io/mnArpee/#website",
+   "url": "https://miklosnemeth.github.io/mnArpee/",
+   "name": "mnArpee",
+   "inLanguage": [
+    "en",
+    "hu"
+   ],
+   "publisher": {
+    "@id": "https://miklosnemeth.github.io/mnArpee/#author"
+   }
+  },
+  {
+   "@type": "Person",
+   "@id": "https://miklosnemeth.github.io/mnArpee/#author",
+   "name": "Miklós Németh",
+   "alternateName": "Németh Miklós",
+   "url": "https://github.com/miklosnemeth",
+   "jobTitle": "Vibecoder"
+  },
+  {
+   "@type": "SoftwareApplication",
+   "@id": "https://miklosnemeth.github.io/mnArpee/#app",
+   "name": "mnArpee",
+   "url": "https://miklosnemeth.github.io/mnArpee/",
+   "description": "mnArpee is a free pattern arpeggiator plugin (VST3) for Windows: hold a chord and play the pattern you draw. Step matrix, ratchets, bass lines and 37 factory presets.",
+   "inLanguage": "en",
+   "applicationCategory": "MultimediaApplication",
+   "applicationSubCategory": "MIDI effect, VST3 audio plugin",
+   "operatingSystem": "Windows 10, Windows 11",
+   "softwareVersion": "1.0.0",
+   "downloadUrl": "https://github.com/miklosnemeth/mnArpee/releases/latest",
+   "installUrl": "https://github.com/miklosnemeth/mnArpee/releases/latest",
+   "fileFormat": "application/vnd.steinberg.vst3",
+   "softwareRequirements": "A DAW that hosts VST3 plugins",
+   "license": "https://www.gnu.org/licenses/agpl-3.0.html",
+   "isAccessibleForFree": true,
+   "offers": {
+    "@type": "Offer",
+    "price": "0",
+    "priceCurrency": "USD"
+   },
+   "author": {
+    "@id": "https://miklosnemeth.github.io/mnArpee/#author"
+   },
+   "image": "https://miklosnemeth.github.io/mnArpee/images/main.png",
+   "screenshot": [
+    "https://miklosnemeth.github.io/mnArpee/images/preset-browser.png",
+    "https://miklosnemeth.github.io/mnArpee/images/random-range.png",
+    "https://miklosnemeth.github.io/mnArpee/images/main.png"
+   ],
+   "featureList": [
+    "Up to 32 steps per pattern; step types Off, Normal, Rest, Tie (legato) and Random.",
+    "Per step: key (Root, Key 1 to 5), octave -3 to +3, velocity, ratchet 1 to 4 and a step gate of 10 to 400 %.",
+    "Pattern: rate 1/64 to 3/8, gate 1 to 125 %, swing -50 to +50 %, octave -2 to +2 and 0 to 32 steps.",
+    "Steps 0 is MIDI thru and 1 is quantized thru.",
+    "Held notes are sorted by pitch, one key per pitch class, up to five keys; the PATTERN strip shows which are used and which are left out.",
+    "A key that is not held plays the chord root, so every pattern fits every chord. The chord name (Cmaj7, Am, C/E, ...) is shown.",
+    "Steps lock to the song position of the host; free-run when the transport is stopped.",
+    "Latch, sustain pedal and panic. Other MIDI (CC, pitch bend, aftertouch) passes through.",
+    "Sample-accurate MIDI and an engine that never allocates on the audio thread.",
+    "37 read-only factory presets in two groups, Melodic and Bassline, with ten style tags.",
+    "A browser inside the plugin window with search, group and style filters and favourites.",
+    "Save as, Revert, Rename, Style, Import, Export, Show in folder and Delete; your own presets are files shared by every project.",
+    "A preset switches at the end of the running pattern. The host's 128 programs mirror the presets.",
+    "A project stores the active preset with its edits, so it sounds the same on another computer.",
+    "Undo and redo for every step edit; the plugin takes no keyboard shortcuts, so it never steals a key from the DAW.",
+    "Pattern tools: set all steps, generate keys (Up, Down, Up-Down, Down-Up, Converge, Random), shift, reverse, clear, copy and paste.",
+    "Random ranges for every lane and a random bass line, kept with the project.",
+    "A dark, flat window with the version under the title, zoom from 80 to 200 %.",
+    "Free and open source under the AGPL-3.0."
+   ]
+  },
+  {
+   "@type": "FAQPage",
+   "@id": "https://miklosnemeth.github.io/mnArpee/#faq",
+   "inLanguage": "en",
+   "mainEntity": [
+    {
+     "@type": "Question",
+     "name": "What is mnArpee?",
+     "acceptedAnswer": {
+      "@type": "Answer",
+      "text": "mnArpee is a free pattern arpeggiator plugin (VST3) for Windows. You hold a chord and it plays a pattern of single notes. There are no fixed arp modes: you draw the pattern step by step in a matrix, or start from a factory preset."
+     }
+    },
+    {
+     "@type": "Question",
+     "name": "Is mnArpee free?",
+     "acceptedAnswer": {
+      "@type": "Answer",
+      "text": "Yes. mnArpee is free software under the GNU Affero General Public License v3.0, and the source code is open on GitHub."
+     }
+    },
+    {
+     "@type": "Question",
+     "name": "Does mnArpee make sound by itself?",
+     "acceptedAnswer": {
+      "@type": "Answer",
+      "text": "No. It is a MIDI effect: it turns the notes you hold into a pattern, and the synth or sampler after it plays the sound. Put it on a track, before your synth."
+     }
+    },
+    {
+     "@type": "Question",
+     "name": "Which operating systems does it run on?",
+     "acceptedAnswer": {
+      "@type": "Answer",
+      "text": "There is an installer for Windows 10 and 11 (64-bit). macOS and Linux are not supported yet."
+     }
+    },
+    {
+     "@type": "Question",
+     "name": "Which DAWs can I use it in?",
+     "acceptedAnswer": {
+      "@type": "Answer",
+      "text": "mnArpee is a standard VST3 plugin, so a DAW that hosts VST3 plugins on Windows can load it. How MIDI is routed to the next plugin differs between DAWs; the user guide has the steps."
+     }
+    },
+    {
+     "@type": "Question",
+     "name": "What do Key 1 to Key 5 mean?",
+     "acceptedAnswer": {
+      "@type": "Answer",
+      "text": "They are the notes you hold, sorted by pitch, one per pitch class. A step says which key it plays, so the same pattern fits any chord. A key you do not hold plays the root of the chord instead."
+     }
+    },
+    {
+     "@type": "Question",
+     "name": "How do I make a bass line?",
+     "acceptedAnswer": {
+      "@type": "Answer",
+      "text": "Pick a Bassline preset, or put steps on the Root row. Root plays the root of the held chord. The dice at the Root row makes a random bass line with accents, ghost notes, rests, glides, octave jumps and ratchets."
+     }
+    },
+    {
+     "@type": "Question",
+     "name": "What is the difference between GATE and STEP GATE?",
+     "acceptedAnswer": {
+      "@type": "Answer",
+      "text": "GATE in the header is the note length of the whole pattern, as a percentage of a step. STEP GATE is a lane that scales it for single steps, from 10 to 400 %. The length of a note is GATE times STEP GATE."
+     }
+    },
+    {
+     "@type": "Question",
+     "name": "Where are my presets saved?",
+     "acceptedAnswer": {
+      "@type": "Answer",
+      "text": "Your presets are files in Documents\\MNAudio\\mnArpee\\User, shared by every project. A DAW project also stores the active preset, with its edits, so it sounds the same on another computer."
+     }
+    },
+    {
+     "@type": "Question",
+     "name": "Does it use keyboard shortcuts?",
+     "acceptedAnswer": {
+      "@type": "Answer",
+      "text": "No. The plugin takes no keys at all, so it can never collide with the shortcuts of your DAW."
+     }
+    },
+    {
+     "@type": "Question",
+     "name": "Who made mnArpee?",
+     "acceptedAnswer": {
+      "@type": "Answer",
+      "text": "mnArpee is made by Miklós Németh as a vibecoding project: the idea, the taste and the decisions are his, and the code is written together with an AI."
+     }
+    }
+   ]
+  }
+ ]
+}
+</script>
+</head>
+<body>
+<a class="skip" href="#main">Skip to the content</a>
+<div class="wrap">
+  <header class="top">
+    <a class="brand display" href="./" aria-label="mnArpee"><svg viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="7" fill="#13211a"/><rect x="6" y="7" width="5" height="18" rx="1.5" fill="#3ddc84"/><rect x="13.5" y="7" width="5" height="18" rx="1.5" fill="#fbfcfb"/><rect x="21" y="7" width="5" height="18" rx="1.5" fill="#3ddc84"/></svg>mnArpee</a>
+    <nav class="nav" aria-label="Main">
+      <a class="hide-sm" href="#features">Features</a>
+      <a class="hide-sm" href="#presets">Presets</a>
+      <a class="hide-sm" href="#pattern">Pattern</a>
+      <a class="hide-sm" href="#faq">FAQ</a>
+      <a class="hide-sm" href="#get">Get it</a>
+      <span class="lang" role="group" aria-label="Language / Nyelv"><span class="cur" aria-current="true">EN</span><a href="hu/" hreflang="hu" lang="hu" title="Magyar">HU</a></span>
+    </nav>
+  </header>
+  <main id="main">
+    <div class="hero">
+      <p class="eyebrow">Free pattern arpeggiator · VST3</p>
+      <h1 class="display">mn<span>Arpee</span><span class="sr-only"> – free pattern arpeggiator plugin for Windows (VST3)</span></h1>
+      <p class="tagline">Hold a chord. Play your pattern.</p>
+      <p class="lede">No fixed arp modes: you draw the whole pattern in a step matrix, and mnArpee plays it with the notes you hold. Bass lines, ratchets, random dice and 37 ready-made presets.</p>
+      <div class="cta">
+        <a class="btn primary" href="https://github.com/miklosnemeth/mnArpee/releases/latest"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12m0 0-5-5m5 5 5-5M4 20h16"/></svg>Download for Windows</a>
+        <a class="btn" href="mnArpee-User-Guide.pdf"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 3h8l4 4v14H6z"/><path d="M14 3v4h4M9 13h6M9 17h6"/></svg>User guide (PDF)</a>
+        <a class="btn" href="https://github.com/miklosnemeth/mnArpee"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 .5a11.5 11.5 0 0 0-3.64 22.41c.58.1.79-.25.79-.56v-2c-3.2.7-3.88-1.37-3.88-1.37-.52-1.33-1.28-1.69-1.28-1.69-1.04-.71.08-.7.08-.7 1.15.08 1.76 1.19 1.76 1.19 1.03 1.76 2.69 1.25 3.35.96.1-.75.4-1.25.73-1.54-2.55-.29-5.24-1.28-5.24-5.69 0-1.26.45-2.28 1.19-3.09-.12-.29-.52-1.46.11-3.05 0 0 .97-.31 3.17 1.18a11 11 0 0 1 5.78 0c2.2-1.49 3.17-1.18 3.17-1.18.63 1.59.23 2.76.11 3.05.74.81 1.19 1.83 1.19 3.09 0 4.42-2.69 5.39-5.25 5.68.41.36.78 1.06.78 2.14v3.17c0 .31.21.67.8.56A11.5 11.5 0 0 0 12 .5Z"/></svg>Source on GitHub</a>
+      </div>
+      <ul class="facts">
+        <li>v1.0.0</li>
+        <li>VST3 · Windows x64</li>
+        <li>Free and open source (AGPL-3.0)</li>
+      </ul>
+      <div class="shot"><img src="images/main.png" width="900" height="560" alt="The mnArpee window: the key matrix, the value lanes and the preset bar"></div>
+    </div>
+    <section aria-labelledby="how">
+      <h2 id="how" class="display">How it works</h2>
+      <p class="sub">mnArpee is a MIDI effect. It makes no sound itself: it sits in front of your synth.</p>
+      <ol class="steps">
+        <li class="step"><h3>Hold a chord</h3><p>Your MIDI keyboard sends the notes. They become Key 1 to Key 5, sorted by pitch.</p></li>
+        <li class="step"><h3>The pattern plays</h3><p>Every step of the pattern picks a key (or the chord root), with its own octave, velocity, gate and ratchet.</p></li>
+        <li class="step"><h3>Your synth plays it</h3><p>Put any synth after mnArpee. The steps lock to the song position of your DAW.</p></li>
+      </ol>
+    </section>
+    <section id="features" aria-labelledby="feat">
+      <h2 id="feat" class="display">Draw the pattern you hear</h2>
+      <p class="sub">Everything you need for arps and bass lines, and nothing that gets in the way.</p>
+      <ul class="cards">
+        <li class="card"><div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M8 5v14M13 5v14M18 5v14M3 12h18"/></svg></div><h3>A step matrix, not arp modes</h3><p>Click cells to put each step on Key 1 to 5, the chord root or a random key. Up to 32 steps.</p></li>
+        <li class="card"><div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16M4 12h10M4 17h6"/></svg></div><h3>Lanes for every step</h3><p>Type, octave, velocity, step gate and ratchet, one box per step. Drag, or use the mouse wheel.</p></li>
+        <li class="card"><div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 18c3 0 3-12 6-12s3 12 6 12 3-8 6-8"/></svg></div><h3>Bass lines</h3><p>The Root row plays the root of the held chord. One dice makes a random bass line with accents, ghost notes and glides.</p></li>
+        <li class="card"><div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="3"/><circle cx="9" cy="9" r="1.2"/><circle cx="15" cy="15" r="1.2"/><circle cx="12" cy="12" r="1.2"/></svg></div><h3>Dice with ranges</h3><p>Every lane has a dice. Right-click it to set the smallest and largest random value.</p></li>
+        <li class="card"><div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 17l-5.4 2.9 1-6.1L3.2 9.5l6.1-.9z"/></svg></div><h3>37 presets, and a real browser</h3><p>Melodic and Bassline presets in ten styles. Search, filters, favourites and your own presets.</p></li>
+        <li class="card"><div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 14 4 9l5-5M4 9h10a6 6 0 0 1 0 12h-3"/></svg></div><h3>Undo, tools, zoom</h3><p>Undo and redo, generate keys, shift, reverse, copy and paste a pattern, and a zoomable window.</p></li>
+      </ul>
+      <h3 class="listh">Everything in the box</h3>
+      <p class="sub">The full feature list of mnArpee 1.0.0.</p>
+      <div class="featlists">
+        <div class="fl"><h4>Pattern</h4><ul>
+          <li>Up to 32 steps per pattern; step types Off, Normal, Rest, Tie (legato) and Random.</li>
+          <li>Per step: key (Root, Key 1 to 5), octave -3 to +3, velocity, ratchet 1 to 4 and a step gate of 10 to 400 %.</li>
+          <li>Pattern: rate 1/64 to 3/8, gate 1 to 125 %, swing -50 to +50 %, octave -2 to +2 and 0 to 32 steps.</li>
+          <li>Steps 0 is MIDI thru and 1 is quantized thru.</li>
+        </ul></div>
+        <div class="fl"><h4>Playing</h4><ul>
+          <li>Held notes are sorted by pitch, one key per pitch class, up to five keys; the PATTERN strip shows which are used and which are left out.</li>
+          <li>A key that is not held plays the chord root, so every pattern fits every chord. The chord name (Cmaj7, Am, C/E, ...) is shown.</li>
+          <li>Steps lock to the song position of the host; free-run when the transport is stopped.</li>
+          <li>Latch, sustain pedal and panic. Other MIDI (CC, pitch bend, aftertouch) passes through.</li>
+          <li>Sample-accurate MIDI and an engine that never allocates on the audio thread.</li>
+        </ul></div>
+        <div class="fl"><h4>Presets</h4><ul>
+          <li>37 read-only factory presets in two groups, Melodic and Bassline, with ten style tags.</li>
+          <li>A browser inside the plugin window with search, group and style filters and favourites.</li>
+          <li>Save as, Revert, Rename, Style, Import, Export, Show in folder and Delete; your own presets are files shared by every project.</li>
+          <li>A preset switches at the end of the running pattern. The host&#x27;s 128 programs mirror the presets.</li>
+          <li>A project stores the active preset with its edits, so it sounds the same on another computer.</li>
+        </ul></div>
+        <div class="fl"><h4>Workflow</h4><ul>
+          <li>Undo and redo for every step edit; the plugin takes no keyboard shortcuts, so it never steals a key from the DAW.</li>
+          <li>Pattern tools: set all steps, generate keys (Up, Down, Up-Down, Down-Up, Converge, Random), shift, reverse, clear, copy and paste.</li>
+          <li>Random ranges for every lane and a random bass line, kept with the project.</li>
+          <li>A dark, flat window with the version under the title, zoom from 80 to 200 %.</li>
+          <li>Free and open source under the AGPL-3.0.</li>
+        </ul></div>
+      </div>
+    </section>
+    <section id="presets" aria-labelledby="pre">
+      <h2 id="pre" class="display">37 factory presets</h2>
+      <p class="sub">Ready to play, in two groups. All of them are read-only: edit one and use Save as to keep your version.</p>
+      <div class="presetgroups two">
+        <div class="pg"><h3>Melodic (the held keys)</h3><ul>
+          <li><strong>Trance Up 16</strong> <span class="tags">Trance</span></li>
+          <li><strong>Up-Down Pad</strong> <span class="tags">Ambient</span></li>
+          <li><strong>Shuffle 16</strong> <span class="tags">House</span></li>
+          <li><strong>Offbeat Stabs</strong> <span class="tags">House</span></li>
+          <li><strong>Random Sparkle</strong> <span class="tags">Ambient</span></li>
+          <li><strong>Tie Glide</strong> <span class="tags">Synthwave</span></li>
+          <li><strong>Up 8ths</strong> <span class="tags">Pop</span></li>
+          <li><strong>Down 16ths</strong> <span class="tags">Trance</span></li>
+          <li><strong>Up-Down 16</strong> <span class="tags">Pop</span></li>
+          <li><strong>Octave Climb</strong> <span class="tags">Trance</span></li>
+          <li><strong>Pluck Thirds</strong> <span class="tags">Pop</span></li>
+          <li><strong>Accent Climb</strong> <span class="tags">Techno</span></li>
+          <li><strong>Gated Trance</strong> <span class="tags">Trance</span></li>
+          <li><strong>Cascade</strong> <span class="tags">Synthwave</span></li>
+          <li><strong>Skipping Thirds</strong> <span class="tags">Disco</span></li>
+          <li><strong>Triplet Up</strong> <span class="tags">Chill</span></li>
+          <li><strong>Random 8ths</strong> <span class="tags">Ambient</span></li>
+          <li><strong>Swing Pluck</strong> <span class="tags">Funk</span></li>
+          <li><strong>Echo Stabs</strong> <span class="tags">House</span></li>
+          <li><strong>Wide Arp</strong> <span class="tags">Synthwave</span></li>
+          <li><strong>Slow Pad Arp</strong> <span class="tags">Ambient</span></li>
+          <li><strong>Tie Climb</strong> <span class="tags">Chill</span></li>
+        </ul></div>
+        <div class="pg"><h3>Bassline (only the root)</h3><ul>
+          <li><strong>Bass 8ths</strong> <span class="tags">Pop</span></li>
+          <li><strong>Bass 16ths</strong> <span class="tags">Techno</span></li>
+          <li><strong>Offbeat Bass</strong> <span class="tags">House, Trance</span></li>
+          <li><strong>Octave Bass</strong> <span class="tags">Disco</span></li>
+          <li><strong>Trance Bass</strong> <span class="tags">Trance</span></li>
+          <li><strong>Pumping Bass</strong> <span class="tags">House</span></li>
+          <li><strong>Rolling Bass</strong> <span class="tags">Techno</span></li>
+          <li><strong>Dotted Bass</strong> <span class="tags">Synthwave</span></li>
+          <li><strong>Long Sub</strong> <span class="tags">Ambient</span></li>
+          <li><strong>Glide Bass</strong> <span class="tags">Synthwave</span></li>
+          <li><strong>Galloping Bass</strong> <span class="tags">Techno</span></li>
+          <li><strong>Funk Bass</strong> <span class="tags">Funk</span></li>
+          <li><strong>Half-time Bass</strong> <span class="tags">Dubstep</span></li>
+          <li><strong>Swing Bass</strong> <span class="tags">Funk</span></li>
+          <li><strong>Ghost 16ths</strong> <span class="tags">House</span></li>
+        </ul></div>
+      </div>
+    </section>
+    <section id="pattern" aria-labelledby="pat">
+      <h2 id="pat" class="display">The keys and the lanes</h2>
+      <p class="sub">A step does not say &quot;C&quot;: it says &quot;Key 1&quot;, &quot;Key 2&quot;, and so on, and the keys are the notes you hold.</p>
+      <div class="twocol">
+        <div><h3 class="listh">Keys</h3><ul class="plain">
+          <li>Key 1 to Key 5 are the held notes, lowest first, one per pitch class.</li>
+          <li>Root plays the root of the held chord (triads, sus, sevenths, power chords, inversions).</li>
+          <li>Random picks one of the keys.</li>
+          <li>A key you do not hold plays the root instead.</li>
+        </ul></div>
+        <div><h3 class="listh">Header values</h3><ul class="plain">
+          <li>RATE 1/64 – 3/8</li>
+          <li>OCT -2 – +2</li>
+          <li>GATE 1 – 125 %</li>
+          <li>SWING -50 – +50 %</li>
+          <li>STEPS 0 – 32</li>
+        </ul><p class="sub">RATE, OCT, GATE, SWING and STEPS belong to the active preset.</p></div>
+      </div>
+      <h3 class="listh">Lanes</h3>
+      <ul class="symbols">
+        <li><code>TYPE</code> <span>Normal note, Off, Rest, Tie (legato) or a random key.</span></li>
+        <li><code>OCTAVE</code> <span>-3 to +3 octaves for the step.</span></li>
+        <li><code>VELOCITY</code> <span>1 to 127.</span></li>
+        <li><code>STEP GATE</code> <span>The note length of the step: 10 to 400 % of the pattern&#x27;s GATE, in steps of 5 %.</span></li>
+        <li><code>RATCHET</code> <span>1 to 4: the step plays its note that many times.</span></li>
+      </ul>
+      <h3 class="listh">Styles</h3><p class="sub">Every preset carries style tags that the browser can filter by.</p><ul class="chips">
+        <li>Trance</li>
+        <li>House</li>
+        <li>Techno</li>
+        <li>Disco</li>
+        <li>Funk</li>
+        <li>Pop</li>
+        <li>Synthwave</li>
+        <li>Ambient</li>
+        <li>Chill</li>
+        <li>Dubstep</li>
+      </ul>
+    </section>
+    <section id="screens" aria-labelledby="scr">
+      <h2 id="scr" class="display">A look inside</h2>
+      <p class="sub">A dark, flat window: the matrix for the keys, and the lanes under it.</p>
+      <div class="gallery">
+        <figure><img src="images/preset-browser.png" loading="lazy" width="900" height="560" alt="The preset browser with group and style columns"><figcaption>The preset browser: group, style, search, favourites</figcaption></figure>
+        <figure><img src="images/random-range.png" loading="lazy" width="900" height="560" alt="The random options of a lane with MIN and MAX"><figcaption>Right-click a dice: the range of the random values</figcaption></figure>
+      </div>
+    </section>
+    <section id="requirements" aria-labelledby="req">
+      <h2 id="req" class="display">System requirements</h2>
+      <ul class="plain">
+        <li>Windows 10 or 11, 64-bit (installer for the VST3).</li>
+        <li>A DAW or host that loads VST3 plugins.</li>
+        <li>A MIDI keyboard or controller (or the DAW&#x27;s piano roll) to hold the chords.</li>
+        <li>A synth or sampler after mnArpee, because mnArpee itself makes no sound.</li>
+        <li>macOS and Linux are not supported yet.</li>
+      </ul>
+    </section>
+    <section id="faq" aria-labelledby="faqh">
+      <h2 id="faqh" class="display">Frequently asked questions</h2>
+      <div class="faq">
+        <details><summary>What is mnArpee?</summary><p>mnArpee is a free pattern arpeggiator plugin (VST3) for Windows. You hold a chord and it plays a pattern of single notes. There are no fixed arp modes: you draw the pattern step by step in a matrix, or start from a factory preset.</p></details>
+        <details><summary>Is mnArpee free?</summary><p>Yes. mnArpee is free software under the GNU Affero General Public License v3.0, and the source code is open on GitHub.</p></details>
+        <details><summary>Does mnArpee make sound by itself?</summary><p>No. It is a MIDI effect: it turns the notes you hold into a pattern, and the synth or sampler after it plays the sound. Put it on a track, before your synth.</p></details>
+        <details><summary>Which operating systems does it run on?</summary><p>There is an installer for Windows 10 and 11 (64-bit). macOS and Linux are not supported yet.</p></details>
+        <details><summary>Which DAWs can I use it in?</summary><p>mnArpee is a standard VST3 plugin, so a DAW that hosts VST3 plugins on Windows can load it. How MIDI is routed to the next plugin differs between DAWs; the user guide has the steps.</p></details>
+        <details><summary>What do Key 1 to Key 5 mean?</summary><p>They are the notes you hold, sorted by pitch, one per pitch class. A step says which key it plays, so the same pattern fits any chord. A key you do not hold plays the root of the chord instead.</p></details>
+        <details><summary>How do I make a bass line?</summary><p>Pick a Bassline preset, or put steps on the Root row. Root plays the root of the held chord. The dice at the Root row makes a random bass line with accents, ghost notes, rests, glides, octave jumps and ratchets.</p></details>
+        <details><summary>What is the difference between GATE and STEP GATE?</summary><p>GATE in the header is the note length of the whole pattern, as a percentage of a step. STEP GATE is a lane that scales it for single steps, from 10 to 400 %. The length of a note is GATE times STEP GATE.</p></details>
+        <details><summary>Where are my presets saved?</summary><p>Your presets are files in <code>Documents\MNAudio\mnArpee\User</code>, shared by every project. A DAW project also stores the active preset, with its edits, so it sounds the same on another computer.</p></details>
+        <details><summary>Does it use keyboard shortcuts?</summary><p>No. The plugin takes no keys at all, so it can never collide with the shortcuts of your DAW.</p></details>
+        <details><summary>Who made mnArpee?</summary><p>mnArpee is made by Miklós Németh as a vibecoding project: the idea, the taste and the decisions are his, and the code is written together with an AI.</p></details>
+      </div>
+    </section>
+    <section id="get" aria-labelledby="getit">
+      <h2 id="getit" class="display">Get mnArpee</h2>
+      <p class="sub">Free, with the source code open. The Windows installer is the quick way in.</p>
+      <div class="get">
+        <div class="box"><h3>Windows (64-bit)</h3><ol>
+          <li>Download <strong>mnArpee-1.0.0-win-x64-setup.exe</strong> from the latest release.</li>
+          <li>Run it. The VST3 goes to <code>Common Files\VST3\MNAudio</code>.</li>
+          <li>Rescan plugins in your DAW and put mnArpee on a track, before your synth.</li>
+        </ol><a class="btn primary" href="https://github.com/miklosnemeth/mnArpee/releases/latest">Latest release</a></div>
+        <div class="box"><h3>Docs and source</h3><ul>
+          <li><a href="https://github.com/miklosnemeth/mnArpee/blob/main/docs/USER_GUIDE.md">User guide (English)</a></li>
+          <li><a href="mnArpee-User-Guide.pdf">User guide, PDF (English)</a></li>
+          <li><a href="https://github.com/miklosnemeth/mnArpee/blob/main/docs/USER_GUIDE.hu.md">User guide (Hungarian)</a></li>
+          <li><a href="mnArpee-Felhasznaloi-utmutato.pdf">User guide, PDF (Hungarian)</a></li>
+          <li><a href="https://github.com/miklosnemeth/mnArpee">Source code and build instructions</a></li>
+          <li><a href="https://github.com/miklosnemeth/mnArpee/issues">Report a bug or ask for a feature</a></li>
+          <li><a href="https://github.com/miklosnemeth/mnArpee/blob/main/LICENSE">License (AGPL-3.0)</a></li>
+        </ul><p>macOS and Linux are not supported yet.</p></div>
+      </div>
+    </section>
+  </main>
+</div>
+<footer class="author">
+  <div class="wrap">
+    <div class="tag"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m8 8-5 4 5 4M16 8l5 4-5 4M14 5l-4 14"/></svg>Vibecoded by</div>
+    <p class="name display">Miklós <b>Németh</b></p>
+    <p>mnArpee is a vibecoding project: the idea, the taste and the decisions are mine, the code is written together with an AI.</p>
+    <p class="legal">© 2026 Miklós Németh · <a href="https://github.com/miklosnemeth/mnArpee/blob/main/LICENSE">AGPL-3.0</a> · Built with <a href="https://juce.com">JUCE</a>. Fonts: Montserrat (OFL) and Roboto Condensed (Apache 2.0).</p>
+  </div>
+</footer>
+</body>
+</html>
