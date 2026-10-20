@@ -3,6 +3,8 @@
 Pattern arpeggiator based on the BlueArp manual (VST3 + Standalone), JUCE 9 + C++23.
 Held notes are sorted by pitch before they reach the engine.
 
+![The mnArpee window with the Down 16ths preset](ui-shot.png)
+
 ## Features (MVP)
 
 - No arp modes: the step matrix draws the whole pattern. Rows, bottom to top: Random, Root, Key 1 .. Key 5
