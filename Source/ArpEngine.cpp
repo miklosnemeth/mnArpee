@@ -492,15 +492,16 @@ void ArpEngine::playOneStep(const Program& prog, const InputNotes& input, double
         }
         else
         {
-            // Gate, lengthened by directly following Rest steps (up to the pattern end) and
-            // held over into a following Tie step.
+            // Gate, lengthened by directly following Rest steps and held over into a following
+            // Tie step. This continues over the pattern end into its start, as long as the
+            // pattern repeats (no program change is pending).
             const double gateQ = stepQ * gateFraction;
+            const int limit = pendingProgram >= 0 ? numSteps - 1 - stepIndex : numSteps - 1;
             int restSteps = 0;
-            int k = stepIndex + 1;
-            for (; k < numSteps && prog.steps[(size_t) k].type == StepType::Rest; ++k)
+            while (restSteps < limit && prog.steps[(size_t) ((stepIndex + 1 + restSteps) % numSteps)].type == StepType::Rest)
                 ++restSteps;
             double offAt = t + std::max(gateQ, oneSample) + restSteps * stepQ;
-            if (k < numSteps && prog.steps[(size_t) k].type == StepType::Tie)
+            if (restSteps < limit && prog.steps[(size_t) ((stepIndex + 1 + restSteps) % numSteps)].type == StepType::Tie)
                 offAt = std::max(offAt, stepTime(prog, gridIndex + 1 + restSteps, stepQ) + oneSample);
             scheduleOff(note, offAt);
         }
