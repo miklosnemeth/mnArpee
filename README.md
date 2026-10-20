@@ -116,6 +116,8 @@ replaces on the last page, asks before it installs an older version over a newer
 asks a DAW that has the plugin loaded to close, runs the old uninstaller silently before it installs, and removes
 the old `Program Files\MNAudio\mnArpee` folder and the old `VST3\mnArpee.vst3` of earlier installers.
 
+The part of the installer script that is the same as in mnKord (the folders, closing the DAW, the version of the installed plugin and the removal of the old one) is `installer/MnAudioInstaller.iss`, the same file in both repositories: change it in one, copy it to the other. There is no folder page: the plugin and the documents always go to the folders above.
+
 Presets are not part of the installer: the plugin writes its factory presets to
 `Documents\MNAudio\mnArpee` the first time it runs, and the uninstaller leaves your own presets alone.
 
