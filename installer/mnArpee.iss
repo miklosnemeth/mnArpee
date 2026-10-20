@@ -39,3 +39,10 @@ Source: "..\LICENSE"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\README.md"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\Resources\Fonts\Montserrat-OFL.txt"; DestDir: "{app}\Licenses"; Flags: ignoreversion
 Source: "..\Resources\Fonts\RobotoCondensed-LICENSE.txt"; DestDir: "{app}\Licenses"; Flags: ignoreversion
+; The user guide (English and Hungarian), with Start menu shortcuts.
+Source: "..\docs\mnArpee-User-Guide.pdf"; DestDir: "{app}\Docs"; Flags: ignoreversion
+Source: "..\docs\mnArpee-Felhasznaloi-utmutato.pdf"; DestDir: "{app}\Docs"; Flags: ignoreversion
+
+[Icons]
+Name: "{autoprograms}\MNAudio\mnArpee user guide"; Filename: "{app}\Docs\mnArpee-User-Guide.pdf"
+Name: "{autoprograms}\MNAudio\mnArpee felhasznaloi utmutato"; Filename: "{app}\Docs\mnArpee-Felhasznaloi-utmutato.pdf"

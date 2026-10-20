@@ -19,7 +19,7 @@ presetet, és átalakítod.
 `C:\Program Files\Common Files\VST3\MNAudio\` mappába kerül (ez a szabványos VST3-mappa saját almappája, amit a DAW-ok
 átvizsgálnak). Ha nem jelenik meg, indíts új pluginkeresést a DAW-ban. A Standalone program nincs a telepítőben.
 
-A licenc és a readme a `C:\Program Files\MNAudio\mnArpee` mappába kerül. Új verziót a régi fölé is telepíthetsz: a
+A licenc, a readme és ez az útmutató (PDF, Start menü-parancsikonokkal) a `C:\Program Files\MNAudio\mnArpee` mappába kerül. Új verziót a régi fölé is telepíthetsz: a
 Setup kiírja, melyik verziót találta ("Upgrade: v1.0.0 -> v1.1.0"), régebbire visszalépés előtt rákérdez, és kéri, hogy
 zárd be a DAW-ot, ha az mnArpee be van töltve.
 
