@@ -444,18 +444,18 @@ int main()
         check(noteOnSequence(runFor(*e, 0.1)).front() == 72, "root-step-plays-root");
     }
 
-    // 28. The same note in another octave counts as one key (the lowest one stays).
+    // 28. The same note in another octave is a key of its own.
     {
         auto e = std::make_unique<ArpEngine>();
         auto b = singleProgramBank(4, SyncRate::R1_8, 50);
         for (int i = 0; i < 4; ++i)
             b->programs[0].steps[(size_t) i].keyIndex = (std::int8_t) i;
         e->setBank(*b);
-        for (int n : { 48, 60, 64, 67 }) // C3 C4 E4 G4: three keys
+        for (int n : { 48, 60, 64, 67 }) // C3 C4 E4 G4: four keys
             e->noteOn(n, 100);
         const auto seq = noteOnSequence(runFor(*e, 1.1));
-        check(seq.size() >= 4 && seq[0] == 48 && seq[1] == 64 && seq[2] == 67 && seq[3] == 48,
-              "octave-doubles-are-one-key");
+        check(seq.size() >= 5 && seq[0] == 48 && seq[1] == 60 && seq[2] == 64 && seq[3] == 67 && seq[4] == 48,
+              "octave-doubles-are-keys-of-their-own");
     }
 
     // 29. More than five different notes: the keys are the lowest five, the rest is left out.
@@ -483,9 +483,9 @@ int main()
         for (int n : { 48, 60, 64, 67, 71, 74, 77 }) // C3 C4 E4 G4 B4 D5 F5
             all.notes[(size_t) all.size++] = HeldNote{ n, 100 };
         reduceToKeys(all, keys);
-        check(keys.size == 5 && keys.notes[0].note == 48 && keys.notes[4].note == 74
-                  && keyUseOf(keys, 60) == KeyUse::Merged && keyUseOf(keys, 64) == KeyUse::Used
-                  && keyUseOf(keys, 77) == KeyUse::LeftOut,
+        check(keys.size == 5 && keys.notes[0].note == 48 && keys.notes[4].note == 71
+                  && keyUseOf(keys, 60) == KeyUse::Used && keyUseOf(keys, 71) == KeyUse::Used
+                  && keyUseOf(keys, 74) == KeyUse::LeftOut && keyUseOf(keys, 77) == KeyUse::LeftOut,
               "key-use-classification");
     }
 

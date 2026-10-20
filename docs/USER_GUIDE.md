@@ -59,9 +59,9 @@ mnArpee does not know your notes in advance, so a step does not say "C". It says
 so on, and the keys are the notes you hold:
 
 - The held notes are sorted by pitch. **Key 1** is the lowest note, **Key 2** the next one, up to **Key 5**.
-- One key per pitch class: the same note in another octave counts as one, and the lowest stays.
-- More than five different notes: the lowest five are the keys, and the rest is left out. The PATTERN strip shows the
-  held notes: **white** is a key, **dim** is merged into a key of another octave, **red** is left out ("+N left out").
+- Every held note is a key, the same note in another octave too (C3 and C4 are two keys).
+- More than five notes: the lowest five are the keys, and the rest is left out. The PATTERN strip shows the
+  held notes: **white** is a key, **red** is left out ("+N left out").
 - **Root** plays the root of the held chord. It understands triads, sus, seventh chords, power chords and inversions.
   If it finds no chord, the lowest note is the root.
 - **Random** picks one of the keys at random.

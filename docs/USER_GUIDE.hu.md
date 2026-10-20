@@ -60,9 +60,9 @@ key" és így tovább. A key-ek a lenyomott hangok:
 
 - A lenyomott hangok magasság szerint rendezettek. A **Key 1** a legalsó hang, a **Key 2** a következő, egészen a
   **Key 5**-ig.
-- Hangnevenként egy key van: ugyanaz a hang más oktávban egynek számít, és a legalsó marad.
-- Ha öt különböző hangnál többet tartasz, a legalsó öt a key, a többi kimarad. A PATTERN sáv mutatja a lenyomott
-  hangokat: a **fehér** egy key, a **halvány** egy másik oktávú key-be olvadt, a **piros** kimaradt ("+N left out").
+- Minden lenyomott hang key, ugyanaz a hang más oktávban is (a C3 és a C4 két key).
+- Ha öt hangnál többet tartasz, a legalsó öt a key, a többi kimarad. A PATTERN sáv mutatja a lenyomott
+  hangokat: a **fehér** egy key, a **piros** kimaradt ("+N left out").
 - A **Root** a lenyomott akkord alaphangját játssza. Érti a hármashangzatokat, a sus akkordokat, a szeptimeket, a power
   chordot és a fordításokat is. Ha nem talál akkordot, a legalsó hang a root.
 - A **Random** véletlenszerűen választ a key-ek közül.

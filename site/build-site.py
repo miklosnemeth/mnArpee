@@ -141,7 +141,7 @@ T = {
                 "Steps 0 is MIDI thru and 1 is quantized thru.",
             ]),
             ("Playing", [
-                "Held notes are sorted by pitch, one key per pitch class, up to five keys; the PATTERN strip shows which are used and which are left out.",
+                "Held notes are sorted by pitch, every note a key (octave doubles too), up to five keys; the PATTERN strip shows which are used and which are left out.",
                 "A key that is not held plays the chord root, so every pattern fits every chord. The chord name (Cmaj7, Am, C/E, ...) is shown.",
                 "Steps lock to the song position of the host; free-run when the transport is stopped.",
                 "Latch, sustain pedal and panic. Other MIDI (CC, pitch bend, aftertouch) passes through.",
@@ -168,7 +168,7 @@ T = {
         "pat_sub": "A step does not say \"C\": it says \"Key 1\", \"Key 2\", and so on, and the keys are the notes you hold.",
         "keys_h": "Keys",
         "keys_list": [
-            "Key 1 to Key 5 are the held notes, lowest first, one per pitch class.",
+            "Key 1 to Key 5 are the held notes, lowest first, up to five.",
             "Root plays the root of the held chord (triads, sus, sevenths, power chords, inversions).",
             "Random picks one of the keys.",
             "A key you do not hold plays the root instead.",
@@ -262,7 +262,7 @@ T = {
                 "A 0 lépés MIDI thru, az 1 kvantált thru.",
             ]),
             ("Játék", [
-                "A lenyomott hangok magasság szerint rendezettek, hangnevenként egy key, legfeljebb öt; a PATTERN sáv mutatja, melyik van használatban és melyik maradt ki.",
+                "A lenyomott hangok magasság szerint rendezettek, minden hang egy key (az oktávduplák is), legfeljebb öt; a PATTERN sáv mutatja, melyik van használatban és melyik maradt ki.",
                 "Az a key, amelyet nem tartasz, az akkord rootját játssza, így minden minta minden akkordhoz illik. Az akkord neve (Cmaj7, Am, C/E, ...) látszik.",
                 "A lépések a hoszt dalpozíciójához igazodnak; álló transzportnál szabadon futnak.",
                 "Latch, szusztain pedál és panic. A többi MIDI (CC, pitch bend, aftertouch) átmegy.",
@@ -289,7 +289,7 @@ T = {
         "pat_sub": "Egy lépés nem azt mondja, hogy \"C\", hanem hogy \"Key 1\", \"Key 2\" és így tovább, a key-ek pedig a lenyomott hangok.",
         "keys_h": "Key-ek",
         "keys_list": [
-            "A Key 1 – Key 5 a lenyomott hangok, alulról felfelé, hangnevenként egy.",
+            "A Key 1 – Key 5 a lenyomott hangok, alulról felfelé, legfeljebb öt.",
             "A Root a lenyomott akkord alaphangját játssza (hármashangzatok, sus, szeptimek, power chord, fordítások).",
             "A Random véletlenszerűen választ a key-ek közül.",
             "Az a key, amelyet nem tartasz, a rootot játssza helyette.",
@@ -358,7 +358,7 @@ FAQ = {
          "mnArpee is a standard VST3 plugin, so a DAW that hosts VST3 plugins on Windows can load it. "
          "How MIDI is routed to the next plugin differs between DAWs; the user guide has the steps."),
         ("What do Key 1 to Key 5 mean?",
-         "They are the notes you hold, sorted by pitch, one per pitch class. A step says which key it plays, so the same pattern fits any "
+         "They are the notes you hold, sorted by pitch, up to five. A step says which key it plays, so the same pattern fits any "
          "chord. A key you do not hold plays the root of the chord instead."),
         ("How do I make a bass line?",
          "Pick a Bassline preset, or put steps on the Root row. Root plays the root of the held chord. The dice at the Root row makes a "
@@ -389,7 +389,7 @@ FAQ = {
          "Az mnArpee szabványos VST3 plugin, ezért minden DAW betöltheti, amelyik Windowson VST3 pluginokat hosztol. "
          "Hogy a MIDI hogyan jut a következő pluginhoz, DAW-onként más; a lépések az útmutatóban vannak."),
         ("Mit jelent a Key 1 – Key 5?",
-         "A lenyomott hangok magasság szerint rendezve, hangnevenként egy. A lépés megmondja, melyik key-t játssza, így ugyanaz a minta "
+         "A lenyomott hangok magasság szerint rendezve, legfeljebb öt. A lépés megmondja, melyik key-t játssza, így ugyanaz a minta "
          "bármilyen akkordhoz illik. Az a key, amelyet nem tartasz, az akkord rootját játssza helyette."),
         ("Hogyan csinálok basszusmenetet?",
          "Válassz egy Bassline presetet, vagy tegyél lépéseket a Root sorra. A Root a lenyomott akkord alaphangját játssza. A Root sor kockája "

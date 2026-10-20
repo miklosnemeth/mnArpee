@@ -75,11 +75,9 @@ struct InputNotes
     }
 };
 
-// The keys the matrix can reach (Key 1..5, Random): every pitch class once, as its lowest held
-// note, at most maxInputKeys of them. What does not make it is
-//  - Merged:   the same note in another octave as a key (C3 + C4: C4 is merged into C3),
-//  - LeftOut:  a note of a further pitch class when five keys are taken already.
-enum class KeyUse : int { Used = 0, Merged = 1, LeftOut = 2 };
+// The keys the matrix can reach (Key 1..5, Random): the lowest maxInputKeys held notes (the same
+// note in several octaves counts as separate keys). LeftOut is a held note above those.
+enum class KeyUse : int { Used = 0, LeftOut = 1 };
 void reduceToKeys(const InputNotes& all, InputNotes& keys) noexcept;
 KeyUse keyUseOf(const InputNotes& keys, int note) noexcept;
 

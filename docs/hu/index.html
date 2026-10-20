@@ -264,7 +264,7 @@ ol.steps, ul.cards { margin: 0; padding: 0; }
     "Lépésenként: key (Root, Key 1–5), oktáv -3 és +3 között, velocity, ratchet 1–4 és 10–400 % step gate.",
     "Mintánként: rate 1/64 – 3/8, gate 1–125 %, swing -50 – +50 %, oktáv -2 – +2 és 0–32 lépés.",
     "A 0 lépés MIDI thru, az 1 kvantált thru.",
-    "A lenyomott hangok magasság szerint rendezettek, hangnevenként egy key, legfeljebb öt; a PATTERN sáv mutatja, melyik van használatban és melyik maradt ki.",
+    "A lenyomott hangok magasság szerint rendezettek, minden hang egy key (az oktávduplák is), legfeljebb öt; a PATTERN sáv mutatja, melyik van használatban és melyik maradt ki.",
     "Az a key, amelyet nem tartasz, az akkord rootját játssza, így minden minta minden akkordhoz illik. Az akkord neve (Cmaj7, Am, C/E, ...) látszik.",
     "A lépések a hoszt dalpozíciójához igazodnak; álló transzportnál szabadon futnak.",
     "Latch, szusztain pedál és panic. A többi MIDI (CC, pitch bend, aftertouch) átmegy.",
@@ -331,7 +331,7 @@ ol.steps, ul.cards { margin: 0; padding: 0; }
      "name": "Mit jelent a Key 1 – Key 5?",
      "acceptedAnswer": {
       "@type": "Answer",
-      "text": "A lenyomott hangok magasság szerint rendezve, hangnevenként egy. A lépés megmondja, melyik key-t játssza, így ugyanaz a minta bármilyen akkordhoz illik. Az a key, amelyet nem tartasz, az akkord rootját játssza helyette."
+      "text": "A lenyomott hangok magasság szerint rendezve, legfeljebb öt. A lépés megmondja, melyik key-t játssza, így ugyanaz a minta bármilyen akkordhoz illik. Az a key, amelyet nem tartasz, az akkord rootját játssza helyette."
      }
     },
     {
@@ -442,7 +442,7 @@ ol.steps, ul.cards { margin: 0; padding: 0; }
           <li>A 0 lépés MIDI thru, az 1 kvantált thru.</li>
         </ul></div>
         <div class="fl"><h4>Játék</h4><ul>
-          <li>A lenyomott hangok magasság szerint rendezettek, hangnevenként egy key, legfeljebb öt; a PATTERN sáv mutatja, melyik van használatban és melyik maradt ki.</li>
+          <li>A lenyomott hangok magasság szerint rendezettek, minden hang egy key (az oktávduplák is), legfeljebb öt; a PATTERN sáv mutatja, melyik van használatban és melyik maradt ki.</li>
           <li>Az a key, amelyet nem tartasz, az akkord rootját játssza, így minden minta minden akkordhoz illik. Az akkord neve (Cmaj7, Am, C/E, ...) látszik.</li>
           <li>A lépések a hoszt dalpozíciójához igazodnak; álló transzportnál szabadon futnak.</li>
           <li>Latch, szusztain pedál és panic. A többi MIDI (CC, pitch bend, aftertouch) átmegy.</li>
@@ -516,7 +516,7 @@ ol.steps, ul.cards { margin: 0; padding: 0; }
       <p class="sub">Egy lépés nem azt mondja, hogy &quot;C&quot;, hanem hogy &quot;Key 1&quot;, &quot;Key 2&quot; és így tovább, a key-ek pedig a lenyomott hangok.</p>
       <div class="twocol">
         <div><h3 class="listh">Key-ek</h3><ul class="plain">
-          <li>A Key 1 – Key 5 a lenyomott hangok, alulról felfelé, hangnevenként egy.</li>
+          <li>A Key 1 – Key 5 a lenyomott hangok, alulról felfelé, legfeljebb öt.</li>
           <li>A Root a lenyomott akkord alaphangját játssza (hármashangzatok, sus, szeptimek, power chord, fordítások).</li>
           <li>A Random véletlenszerűen választ a key-ek közül.</li>
           <li>Az a key, amelyet nem tartasz, a rootot játssza helyette.</li>
@@ -576,7 +576,7 @@ ol.steps, ul.cards { margin: 0; padding: 0; }
         <details><summary>Ad hangot az mnArpee magától?</summary><p>Nem. MIDI-effekt: a lenyomott hangokból mintát csinál, a hangot a mögötte lévő szintetizátor vagy sampler adja. Tedd egy sávra, a szintetizátor elé.</p></details>
         <details><summary>Milyen operációs rendszereken fut?</summary><p>Windows 10-re és 11-re (64 bites) van telepítő. macOS-t és Linuxot egyelőre nem támogat.</p></details>
         <details><summary>Melyik DAW-ban használhatom?</summary><p>Az mnArpee szabványos VST3 plugin, ezért minden DAW betöltheti, amelyik Windowson VST3 pluginokat hosztol. Hogy a MIDI hogyan jut a következő pluginhoz, DAW-onként más; a lépések az útmutatóban vannak.</p></details>
-        <details><summary>Mit jelent a Key 1 – Key 5?</summary><p>A lenyomott hangok magasság szerint rendezve, hangnevenként egy. A lépés megmondja, melyik key-t játssza, így ugyanaz a minta bármilyen akkordhoz illik. Az a key, amelyet nem tartasz, az akkord rootját játssza helyette.</p></details>
+        <details><summary>Mit jelent a Key 1 – Key 5?</summary><p>A lenyomott hangok magasság szerint rendezve, legfeljebb öt. A lépés megmondja, melyik key-t játssza, így ugyanaz a minta bármilyen akkordhoz illik. Az a key, amelyet nem tartasz, az akkord rootját játssza helyette.</p></details>
         <details><summary>Hogyan csinálok basszusmenetet?</summary><p>Válassz egy Bassline presetet, vagy tegyél lépéseket a Root sorra. A Root a lenyomott akkord alaphangját játssza. A Root sor kockája véletlen basszusmenetet csinál hangsúlyokkal, szellemhangokkal, szünetekkel, csúsztatásokkal, oktávugrásokkal és ratchetekkel.</p></details>
         <details><summary>Mi a különbség a GATE és a STEP GATE között?</summary><p>A fejléc GATE értéke az egész minta hanghossza a lépés százalékában. A STEP GATE egy sáv, amely ezt skálázza az egyes lépésekre, 10 és 400 % között. A hang hossza a GATE és a STEP GATE szorzata.</p></details>
         <details><summary>Hol vannak a presetjeim?</summary><p>A saját presetjeid fájlok a <code>Documents\MNAudio\mnArpee\User</code> mappában, minden projekt közösen használja őket. A DAW-projekt az aktív presetet a szerkesztéseivel együtt is tárolja, ezért egy másik gépen is ugyanúgy szól.</p></details>

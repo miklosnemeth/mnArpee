@@ -507,7 +507,7 @@ int main()
         check(cc && off && run(*p, 20).empty(), "cc-thru-and-all-notes-off");
     }
 
-    // The editor's note display: which held notes are keys, merged octave doubles, or left out.
+    // The editor's note display: which held notes are keys or left out.
     {
         auto p = makeProcessor();
         juce::MidiBuffer chord;
@@ -519,8 +519,8 @@ int main()
         for (int i = 0; i < ui.numInput.load(); ++i)
             uses.push_back(ui.input[(size_t) i].load() & 3);
         check(ui.numInput.load() == 7 && (ui.input[0].load() >> 2) == 48
-                  && uses == std::vector<int> { 0, 1, 0, 0, 0, 0, 2 },
-              "ui-shows-merged-and-left-out-notes");
+                  && uses == std::vector<int> { 0, 0, 0, 0, 0, 1, 1 },
+              "ui-shows-keys-and-left-out-notes");
     }
 
     // Editor: opens, follows a state load without dangling data.
