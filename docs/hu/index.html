@@ -20,7 +20,7 @@
 <meta property="og:locale:alternate" content="en_US">
 <meta property="og:image" content="https://miklosnemeth.github.io/mnArpee/images/main.png">
 <meta property="og:image:width" content="900">
-<meta property="og:image:height" content="560">
+<meta property="og:image:height" content="590">
 <meta property="og:image:alt" content="Az mnArpee ablaka a key-mátrixszal és az értéksávokkal">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:title" content="mnArpee – ingyenes pattern-arpeggiátor plugin (VST3) Windowsra">
@@ -261,13 +261,13 @@ ol.steps, ul.cards { margin: 0; padding: 0; }
    ],
    "featureList": [
     "Mintánként legfeljebb 32 lépés; lépéstípusok: Off, Normal, Rest, Tie (legato) és Random.",
-    "Lépésenként: key (Root, Key 1–5), oktáv -3 és +3 között, velocity, ratchet 1–4 és 10–400 % step gate.",
+    "Lépésenként: key (Root, Key 1–5), oktáv -3 és +3 között, velocity, ratchet 1–4, 10–400 % step gate és 5–100 % esély.",
     "Mintánként: rate 1/64 – 3/8, gate 1–125 %, swing -50 – +50 %, oktáv -2 – +2 és 0–32 lépés.",
     "A 0 lépés MIDI thru, az 1 kvantált thru.",
     "A lenyomott hangok magasság szerint rendezettek, minden hang egy key (az oktávduplák is), legfeljebb öt; a PATTERN sáv mutatja, melyik van használatban és melyik maradt ki.",
     "Az a key, amelyet nem tartasz, az akkord rootját játssza, így minden minta minden akkordhoz illik. Az akkord neve (Cmaj7, Am, C/E, ...) látszik.",
     "A lépések a hoszt dalpozíciójához igazodnak; álló transzportnál szabadon futnak.",
-    "Latch, szusztain pedál és panic. A többi MIDI (CC, pitch bend, aftertouch) átmegy.",
+    "Latch, Group (az azonos hang több oktávban egy key) és Cut (a hangok az utolsó billentyűvel megállnak), mind hoszt-paraméter; szusztain pedál és panic. A többi MIDI (CC, pitch bend, aftertouch) átmegy.",
     "Mintapontos MIDI és olyan motor, amely az audioszálon soha nem foglal memóriát.",
     "37 csak olvasható gyári preset két csoportban, Melodic és Bassline, tíz stílus-címkével.",
     "Böngésző a plugin ablakán belül, kereséssel, csoport- és stílusszűrővel és kedvencekkel.",
@@ -410,7 +410,7 @@ ol.steps, ul.cards { margin: 0; padding: 0; }
         <li>VST3 · Windows x64</li>
         <li>Ingyenes és nyílt forráskódú (AGPL-3.0)</li>
       </ul>
-      <div class="shot"><img src="../images/main.png" width="900" height="560" alt="Az mnArpee ablaka: a key-mátrix, az értéksávok és a preset-sáv"></div>
+      <div class="shot"><img src="../images/main.png" width="900" height="590" alt="Az mnArpee ablaka: a key-mátrix, az értéksávok és a preset-sáv"></div>
     </div>
     <section aria-labelledby="how">
       <h2 id="how" class="display">Hogyan működik</h2>
@@ -426,7 +426,7 @@ ol.steps, ul.cards { margin: 0; padding: 0; }
       <p class="sub">Minden, ami az arpokhoz és a basszusmenetekhez kell, és semmi, ami útban van.</p>
       <ul class="cards">
         <li class="card"><div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M8 5v14M13 5v14M18 5v14M3 12h18"/></svg></div><h3>Lépésmátrix arp-módok helyett</h3><p>Kattints a cellákra: minden lépés a Key 1–5, az akkord rootja vagy egy véletlen key lehet. Legfeljebb 32 lépés.</p></li>
-        <li class="card"><div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16M4 12h10M4 17h6"/></svg></div><h3>Sávok minden lépéshez</h3><p>Type, octave, velocity, step gate és ratchet, lépésenként egy mező. Húzd, vagy használd az egérgörgőt.</p></li>
+        <li class="card"><div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16M4 12h10M4 17h6"/></svg></div><h3>Sávok minden lépéshez</h3><p>Type, octave, velocity, step gate, ratchet és chance, lépésenként egy mező. Húzd, vagy használd az egérgörgőt.</p></li>
         <li class="card"><div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 18c3 0 3-12 6-12s3 12 6 12 3-8 6-8"/></svg></div><h3>Basszusmenetek</h3><p>A Root sor a lenyomott akkord rootját játssza. Egy kocka véletlen basszusmenetet csinál hangsúlyokkal, szellemhangokkal és csúsztatásokkal.</p></li>
         <li class="card"><div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="3"/><circle cx="9" cy="9" r="1.2"/><circle cx="15" cy="15" r="1.2"/><circle cx="12" cy="12" r="1.2"/></svg></div><h3>Kockák tartománnyal</h3><p>Minden sávnak van kockája. Jobb kattintásra megadhatod a legkisebb és a legnagyobb véletlen értéket.</p></li>
         <li class="card"><div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 17l-5.4 2.9 1-6.1L3.2 9.5l6.1-.9z"/></svg></div><h3>37 preset és igazi böngésző</h3><p>Melodic és Bassline presetek tíz stílusban. Keresés, szűrők, kedvencek és saját presetek.</p></li>
@@ -437,7 +437,7 @@ ol.steps, ul.cards { margin: 0; padding: 0; }
       <div class="featlists">
         <div class="fl"><h4>Minta</h4><ul>
           <li>Mintánként legfeljebb 32 lépés; lépéstípusok: Off, Normal, Rest, Tie (legato) és Random.</li>
-          <li>Lépésenként: key (Root, Key 1–5), oktáv -3 és +3 között, velocity, ratchet 1–4 és 10–400 % step gate.</li>
+          <li>Lépésenként: key (Root, Key 1–5), oktáv -3 és +3 között, velocity, ratchet 1–4, 10–400 % step gate és 5–100 % esély.</li>
           <li>Mintánként: rate 1/64 – 3/8, gate 1–125 %, swing -50 – +50 %, oktáv -2 – +2 és 0–32 lépés.</li>
           <li>A 0 lépés MIDI thru, az 1 kvantált thru.</li>
         </ul></div>
@@ -445,7 +445,7 @@ ol.steps, ul.cards { margin: 0; padding: 0; }
           <li>A lenyomott hangok magasság szerint rendezettek, minden hang egy key (az oktávduplák is), legfeljebb öt; a PATTERN sáv mutatja, melyik van használatban és melyik maradt ki.</li>
           <li>Az a key, amelyet nem tartasz, az akkord rootját játssza, így minden minta minden akkordhoz illik. Az akkord neve (Cmaj7, Am, C/E, ...) látszik.</li>
           <li>A lépések a hoszt dalpozíciójához igazodnak; álló transzportnál szabadon futnak.</li>
-          <li>Latch, szusztain pedál és panic. A többi MIDI (CC, pitch bend, aftertouch) átmegy.</li>
+          <li>Latch, Group (az azonos hang több oktávban egy key) és Cut (a hangok az utolsó billentyűvel megállnak), mind hoszt-paraméter; szusztain pedál és panic. A többi MIDI (CC, pitch bend, aftertouch) átmegy.</li>
           <li>Mintapontos MIDI és olyan motor, amely az audioszálon soha nem foglal memóriát.</li>
         </ul></div>
         <div class="fl"><h4>Presetek</h4><ul>
@@ -536,6 +536,7 @@ ol.steps, ul.cards { margin: 0; padding: 0; }
         <li><code>VELOCITY</code> <span>1 és 127 között.</span></li>
         <li><code>STEP GATE</code> <span>A lépés hanghossza: a minta GATE-jének 10 és 400 %-a, 5 %-os lépésekben.</span></li>
         <li><code>RATCHET</code> <span>1 és 4 között: a lépés annyiszor játssza a hangját.</span></li>
+        <li><code>CHANCE</code> <span>5 és 100 % között: az esély, hogy a lépés egyáltalán megszólal.</span></li>
       </ul>
       <h3 class="listh">Stílusok</h3><p class="sub">Minden presetnek vannak stílus-címkéi, amelyek szerint a böngésző szűrni tud.</p><ul class="chips">
         <li>Trance</li>
@@ -554,8 +555,8 @@ ol.steps, ul.cards { margin: 0; padding: 0; }
       <h2 id="scr" class="display">Egy pillantás belülről</h2>
       <p class="sub">Sötét, letisztult ablak: a mátrix a key-ekhez, alatta a sávok.</p>
       <div class="gallery">
-        <figure><img src="../images/preset-browser.png" loading="lazy" width="900" height="560" alt="A preset-böngésző csoport és stílus oszlopokkal"><figcaption>A preset-böngésző: csoport, stílus, keresés, kedvencek</figcaption></figure>
-        <figure><img src="../images/random-range.png" loading="lazy" width="900" height="560" alt="Egy sáv véletlen beállításai MIN és MAX értékkel"><figcaption>Jobb kattintás egy kockán: a véletlen értékek tartománya</figcaption></figure>
+        <figure><img src="../images/preset-browser.png" loading="lazy" width="900" height="590" alt="A preset-böngésző csoport és stílus oszlopokkal"><figcaption>A preset-böngésző: csoport, stílus, keresés, kedvencek</figcaption></figure>
+        <figure><img src="../images/random-range.png" loading="lazy" width="900" height="590" alt="Egy sáv véletlen beállításai MIN és MAX értékkel"><figcaption>Jobb kattintás egy kockán: a véletlen értékek tartománya</figcaption></figure>
       </div>
     </section>
     <section id="requirements" aria-labelledby="req">

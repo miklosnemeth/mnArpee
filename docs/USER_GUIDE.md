@@ -44,12 +44,12 @@ transport is stopped, mnArpee runs on its own tempo clock, and a new chord start
 From the top:
 
 - **Header.** The logo with the version, the preset picker (the arrows, the preset name, **New**, **Save**, **Menu**), the
-  undo and redo buttons, and **Latch**.
-- **Values.** RATE, OCT, GATE, SWING and STEPS of the pattern. Drag a value up or down, or use the mouse wheel.
+  undo and redo buttons.
+- **Values.** RATE, OCT, GATE, SWING and STEPS of the pattern, and at the right end the chips **Latch**, **Group** and **Cut**. Drag a value up or down, or use the mouse wheel.
   Sideways movement does nothing, so the value never jumps when you move the mouse.
 - **PATTERN.** The notes you hold, and the chord they make (Cmaj7, Am, C/E, G5, ...).
 - **The key matrix.** Each column is a step; the rows say which note the step plays.
-- **The lanes.** Under the matrix: TYPE, OCTAVE, VELOCITY, STEP GATE and RATCHET, with one box per step.
+- **The lanes.** Under the matrix: TYPE, OCTAVE, VELOCITY, STEP GATE, RATCHET and CHANCE, with one box per step.
 
 The plugin has **no keyboard shortcuts**. It never takes a key away from your DAW.
 
@@ -59,9 +59,9 @@ mnArpee does not know your notes in advance, so a step does not say "C". It says
 so on, and the keys are the notes you hold:
 
 - The held notes are sorted by pitch. **Key 1** is the lowest note, **Key 2** the next one, up to **Key 5**.
-- Every held note is a key, the same note in another octave too (C3 and C4 are two keys).
+- Every held note is a key, the same note in another octave too (C3 and C4 are two keys). Turn **Group** on to make the same note in several octaves one key (the lowest one), so a wide chord does not use up the five keys.
 - More than five notes: the lowest five are the keys, and the rest is left out. The PATTERN strip shows the
-  held notes: **white** is a key, **red** is left out ("+N left out").
+  held notes: **white** is a key, **dim** is grouped into the key of its pitch class (Group on), **red** is left out ("+N left out").
 - **Root** plays the root of the held chord. It understands triads, sus, seventh chords, power chords and inversions.
   If it finds no chord, the lowest note is the root.
 - **Random** picks one of the keys at random.
@@ -79,6 +79,7 @@ Click a cell in the matrix to put the step on that row. Click the same cell agai
 | **VELOCITY** | 1 to 127. |
 | **STEP GATE** | The length of the step's note: 10 to 400 % of the pattern's GATE, in steps of 5 %. 100 = unchanged. |
 | **RATCHET** | 1 to 4. The step plays its note that many times, evenly spread over the step. |
+| **CHANCE** | 5 to 100 %, in steps of 5 %. The chance that the step plays at all: 100 always plays, 50 plays about every second time. |
 
 Drag a box up or down, or use the mouse wheel. The **dice** in front of a lane fills the whole lane with random values.
 
@@ -118,8 +119,14 @@ With less than 16 steps the columns past the end are dimmed and cannot be used.
 
 These values always belong to the active preset. Change one and the preset shows the unsaved dot.
 
-**Latch** keeps the arpeggio going after you let the keys go. A new chord replaces the latched one. The **sustain
-pedal** works as well, and **panic** (all notes off) from the host stops everything at once.
+Three chips sit at the right end of the values card (hover over one for a hint; all three are host parameters):
+
+- **Latch** keeps the arpeggio going after you let the keys go. A new chord replaces the latched one.
+- **Group** makes the same note in several octaves one key (the lowest).
+- **Cut** stops the sounding notes at once when you release the last key. Without it, the notes sound until the end of their gate
+  or the next step.
+
+The **sustain pedal** works as well, and **panic** (all notes off) from the host stops everything at once.
 
 ## Pattern tools
 
@@ -184,6 +191,7 @@ presets. Unused slots show "-".
 - Start from a factory preset and change two or three steps instead of drawing from nothing.
 - Put a random range on VELOCITY (for example 80 to 127) and press the dice: a quick way to a human feel.
 - A pattern with five keys sounds good on a 3-note chord too, because the missing keys play the root.
+- Put a CHANCE of 50 to 75 % on a few steps (and press the dice of the lane) so that the pattern is a little different every round.
 - Use RATCHET 2 or 3 on single steps for rolls, and a STEP GATE of 200 % or more for notes that hold over the next step.
 
 ## Troubleshooting

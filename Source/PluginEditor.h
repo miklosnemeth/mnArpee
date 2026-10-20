@@ -30,6 +30,9 @@ public:
     juce::Font getPopupMenuFont() override;
     juce::Font getTextButtonFont(juce::TextButton&, int buttonHeight) override;
     juce::Font getSliderPopupFont(juce::Slider&) override;
+    juce::Rectangle<int> getTooltipBounds(const juce::String& tipText, juce::Point<int> screenPos,
+                                          juce::Rectangle<int> parentArea) override;
+    void drawTooltip(juce::Graphics&, const juce::String& text, int width, int height) override;
 };
 
 using HistoryButton = mnaudio::ui::HistoryButton;
@@ -135,7 +138,8 @@ private:
     juce::TextButton presetButton, newButton, saveButton, menuButton;
     HistoryButton undoButton { false }, redoButton { true };
     ValueBar rateSlider, octaveSlider, gateSlider, swingSlider, stepsSlider;
-    juce::ToggleButton latchButton;
+    juce::TooltipWindow tooltipWindow { this, 500 };
+    juce::ToggleButton latchButton, groupButton, cutButton; // chips at the right end of the values card
     juce::Rectangle<int> brandArea, versionArea, statusArea;
 
     // Matrix, with the value lanes below it (a lane caption chooses what the rows edit).
@@ -143,7 +147,7 @@ private:
 
     // Attachments (declared after the controls, so they are destroyed first)
     std::unique_ptr<SliderAttachment> rateAtt, octaveAtt, gateAtt, swingAtt, stepsAtt;
-    std::unique_ptr<ButtonAttachment> latchAtt;
+    std::unique_ptr<ButtonAttachment> latchAtt, groupAtt, cutAtt;
 
     // The held notes in the pattern card: each as note * 4 + KeyUse (see ArpEngine.h).
     std::vector<int> heldShown;

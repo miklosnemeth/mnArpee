@@ -17,17 +17,31 @@ constexpr double gridEpsilon = 1.0e-9;
 constexpr double jumpToleranceQuarters = 0.01;
 }
 
-void reduceToKeys(const InputNotes& all, InputNotes& keys) noexcept
+void reduceToKeys(const InputNotes& all, InputNotes& keys, bool groupOctaves) noexcept
 {
-    // Every held note is a key (the same note in several octaves too), lowest first.
+    // Every held note is a key, lowest first (the same note in several octaves too), or with
+    // groupOctaves one key per pitch class, as its lowest held note.
     keys.size = 0;
+    unsigned taken = 0;
     for (int i = 0; i < all.size && keys.size < maxInputKeys; ++i)
+    {
+        const unsigned bit = 1u << (all.notes[(size_t) i].note % 12);
+        if (groupOctaves && (taken & bit) != 0)
+            continue;
+        taken |= bit;
         keys.notes[(size_t) keys.size++] = all.notes[(size_t) i];
+    }
 }
 
-KeyUse keyUseOf(const InputNotes& keys, int note) noexcept
+KeyUse keyUseOf(const InputNotes& keys, int note, bool groupOctaves) noexcept
 {
-    return keys.contains(note) ? KeyUse::Used : KeyUse::LeftOut;
+    if (keys.contains(note))
+        return KeyUse::Used;
+    if (groupOctaves)
+        for (int i = 0; i < keys.size; ++i)
+            if (keys.notes[(size_t) i].note % 12 == note % 12)
+                return KeyUse::Merged; // grouped into the key of its pitch class
+    return KeyUse::LeftOut;
 }
 
 namespace
@@ -423,7 +437,7 @@ void ArpEngine::playOneStep(const Program& prog, const InputNotes& input, double
         // Rest is silent here: the preceding note was lengthened when it was scheduled.
         // KEY SELECT: k1..k5 index into the keys (the held notes, sorted, at most five);
         // Root is the root of the held chord, and it also stands in for a key that is not held.
-        reduceToKeys(input, scratchKeys);
+        reduceToKeys(input, scratchKeys, groupOctaves);
         const auto& keys = scratchKeys;
         int source = 0;
         if (step.type == StepType::Random)
@@ -545,6 +559,12 @@ void ArpEngine::render(int numSamples, const HostPosition& host, EventBuffer& ou
         resync(blockStartPpq, host.isPlaying);
 
     collectInput(scratchInput);
+    if (cutOnRelease && hadInput && scratchInput.empty())
+    {
+        // The last key was let go: the sounding notes stop here, not at the end of their gate.
+        killAll(0);
+        lastPlayedStep = -1;
+    }
     if (! host.isPlaying && ! hadInput && ! scratchInput.empty())
     {
         // Free-run: the first key of a new phrase starts the pattern right away.

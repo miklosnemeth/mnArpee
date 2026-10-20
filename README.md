@@ -14,7 +14,7 @@ Held notes are sorted by pitch before they reach the engine.
 
 - No arp modes: the step matrix draws the whole pattern. Rows, bottom to top: Random, Root, Key 1 .. Key 5
   - Key 1..5 pick from the held notes, sorted by pitch; every held note is a key, the same note in another octave too; more than five notes: the lowest five are the keys and the rest is left out. A key that is not held (a pattern with more keys than notes) plays the chord root instead, same as the Root row. Random picks among the keys.
-  - The held notes are shown next to "PATTERN": white = a key, red = left out (with a "+N left out" note)
+  - The held notes are shown next to "PATTERN": white = a key, dim = grouped into the key of its pitch class (Group on), red = left out (with a "+N left out" note)
   - Root plays the root of the held chord (triads, sus, 7th chords, power chords, inversions too), else the lowest note
 - up to 32 steps per pattern, step types: Off / Normal / Rest / Tie / Random (every step plays one note)
   - Rest lengthens the previous note by a step (also over the pattern end into its start), Tie plays legato (new note starts before the old one ends; a note tied to itself keeps sounding)
@@ -30,9 +30,9 @@ Held notes are sorted by pitch before they reach the engine.
 - Undo / redo of the step edits (the two buttons in the header). The plugin has no keyboard shortcuts, so it never takes a key from the DAW
 - Zoom of the whole editor (Menu > Zoom, 80..200%, kept with the project)
 - The chord the held notes form (Cmaj7, Am, C/E, G5, ...) is shown at the right end of the "PATTERN" strip
-- Latch (a new chord replaces the latched one), sustain pedal, panic / all-notes-off, CC/bend/aftertouch pass-through, output on the input channel
+- Three chips at the right end of the values card: **Latch** (a new chord replaces the latched one), **Group** (the same note in several octaves is one key, the lowest; off: every held note is a key) and **Cut** (the sounding notes stop at once when the last key is released, not at the end of their gate); they are host parameters. Sustain pedal, panic / all-notes-off, CC/bend/aftertouch pass-through, output on the input channel
 - Sample-accurate MIDI handling; the engine is allocation-free on the audio thread and edits reach it without locks
-- Matrix UI: the matrix is for the keys (Random, Root, Key 1..5): clicking a cell sets the step, the dice in the corner above the row labels fills the keys randomly, and the dice at the Root row makes a random bass line (Root steps only, with accents, ghost notes, rests, glides, octave jumps and ratchets; also in the right-click menu). Under it are the other values as lanes: TYPE, OCTAVE, VELOCITY, GATE (the length of the note as a percentage of the preset's gate: 10..400% in steps of 5%) and RATCHET (1..4: the step plays its note that many times, evenly spread over the step); drag a box up and down or use the mouse wheel, and the dice in front of a lane fills it randomly (right click on a dice: the range of the random values, Randomize, Reset range, Reset lane; the ranges are kept with the project)
+- Matrix UI: the matrix is for the keys (Random, Root, Key 1..5): clicking a cell sets the step, the dice in the corner above the row labels fills the keys randomly, and the dice at the Root row makes a random bass line (Root steps only, with accents, ghost notes, rests, glides, octave jumps and ratchets; also in the right-click menu). Under it are the other values as lanes: TYPE, OCTAVE, VELOCITY, GATE (the length of the note as a percentage of the preset's gate: 10..400% in steps of 5%) and RATCHET (1..4: the step plays its note that many times, evenly spread over the step) and CHANCE (5..100% in steps of 5%: the chance that the step plays); drag a box up and down or use the mouse wheel, and the dice in front of a lane fills it randomly (right click on a dice: the range of the random values, Randomize, Reset range, Reset lane; the ranges are kept with the project)
 
 ## Look shared with mnKord
 

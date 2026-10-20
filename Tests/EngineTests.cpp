@@ -798,6 +798,73 @@ int main()
         check(defaultsInside, "default-random-ranges-are-inside-the-full-ranges");
     }
 
+    // 40. Group octaves: one key per pitch class (the lowest), or a key for every held note.
+    {
+        InputNotes all, keys;
+        all.size = 0;
+        for (int n : { 48, 60, 64, 67, 71, 74, 77 }) // C3 C4 E4 G4 B4 D5 F5
+            all.notes[(size_t) all.size++] = HeldNote{ n, 100 };
+        reduceToKeys(all, keys, true);
+        check(keys.size == 5 && keys.notes[0].note == 48 && keys.notes[1].note == 64 && keys.notes[4].note == 74
+                  && keyUseOf(keys, 60, true) == KeyUse::Merged && keyUseOf(keys, 77, true) == KeyUse::LeftOut
+                  && keyUseOf(keys, 64, true) == KeyUse::Used,
+              "group-octaves-key-use");
+
+        auto e = std::make_unique<ArpEngine>();
+        e->setGroupOctaves(true);
+        auto b = singleProgramBank(4, SyncRate::R1_8, 50);
+        for (int i = 0; i < 4; ++i)
+            b->programs[0].steps[(size_t) i].keyIndex = (std::int8_t) i;
+        e->setBank(*b);
+        for (int n : { 48, 60, 64, 67 }) // C3 C4 E4 G4: with grouping three keys, Key 4 plays the root
+            e->noteOn(n, 100);
+        const auto seq = noteOnSequence(runFor(*e, 0.9));
+        check(seq.size() >= 4 && seq[0] == 48 && seq[1] == 64 && seq[2] == 67 && seq[3] == 48, "group-octaves-merges-the-doubles");
+    }
+
+    // 41. Cut on release: the sounding notes stop with the last key, not at the end of their gate.
+    for (const bool cut : { false, true })
+    {
+        auto e = std::make_unique<ArpEngine>();
+        e->setCutOnRelease(cut);
+        auto b = singleProgramBank(4, SyncRate::R1_8, 125);
+        b->programs[0].steps[0].gateScalePercent = 400; // a note that would sound for a long time
+        e->setBank(*b);
+        e->noteOn(60, 100);
+        Runner r;
+        r.run(*e, 0.1);
+        e->noteOff(60);
+        const auto tail = r.run(*e, 0.05);
+        int offs = 0;
+        for (const auto& ev : tail)
+            offs += ev.ev.isNoteOn ? 0 : 1;
+        check(cut ? offs == 1 : offs == 0, cut ? "cut-on-release-stops-the-note" : "release-without-cut-lets-the-note-ring");
+    }
+
+    // 42. Chance: a step that fails its roll is silent; the lane has 5 % steps.
+    {
+        auto e = std::make_unique<ArpEngine>();
+        auto b = singleProgramBank(4, SyncRate::R1_8, 50);
+        b->programs[0].steps[1].chance = 50;
+        e->setBank(*b);
+        e->setRandomFn([](int, int hi) { return hi; }); // the roll is 100: a step with a lower chance does not play
+        e->noteOn(60, 100);
+        check(noteOnSequence(runFor(*e, 0.9)).size() == 3, "step-chance-skips-a-failed-roll");
+
+        auto p = makeInitProgram("Chances");
+        setLaneValue(p, PatternLane::Chance, 50);
+        std::mt19937 rng(5);
+        auto q = p;
+        randomizeLane(q, PatternLane::Chance, rng, { 10, 20 });
+        bool ok = true;
+        for (int i = 0; i < 16; ++i)
+            ok = ok && q.steps[(size_t) i].chance >= 50 && q.steps[(size_t) i].chance <= 100 && q.steps[(size_t) i].chance % 5 == 0;
+        resetLane(q, PatternLane::Chance);
+        check(p.steps[31].chance == 50 && ok && q.steps[3].chance == 100 && nearestChanceStep(100) == numChanceSteps
+                  && nearestChanceStep(0) == 1 && nearestChanceStep(47) == 9,
+              "chance-lane-tools");
+    }
+
     std::printf("%d checks, %d failures\n", checks, failures);
     return failures == 0 ? 0 : 1;
 }

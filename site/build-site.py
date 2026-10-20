@@ -80,12 +80,14 @@ LANES = {
            ("OCTAVE", "-3 to +3 octaves for the step."),
            ("VELOCITY", "1 to 127."),
            ("STEP GATE", "The note length of the step: 10 to 400 % of the pattern's GATE, in steps of 5 %."),
-           ("RATCHET", "1 to 4: the step plays its note that many times.")],
+           ("RATCHET", "1 to 4: the step plays its note that many times."),
+           ("CHANCE", "5 to 100 %: the chance that the step plays at all.")],
     "hu": [("TYPE", "Normál hang, Off, Rest, Tie (legato) vagy véletlen key."),
            ("OCTAVE", "-3 és +3 oktáv között a lépésre."),
            ("VELOCITY", "1 és 127 között."),
            ("STEP GATE", "A lépés hanghossza: a minta GATE-jének 10 és 400 %-a, 5 %-os lépésekben."),
-           ("RATCHET", "1 és 4 között: a lépés annyiszor játssza a hangját.")],
+           ("RATCHET", "1 és 4 között: a lépés annyiszor játssza a hangját."),
+           ("CHANCE", "5 és 100 % között: az esély, hogy a lépés egyáltalán megszólal.")],
 }
 
 VALUES = ["RATE 1/64 – 3/8", "OCT -2 – +2", "GATE 1 – 125 %", "SWING -50 – +50 %", "STEPS 0 – 32"]
@@ -125,7 +127,7 @@ T = {
         "feat_sub": "Everything you need for arps and bass lines, and nothing that gets in the way.",
         "cards": [
             ("A step matrix, not arp modes", "Click cells to put each step on Key 1 to 5, the chord root or a random key. Up to 32 steps."),
-            ("Lanes for every step", "Type, octave, velocity, step gate and ratchet, one box per step. Drag, or use the mouse wheel."),
+            ("Lanes for every step", "Type, octave, velocity, step gate, ratchet and chance, one box per step. Drag, or use the mouse wheel."),
             ("Bass lines", "The Root row plays the root of the held chord. One dice makes a random bass line with accents, ghost notes and glides."),
             ("Dice with ranges", "Every lane has a dice. Right-click it to set the smallest and largest random value."),
             ("{presets} presets, and a real browser", "Melodic and Bassline presets in ten styles. Search, filters, favourites and your own presets."),
@@ -136,7 +138,7 @@ T = {
         "feature_groups": [
             ("Pattern", [
                 "Up to 32 steps per pattern; step types Off, Normal, Rest, Tie (legato) and Random.",
-                "Per step: key (Root, Key 1 to 5), octave -3 to +3, velocity, ratchet 1 to 4 and a step gate of 10 to 400 %.",
+                "Per step: key (Root, Key 1 to 5), octave -3 to +3, velocity, ratchet 1 to 4, a step gate of 10 to 400 % and a chance of 5 to 100 %.",
                 "Pattern: rate 1/64 to 3/8, gate 1 to 125 %, swing -50 to +50 %, octave -2 to +2 and 0 to 32 steps.",
                 "Steps 0 is MIDI thru and 1 is quantized thru.",
             ]),
@@ -144,7 +146,7 @@ T = {
                 "Held notes are sorted by pitch, every note a key (octave doubles too), up to five keys; the PATTERN strip shows which are used and which are left out.",
                 "A key that is not held plays the chord root, so every pattern fits every chord. The chord name (Cmaj7, Am, C/E, ...) is shown.",
                 "Steps lock to the song position of the host; free-run when the transport is stopped.",
-                "Latch, sustain pedal and panic. Other MIDI (CC, pitch bend, aftertouch) passes through.",
+                "Latch, Group (the same note in several octaves is one key) and Cut (the notes stop with the last key), all host parameters; sustain pedal and panic. Other MIDI (CC, pitch bend, aftertouch) passes through.",
                 "Sample-accurate MIDI and an engine that never allocates on the audio thread.",
             ]),
             ("Presets", [
@@ -246,7 +248,7 @@ T = {
         "feat_sub": "Minden, ami az arpokhoz és a basszusmenetekhez kell, és semmi, ami útban van.",
         "cards": [
             ("Lépésmátrix arp-módok helyett", "Kattints a cellákra: minden lépés a Key 1–5, az akkord rootja vagy egy véletlen key lehet. Legfeljebb 32 lépés."),
-            ("Sávok minden lépéshez", "Type, octave, velocity, step gate és ratchet, lépésenként egy mező. Húzd, vagy használd az egérgörgőt."),
+            ("Sávok minden lépéshez", "Type, octave, velocity, step gate, ratchet és chance, lépésenként egy mező. Húzd, vagy használd az egérgörgőt."),
             ("Basszusmenetek", "A Root sor a lenyomott akkord rootját játssza. Egy kocka véletlen basszusmenetet csinál hangsúlyokkal, szellemhangokkal és csúsztatásokkal."),
             ("Kockák tartománnyal", "Minden sávnak van kockája. Jobb kattintásra megadhatod a legkisebb és a legnagyobb véletlen értéket."),
             ("{presets} preset és igazi böngésző", "Melodic és Bassline presetek tíz stílusban. Keresés, szűrők, kedvencek és saját presetek."),
@@ -257,7 +259,7 @@ T = {
         "feature_groups": [
             ("Minta", [
                 "Mintánként legfeljebb 32 lépés; lépéstípusok: Off, Normal, Rest, Tie (legato) és Random.",
-                "Lépésenként: key (Root, Key 1–5), oktáv -3 és +3 között, velocity, ratchet 1–4 és 10–400 % step gate.",
+                "Lépésenként: key (Root, Key 1–5), oktáv -3 és +3 között, velocity, ratchet 1–4, 10–400 % step gate és 5–100 % esély.",
                 "Mintánként: rate 1/64 – 3/8, gate 1–125 %, swing -50 – +50 %, oktáv -2 – +2 és 0–32 lépés.",
                 "A 0 lépés MIDI thru, az 1 kvantált thru.",
             ]),
@@ -265,7 +267,7 @@ T = {
                 "A lenyomott hangok magasság szerint rendezettek, minden hang egy key (az oktávduplák is), legfeljebb öt; a PATTERN sáv mutatja, melyik van használatban és melyik maradt ki.",
                 "Az a key, amelyet nem tartasz, az akkord rootját játssza, így minden minta minden akkordhoz illik. Az akkord neve (Cmaj7, Am, C/E, ...) látszik.",
                 "A lépések a hoszt dalpozíciójához igazodnak; álló transzportnál szabadon futnak.",
-                "Latch, szusztain pedál és panic. A többi MIDI (CC, pitch bend, aftertouch) átmegy.",
+                "Latch, Group (az azonos hang több oktávban egy key) és Cut (a hangok az utolsó billentyűvel megállnak), mind hoszt-paraméter; szusztain pedál és panic. A többi MIDI (CC, pitch bend, aftertouch) átmegy.",
                 "Mintapontos MIDI és olyan motor, amely az audioszálon soha nem foglal memóriát.",
             ]),
             ("Presetek", [

@@ -149,8 +149,9 @@ constexpr StepType stepTypeFromInt(int v) noexcept
 static_assert(std::is_trivially_copyable_v<Bank>, "Bank must be copyable without allocation");
 
 // Pattern editing (the numeric lane values are Key: -1 root / 0..4 key 1..5 / -2 random step,
-// Type: StepType, Octave: -3..3, Velocity: 1..127, Ratchet: 1..4, Gate: 10..800 % of the preset gate; the editor offers 10..400 in steps of 5).
-enum class PatternLane { Key, Type, Octave, Velocity, Ratchet, Gate };
+// Type: StepType, Octave: -3..3, Velocity: 1..127, Ratchet: 1..4, Gate: 10..800 % of the preset gate; the editor offers 10..400 in steps of 5,
+// Chance: 1..100 % that the step plays; the editor offers 5..100 in steps of 5).
+enum class PatternLane { Key, Type, Octave, Velocity, Ratchet, Gate, Chance };
 // Sets one lane of every stored step (not just the playing ones) to a value.
 void setLaneValue(Program& p, PatternLane lane, int value);
 // Rotates the playing steps by one: direction < 0 moves them left, > 0 right.
@@ -187,6 +188,12 @@ inline constexpr int numGateSteps = 79;
 constexpr int gateStepPercent(int index) noexcept { return 10 + 5 * index; }
 // The gate step nearest to a percentage.
 int nearestGateStep(int percent) noexcept;
+
+// The chance of a step moves in steps of 5 % in the editor: 5, 10, ... 100 (index 1..20).
+inline constexpr int numChanceSteps = 20;
+constexpr int chanceStepPercent(int index) noexcept { return 5 * index; }
+// The chance step nearest to a percentage (1..20).
+int nearestChanceStep(int percent) noexcept;
 
 Program makeInitProgram(std::string_view name = "Init");
 Bank makeFactoryBank();

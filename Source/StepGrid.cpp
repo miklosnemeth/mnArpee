@@ -10,15 +10,15 @@ constexpr int gutterTop = 20; // column labels (1,5,9,...)
 constexpr int cellGap = 3;
 constexpr int laneRowH = 25;  // value lane row height
 constexpr int laneGap = 8;    // between the matrix and the value lanes
-constexpr int numLaneRows = 5;
+constexpr int numLaneRows = 6;
 constexpr int minVisibleSteps = 16; // columns always shown
 constexpr int dragPixelsPerUnit = 8; // type, octave and ratchet; velocity: 1 px per unit, gate: 3 px (5 % per unit)
 
-// Value lanes under the matrix, top to bottom: step type, octave, velocity, gate, ratchet.
+// Value lanes under the matrix, top to bottom: step type, octave, velocity, gate, ratchet, chance.
 constexpr StepGrid::Lane laneOfRow[numLaneRows] = { StepGrid::Lane::Type, StepGrid::Lane::Octave,
                                                     StepGrid::Lane::Velocity, StepGrid::Lane::Gate,
-                                                    StepGrid::Lane::Ratchet };
-constexpr const char* laneCaptions[numLaneRows] = { "TYPE", "OCTAVE", "VELOCITY", "STEP GATE", "RATCHET" };
+                                                    StepGrid::Lane::Ratchet, StepGrid::Lane::Chance };
+constexpr const char* laneCaptions[numLaneRows] = { "TYPE", "OCTAVE", "VELOCITY", "STEP GATE", "RATCHET", "CHANCE" };
 }
 
 namespace
@@ -338,6 +338,10 @@ void StepGrid::paint(juce::Graphics& g)
                     text = juce::String(step.gateScalePercent);
                     dim = silent;
                     break;
+                case Lane::Chance:
+                    text = juce::String(step.chance);
+                    dim = silent;
+                    break;
                 case Lane::Root: break; // only the dice of the Root row
                 case Lane::Octave:
                     text = step.octave > 0 ? "+" + juce::String(step.octave) : juce::String(step.octave);
@@ -484,7 +488,7 @@ void StepGrid::mouseDrag(const juce::MouseEvent& e)
         dragRemainder += dragLastY - e.getPosition().y;
         dragLastY = e.getPosition().y;
         const auto dragLane = laneOfRow[dragLaneRow];
-        const int perUnit = dragLane == Lane::Velocity ? 1 : dragLane == Lane::Gate ? 3 : dragPixelsPerUnit;
+        const int perUnit = dragLane == Lane::Velocity ? 1 : dragLane == Lane::Gate ? 3 : dragLane == Lane::Chance ? 6 : dragPixelsPerUnit;
         const int units = dragRemainder / perUnit;
         if (units != 0 && adjusted)
         {

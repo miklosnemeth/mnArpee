@@ -18,6 +18,8 @@ juce::AudioProcessorValueTreeState::ParameterLayout makeLayout()
     params.push_back(std::make_unique<juce::AudioParameterInt>("gate", "Gate %", 1, 125, 80));
     params.push_back(std::make_unique<juce::AudioParameterInt>("swing", "Swing %", -50, 50, 0));
     params.push_back(std::make_unique<juce::AudioParameterBool>("latch", "Latch", false));
+    params.push_back(std::make_unique<juce::AudioParameterBool>("group", "Group octaves", false));
+    params.push_back(std::make_unique<juce::AudioParameterBool>("cut", "Cut on release", false));
     params.push_back(std::make_unique<juce::AudioParameterInt>("steps", "Steps", 0, mnArpee::maxSteps, 16));
     return { params.begin(), params.end() };
 }
@@ -45,6 +47,8 @@ MnArpeeAudioProcessor::MnArpeeAudioProcessor()
     octaveParam = apvts.getRawParameterValue("octave");
     stepsParam = apvts.getRawParameterValue("steps");
     latchParam = apvts.getRawParameterValue("latch");
+    groupParam = apvts.getRawParameterValue("group");
+    cutParam = apvts.getRawParameterValue("cut");
 
     for (int i = 0; i < (int) randomRanges.size(); ++i)
         randomRanges[(size_t) i] = mnArpee::defaultRandomRange((mnArpee::PatternLane) i);
@@ -98,6 +102,8 @@ MnArpeeAudioProcessor::ParamValues MnArpeeAudioProcessor::readParams() const
     v.octave = juce::jlimit(-2, 2, toInt(octaveParam));
     v.steps = juce::jlimit(0, mnArpee::maxSteps, toInt(stepsParam));
     v.latch = latchParam->load() > 0.5f;
+    v.group = groupParam->load() > 0.5f;
+    v.cut = cutParam->load() > 0.5f;
     return v;
 }
 
@@ -535,6 +541,8 @@ void MnArpeeAudioProcessor::applyParamsToEngine()
     }
     if (v.latch != applied.latch)
         engine.setLatch(v.latch);
+    engine.setGroupOctaves(v.group);
+    engine.setCutOnRelease(v.cut);
     applied = v;
 }
 
@@ -617,12 +625,13 @@ void MnArpeeAudioProcessor::updateUiStatus()
     ui.playingProgram.store(engine.getCurrentProgram(), std::memory_order_relaxed);
     const auto input = engine.getActiveInput();
     mnArpee::InputNotes keys;
-    mnArpee::reduceToKeys(input, keys);
+    const bool group = groupParam->load() > 0.5f;
+    mnArpee::reduceToKeys(input, keys, group);
     const int n = std::min(input.size, (int) UiStatus::maxShownInput);
     for (int i = 0; i < n; ++i)
     {
         const int note = input.notes[(size_t) i].note;
-        ui.input[(size_t) i].store(note * 4 + (int) mnArpee::keyUseOf(keys, note), std::memory_order_relaxed);
+        ui.input[(size_t) i].store(note * 4 + (int) mnArpee::keyUseOf(keys, note, group), std::memory_order_relaxed);
     }
     ui.chord.store(mnArpee::detectChord(input).code(), std::memory_order_relaxed);
     ui.numInput.store(n, std::memory_order_release);
