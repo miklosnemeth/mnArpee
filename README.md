@@ -13,8 +13,8 @@ Held notes are sorted by pitch before they reach the engine.
 ## Features (MVP)
 
 - No arp modes: the step matrix draws the whole pattern. Rows, bottom to top: Random, Root, Key 1 .. Key 5
-  - Key 1..5 pick from the held notes, sorted by pitch, one key per pitch class: the same note in another octave counts as one (the lowest stays); more than five different notes: the lowest five are the keys and the rest is left out. A key that is not held (a pattern with more keys than notes) plays the chord root instead, same as the Root row. Random picks among the keys.
-  - The held notes are shown next to "PATTERN": white = a key, dim = merged into a key of another octave, red = left out (with a "+N left out" note)
+  - Key 1..5 pick from the held notes, sorted by pitch; every held note is a key, the same note in another octave too; more than five notes: the lowest five are the keys and the rest is left out. A key that is not held (a pattern with more keys than notes) plays the chord root instead, same as the Root row. Random picks among the keys.
+  - The held notes are shown next to "PATTERN": white = a key, red = left out (with a "+N left out" note)
   - Root plays the root of the held chord (triads, sus, 7th chords, power chords, inversions too), else the lowest note
 - up to 32 steps per pattern, step types: Off / Normal / Rest / Tie / Random (every step plays one note)
   - Rest lengthens the previous note by a step (also over the pattern end into its start), Tie plays legato (new note starts before the old one ends; a note tied to itself keeps sounding)

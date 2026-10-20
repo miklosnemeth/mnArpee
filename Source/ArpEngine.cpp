@@ -19,27 +19,15 @@ constexpr double jumpToleranceQuarters = 0.01;
 
 void reduceToKeys(const InputNotes& all, InputNotes& keys) noexcept
 {
+    // Every held note is a key (the same note in several octaves too), lowest first.
     keys.size = 0;
-    unsigned taken = 0;
     for (int i = 0; i < all.size && keys.size < maxInputKeys; ++i)
-    {
-        const unsigned bit = 1u << (all.notes[(size_t) i].note % 12);
-        if ((taken & bit) == 0) // ascending pitch: the first of a pitch class is its lowest
-        {
-            taken |= bit;
-            keys.notes[(size_t) keys.size++] = all.notes[(size_t) i];
-        }
-    }
+        keys.notes[(size_t) keys.size++] = all.notes[(size_t) i];
 }
 
 KeyUse keyUseOf(const InputNotes& keys, int note) noexcept
 {
-    if (keys.contains(note))
-        return KeyUse::Used;
-    for (int i = 0; i < keys.size; ++i)
-        if (keys.notes[(size_t) i].note % 12 == note % 12)
-            return KeyUse::Merged;
-    return KeyUse::LeftOut;
+    return keys.contains(note) ? KeyUse::Used : KeyUse::LeftOut;
 }
 
 namespace
@@ -433,7 +421,7 @@ void ArpEngine::playOneStep(const Program& prog, const InputNotes& input, double
     if (play && step.type != StepType::Off && step.type != StepType::Rest)
     {
         // Rest is silent here: the preceding note was lengthened when it was scheduled.
-        // KEY SELECT: k1..k5 index into the keys (the held notes, one per pitch class, sorted);
+        // KEY SELECT: k1..k5 index into the keys (the held notes, sorted, at most five);
         // Root is the root of the held chord, and it also stands in for a key that is not held.
         reduceToKeys(input, scratchKeys);
         const auto& keys = scratchKeys;

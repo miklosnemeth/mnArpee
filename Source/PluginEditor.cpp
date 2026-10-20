@@ -1282,8 +1282,8 @@ void MnArpeeAudioEditor::paint(juce::Graphics& g)
     g.drawText("PATTERN", gridCard.getX() + 14, gridCard.getY() + 7, 120, 16,
                juce::Justification::centredLeft);
 
-    // The held notes, right of the "PATTERN" label. White: a key of the matrix. Dim: the same note
-    // in another octave as a key, merged into it. Red: left out, more than five different notes.
+    // The held notes, right of the "PATTERN" label. White: a key of the matrix.
+    // Red: left out, more than five notes are held.
     const auto font = mnArpee::fonts::text(17.0f, true);
     g.setFont(font);
     int x = statusArea.getX();
@@ -1303,9 +1303,7 @@ void MnArpeeAudioEditor::paint(juce::Graphics& g)
         const auto use = (mnArpee::KeyUse) (v & 3);
         leftOut += use == mnArpee::KeyUse::LeftOut ? 1 : 0;
         draw(juce::MidiMessage::getMidiNoteName(v >> 2, true, true, 4) + " ",
-             use == mnArpee::KeyUse::Used ? Pal::text()
-             : use == mnArpee::KeyUse::Merged ? Pal::dimText().withAlpha(0.6f)
-                                              : Pal::accent2());
+             use == mnArpee::KeyUse::Used ? Pal::text() : Pal::accent2());
     }
     if (leftOut > 0)
         draw(" +" + juce::String(leftOut) + " left out", Pal::accent2());

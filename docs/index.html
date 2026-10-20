@@ -264,7 +264,7 @@ ol.steps, ul.cards { margin: 0; padding: 0; }
     "Per step: key (Root, Key 1 to 5), octave -3 to +3, velocity, ratchet 1 to 4 and a step gate of 10 to 400 %.",
     "Pattern: rate 1/64 to 3/8, gate 1 to 125 %, swing -50 to +50 %, octave -2 to +2 and 0 to 32 steps.",
     "Steps 0 is MIDI thru and 1 is quantized thru.",
-    "Held notes are sorted by pitch, one key per pitch class, up to five keys; the PATTERN strip shows which are used and which are left out.",
+    "Held notes are sorted by pitch, every note a key (octave doubles too), up to five keys; the PATTERN strip shows which are used and which are left out.",
     "A key that is not held plays the chord root, so every pattern fits every chord. The chord name (Cmaj7, Am, C/E, ...) is shown.",
     "Steps lock to the song position of the host; free-run when the transport is stopped.",
     "Latch, sustain pedal and panic. Other MIDI (CC, pitch bend, aftertouch) passes through.",
@@ -331,7 +331,7 @@ ol.steps, ul.cards { margin: 0; padding: 0; }
      "name": "What do Key 1 to Key 5 mean?",
      "acceptedAnswer": {
       "@type": "Answer",
-      "text": "They are the notes you hold, sorted by pitch, one per pitch class. A step says which key it plays, so the same pattern fits any chord. A key you do not hold plays the root of the chord instead."
+      "text": "They are the notes you hold, sorted by pitch, up to five. A step says which key it plays, so the same pattern fits any chord. A key you do not hold plays the root of the chord instead."
      }
     },
     {
@@ -442,7 +442,7 @@ ol.steps, ul.cards { margin: 0; padding: 0; }
           <li>Steps 0 is MIDI thru and 1 is quantized thru.</li>
         </ul></div>
         <div class="fl"><h4>Playing</h4><ul>
-          <li>Held notes are sorted by pitch, one key per pitch class, up to five keys; the PATTERN strip shows which are used and which are left out.</li>
+          <li>Held notes are sorted by pitch, every note a key (octave doubles too), up to five keys; the PATTERN strip shows which are used and which are left out.</li>
           <li>A key that is not held plays the chord root, so every pattern fits every chord. The chord name (Cmaj7, Am, C/E, ...) is shown.</li>
           <li>Steps lock to the song position of the host; free-run when the transport is stopped.</li>
           <li>Latch, sustain pedal and panic. Other MIDI (CC, pitch bend, aftertouch) passes through.</li>
@@ -516,7 +516,7 @@ ol.steps, ul.cards { margin: 0; padding: 0; }
       <p class="sub">A step does not say &quot;C&quot;: it says &quot;Key 1&quot;, &quot;Key 2&quot;, and so on, and the keys are the notes you hold.</p>
       <div class="twocol">
         <div><h3 class="listh">Keys</h3><ul class="plain">
-          <li>Key 1 to Key 5 are the held notes, lowest first, one per pitch class.</li>
+          <li>Key 1 to Key 5 are the held notes, lowest first, up to five.</li>
           <li>Root plays the root of the held chord (triads, sus, sevenths, power chords, inversions).</li>
           <li>Random picks one of the keys.</li>
           <li>A key you do not hold plays the root instead.</li>
@@ -576,7 +576,7 @@ ol.steps, ul.cards { margin: 0; padding: 0; }
         <details><summary>Does mnArpee make sound by itself?</summary><p>No. It is a MIDI effect: it turns the notes you hold into a pattern, and the synth or sampler after it plays the sound. Put it on a track, before your synth.</p></details>
         <details><summary>Which operating systems does it run on?</summary><p>There is an installer for Windows 10 and 11 (64-bit). macOS and Linux are not supported yet.</p></details>
         <details><summary>Which DAWs can I use it in?</summary><p>mnArpee is a standard VST3 plugin, so a DAW that hosts VST3 plugins on Windows can load it. How MIDI is routed to the next plugin differs between DAWs; the user guide has the steps.</p></details>
-        <details><summary>What do Key 1 to Key 5 mean?</summary><p>They are the notes you hold, sorted by pitch, one per pitch class. A step says which key it plays, so the same pattern fits any chord. A key you do not hold plays the root of the chord instead.</p></details>
+        <details><summary>What do Key 1 to Key 5 mean?</summary><p>They are the notes you hold, sorted by pitch, up to five. A step says which key it plays, so the same pattern fits any chord. A key you do not hold plays the root of the chord instead.</p></details>
         <details><summary>How do I make a bass line?</summary><p>Pick a Bassline preset, or put steps on the Root row. Root plays the root of the held chord. The dice at the Root row makes a random bass line with accents, ghost notes, rests, glides, octave jumps and ratchets.</p></details>
         <details><summary>What is the difference between GATE and STEP GATE?</summary><p>GATE in the header is the note length of the whole pattern, as a percentage of a step. STEP GATE is a lane that scales it for single steps, from 10 to 400 %. The length of a note is GATE times STEP GATE.</p></details>
         <details><summary>Where are my presets saved?</summary><p>Your presets are files in <code>Documents\MNAudio\mnArpee\User</code>, shared by every project. A DAW project also stores the active preset, with its edits, so it sounds the same on another computer.</p></details>
