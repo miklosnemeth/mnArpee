@@ -27,6 +27,10 @@ Held notes are sorted by pitch before they reach the engine.
 - Sample-accurate MIDI handling; the engine is allocation-free on the audio thread and edits reach it without locks
 - Matrix UI: the matrix is for the keys (Random, Root, Key 1..5): clicking a cell sets the step, the dice in the corner above the row labels fills the keys randomly, and the dice at the Root row makes a random bass line (Root steps only, with accents, ghost notes, rests, glides, octave jumps and ratchets; also in the right-click menu). Under it are the other values as lanes: TYPE, OCTAVE, VELOCITY, GATE (the length of the note as a percentage of the preset's gate: 10..400% in steps of 5%) and RATCHET (1..4: the step plays its note that many times, evenly spread over the step); drag a box up and down or use the mouse wheel, and the dice in front of a lane fills it randomly (right click on a dice: the range of the random values, Randomize, Reset range, Reset lane; the ranges are kept with the project)
 
+## Look shared with mnKord
+
+`Source/MnAudioUi.h` (the palette, the sizes and layout of the header, the window frame, the cards, the title and the unsaved dot, and the undo / redo button) is the same file as `Source/MnAudioUi.h` in [mnKord](https://github.com/miklosnemeth/mnkord). Change it in one repository and copy it to the other, so that both plugins look the same.
+
 ## Build (Windows)
 
 ```powershell
